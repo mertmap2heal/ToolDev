@@ -399,7 +399,17 @@ export default function ValidationItemDetailDrawer({
   }
 
   return (
-    <div className="params-v2 validation-v2 fixed inset-0 z-40 flex">
+    <div
+      className="params-v2 validation-v2 fixed inset-0 z-40 flex"
+      // The .params-v2 class normally paints a solid page background. Inside
+      // a fixed-position drawer wrapper that meant a full-screen opaque
+      // panel sat over the underlying page, so the "left side" of the
+      // viewport looked grey-and-empty instead of just dimmed. Keep the
+      // class for CSS-var inheritance (--pv-*) but force the wrapper itself
+      // transparent so the page shows through behind the semi-opaque
+      // backdrop button below.
+      style={{ background: 'transparent' }}
+    >
       <button
         type="button"
         aria-label="Close drawer"
@@ -407,7 +417,7 @@ export default function ValidationItemDetailDrawer({
         style={{ background: 'rgba(15,20,25,0.3)' }}
         onClick={close}
       />
-      <div className="pv-drawer-shell" style={{ width: 720, maxWidth: '100%', margin: 0, borderRadius: 0 }}>
+      <div className="pv-drawer-shell" style={{ width: 720, maxWidth: '100%', margin: 0, borderRadius: 0, background: 'var(--pv-bg)' }}>
         <div className="pv-dr-head">
           <span className="pv-dr-id">{draft?.key ?? '…'}</span>
           {draft && (

@@ -1,25 +1,32 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import {
+  Bold, Italic, Strikethrough, Heading, Quote, Code, Link2 as LinkIcon,
+  List, ListOrdered, CheckSquare, Table, Code2,
+} from 'lucide-react'
 import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
 
-// Markdown editor — first cut of the standardised text input promised in
-// memory/feedback_markdown_editor.md.
+// Standardised Markdown editor — the single canonical text-input the rest of
+// the app builds on (see memory/feedback_markdown_editor.md and
+// memory/feedback_universal_chat.md).
 //
-// Goals (v1):
-//   - One component used everywhere we have multi-line text (descriptions,
-//     notes, sign-off comments later).
-//   - Plain-text Markdown source — what the user sees in Edit is what is
-//     stored on the server. No hidden HTML, no rich-text serialisation.
-//   - GFM-style mini-preview without bringing in a markdown parser dep
-//     (CLAUDE.md rule 2: ask before adding deps). We render a deliberately
-//     small subset; a real parser can swap in later.
-//   - Cross-entity link chips (REQ-/VAL-/PRM-/VER-/CR-/...) inline.
-//   - @[Name](userId) mentions rendered as chips.
+// Surface, GitLab-style:
+//   - Tabs: Write / Preview
+//   - Toolbar of formatting actions (B / I / S / heading / quote / inline
+//     code / link / bullet list / numbered list / task list / table /
+//     code block). Each inserts markdown tokens at the caret or around the
+//     selection — never the contents of the document.
+//   - @mention autocomplete: type '@' to open a member popover. Selection
+//     persists as `@[Name](userId)` so preview can render a chip even when
+//     the display name changes.
+//   - Cross-entity refs (REQ-001 / VAL-014 / PRM-002 ...) recognised inline
+//     and rendered as chips in preview by the parseEntityRefs util.
+//   - GFM via marked + DOMPurify; output is sanitised HTML walked into
+//     React nodes — never set via dangerouslySetInnerHTML.
 //
-// Out of scope for v1: tables, footnotes, images, blockquotes, fenced code
-// blocks, paste-image upload. Those are planned for a follow-up cycle when
-// a real Markdown parser is sanctioned.
+// Public contract is unchanged (value/onChange/placeholder/members/rows/
+// disabled) so existing call sites keep working.
 
 const MENTION_TOKEN_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 
@@ -50,6 +57,145 @@ export default function MarkdownEditor({
   disabled = false,
 }: Props) {
   const [tab, setTab] = useState<'write' | 'preview'>('write')
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  // Mention popover state. `mentionQuery` is the partial text after the
+  // most-recent '@' before the caret. null = no active mention.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionAnchor, setMentionAnchor] = useState<number>(-1)
+  const [mentionIndex, setMentionIndex] = useState(0)
+
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null || members.length === 0) return []
+    const q = mentionQuery.toLowerCase()
+    return members
+      .filter((m) => {
+        const name = (m.name ?? '').toLowerCase()
+        const email = (m.email ?? '').toLowerCase()
+        return name.includes(q) || email.includes(q)
+      })
+      .slice(0, 6)
+  }, [mentionQuery, members])
+
+  useEffect(() => {
+    setMentionIndex(0)
+  }, [mentionQuery])
+
+  // --- Selection / caret helpers ----------------------------------------
+
+  const getSel = (): { start: number; end: number } => {
+    const ta = textareaRef.current
+    if (!ta) return { start: value.length, end: value.length }
+    return { start: ta.selectionStart ?? 0, end: ta.selectionEnd ?? 0 }
+  }
+
+  // Wrap the current selection with `before` and `after`. If nothing is
+  // selected, drop a token and place the caret between before/after so the
+  // user can type immediately.
+  const wrapSelection = (before: string, after: string = before, placeholderText = '') => {
+    if (disabled) return
+    const { start, end } = getSel()
+    const selected = value.slice(start, end)
+    const insertion = selected || placeholderText
+    const next = value.slice(0, start) + before + insertion + after + value.slice(end)
+    onChange(next)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (!ta) return
+      ta.focus()
+      const caretStart = start + before.length
+      const caretEnd = caretStart + insertion.length
+      ta.setSelectionRange(caretStart, caretEnd)
+    })
+  }
+
+  // Prefix each selected line with `prefix`. If nothing is selected, prefix
+  // the current line. Used by lists, blockquote, headings.
+  const prefixLines = (prefix: string | ((index: number) => string)) => {
+    if (disabled) return
+    const { start, end } = getSel()
+    // Expand selection to whole lines so we don't break mid-line markdown.
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1
+    const lineEndIdx = value.indexOf('\n', end)
+    const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx
+    const block = value.slice(lineStart, lineEnd)
+    const lines = block.split('\n')
+    const next = lines
+      .map((l, i) => (typeof prefix === 'function' ? prefix(i) : prefix) + l)
+      .join('\n')
+    const updated = value.slice(0, lineStart) + next + value.slice(lineEnd)
+    onChange(updated)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (!ta) return
+      ta.focus()
+      ta.setSelectionRange(lineStart, lineStart + next.length)
+    })
+  }
+
+  // Insert a block (eg. fenced code, table) at the caret on its own line(s).
+  const insertBlock = (block: string) => {
+    if (disabled) return
+    const { start, end } = getSel()
+    // Ensure block starts on a fresh line.
+    const needLeading = start > 0 && value[start - 1] !== '\n'
+    const needTrailing = end < value.length && value[end] !== '\n'
+    const insertion = (needLeading ? '\n' : '') + block + (needTrailing ? '\n' : '')
+    const next = value.slice(0, start) + insertion + value.slice(end)
+    onChange(next)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (!ta) return
+      ta.focus()
+      const caret = start + insertion.length
+      ta.setSelectionRange(caret, caret)
+    })
+  }
+
+  // --- Mention detection -----------------------------------------------
+
+  const detectMention = (next: string, caret: number) => {
+    const upto = next.slice(0, caret)
+    const at = upto.lastIndexOf('@')
+    if (at < 0) {
+      setMentionQuery(null)
+      return
+    }
+    // Trigger only when '@' starts a token (start-of-string or after
+    // whitespace) so we don't open the popover inside emails.
+    const prev = upto[at - 1]
+    if (at !== 0 && prev !== ' ' && prev !== '\n' && prev !== '\t') {
+      setMentionQuery(null)
+      return
+    }
+    const after = upto.slice(at + 1)
+    if (/\s/.test(after)) {
+      setMentionQuery(null)
+      return
+    }
+    setMentionAnchor(at)
+    setMentionQuery(after)
+  }
+
+  const insertMention = (idx: number) => {
+    const m = mentionMatches[idx]
+    const ta = textareaRef.current
+    if (!m || mentionAnchor < 0 || !ta) return
+    const display = (m.name ?? m.email ?? 'user').trim() || 'user'
+    const before = value.slice(0, mentionAnchor)
+    const afterCaret = value.slice(ta.selectionStart ?? mentionAnchor)
+    const inserted = `@[${display}](${m.id}) `
+    const next = before + inserted + afterCaret
+    onChange(next)
+    setMentionQuery(null)
+    setMentionAnchor(-1)
+    requestAnimationFrame(() => {
+      const newCaret = (before + inserted).length
+      ta.focus()
+      ta.setSelectionRange(newCaret, newCaret)
+    })
+  }
+
+  // --- Render -----------------------------------------------------------
 
   return (
     <div
@@ -57,7 +203,7 @@ export default function MarkdownEditor({
         border: '1px solid var(--pv-line)',
         borderRadius: 4,
         background: 'var(--pv-bg)',
-        overflow: 'hidden',
+        overflow: 'visible',
       }}
     >
       <div
@@ -92,31 +238,258 @@ export default function MarkdownEditor({
             paddingRight: 8,
             letterSpacing: '0.02em',
           }}
-          title="Supports: **bold**, *italic*, `code`, # heading, - list, [text](url), REQ-001 etc., @[Name](userId)"
+          title="Markdown supported: **bold**, *italic*, ~~strike~~, # heading, > quote, `code`, ``` blocks, - / 1. / - [ ] lists, tables, [link](url), REQ-001 refs, @mentions."
         >
           Markdown
         </span>
       </div>
-      {tab === 'write' ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          rows={rows}
-          placeholder={placeholder}
+
+      {tab === 'write' && !disabled && (
+        <div
           style={{
-            width: '100%',
-            border: 0,
-            outline: 0,
-            padding: 8,
-            fontSize: 13,
-            lineHeight: 1.5,
-            background: 'transparent',
-            color: 'var(--pv-fg)',
-            fontFamily: 'inherit',
-            resize: 'vertical',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 2,
+            padding: '4px 6px',
+            borderBottom: '1px solid var(--pv-line)',
+            background: 'var(--pv-surface-soft)',
           }}
-        />
+        >
+          <TBtn title="Bold (Ctrl+B)" onClick={() => wrapSelection('**', '**', 'bold')}>
+            <Bold size={14} />
+          </TBtn>
+          <TBtn title="Italic (Ctrl+I)" onClick={() => wrapSelection('_', '_', 'italic')}>
+            <Italic size={14} />
+          </TBtn>
+          <TBtn title="Strikethrough" onClick={() => wrapSelection('~~', '~~', 'strike')}>
+            <Strikethrough size={14} />
+          </TBtn>
+          <TSep />
+          <TBtn title="Heading" onClick={() => prefixLines('## ')}>
+            <Heading size={14} />
+          </TBtn>
+          <TBtn title="Quote" onClick={() => prefixLines('> ')}>
+            <Quote size={14} />
+          </TBtn>
+          <TBtn title="Inline code" onClick={() => wrapSelection('`', '`', 'code')}>
+            <Code size={14} />
+          </TBtn>
+          <TBtn title="Code block" onClick={() => insertBlock('```\ncode\n```')}>
+            <Code2 size={14} />
+          </TBtn>
+          <TBtn
+            title="Link"
+            onClick={() => {
+              const url = window.prompt('URL:', 'https://') ?? ''
+              if (!url) return
+              wrapSelection('[', `](${url})`, 'link text')
+            }}
+          >
+            <LinkIcon size={14} />
+          </TBtn>
+          <TSep />
+          <TBtn title="Bulleted list" onClick={() => prefixLines('- ')}>
+            <List size={14} />
+          </TBtn>
+          <TBtn title="Numbered list" onClick={() => prefixLines((i) => `${i + 1}. `)}>
+            <ListOrdered size={14} />
+          </TBtn>
+          <TBtn title="Task list" onClick={() => prefixLines('- [ ] ')}>
+            <CheckSquare size={14} />
+          </TBtn>
+          <TSep />
+          <TBtn
+            title="Table"
+            onClick={() =>
+              insertBlock('| Column | Column |\n| --- | --- |\n| Cell | Cell |')
+            }
+          >
+            <Table size={14} />
+          </TBtn>
+          <TSep />
+          <TBtn
+            title="Mention a teammate"
+            onClick={() => {
+              const ta = textareaRef.current
+              if (!ta) return
+              const { start } = getSel()
+              const needSpace = start > 0 && !/\s/.test(value[start - 1] ?? '')
+              const insert = `${needSpace ? ' ' : ''}@`
+              const next = value.slice(0, start) + insert + value.slice(start)
+              onChange(next)
+              requestAnimationFrame(() => {
+                const caret = start + insert.length
+                ta.focus()
+                ta.setSelectionRange(caret, caret)
+                detectMention(next, caret)
+              })
+            }}
+          >
+            <span style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, fontWeight: 600 }}>@</span>
+          </TBtn>
+        </div>
+      )}
+
+      {tab === 'write' ? (
+        <div style={{ position: 'relative' }}>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              const v = e.target.value
+              onChange(v)
+              detectMention(v, e.target.selectionStart ?? v.length)
+            }}
+            onKeyDown={(e) => {
+              if (mentionQuery !== null && mentionMatches.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setMentionIndex((i) => (i + 1) % mentionMatches.length)
+                  return
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setMentionIndex(
+                    (i) => (i - 1 + mentionMatches.length) % mentionMatches.length,
+                  )
+                  return
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault()
+                  insertMention(mentionIndex)
+                  return
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setMentionQuery(null)
+                  return
+                }
+              }
+              if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
+                e.preventDefault()
+                wrapSelection('**', '**', 'bold')
+              } else if ((e.metaKey || e.ctrlKey) && (e.key === 'i' || e.key === 'I')) {
+                e.preventDefault()
+                wrapSelection('_', '_', 'italic')
+              }
+            }}
+            disabled={disabled}
+            rows={rows}
+            placeholder={placeholder}
+            style={{
+              width: '100%',
+              border: 0,
+              outline: 0,
+              padding: 8,
+              fontSize: 13,
+              lineHeight: 1.5,
+              background: 'transparent',
+              color: 'var(--pv-fg)',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+            }}
+          />
+          {mentionQuery !== null && mentionMatches.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Mention teammate"
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 8,
+                zIndex: 50,
+                minWidth: 220,
+                maxWidth: 320,
+                background: 'var(--pv-bg)',
+                border: '1px solid var(--pv-line)',
+                borderRadius: 4,
+                boxShadow: '0 6px 24px rgba(15,20,25,0.12)',
+                padding: 4,
+                fontSize: 12,
+                marginTop: 2,
+              }}
+            >
+              {mentionMatches.map((m, i) => {
+                const name = m.name || m.email || 'Unknown'
+                const email = m.email ?? ''
+                const active = i === mentionIndex
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      insertMention(i)
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      width: '100%',
+                      padding: '6px 8px',
+                      border: 0,
+                      borderRadius: 4,
+                      background: active ? 'var(--pv-blue-tint)' : 'transparent',
+                      color: active ? 'var(--pv-blue-ink)' : 'var(--pv-fg)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 999,
+                        background: 'linear-gradient(135deg, #d6e2ec, #bccddb)',
+                        color: 'var(--pv-fg-2)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {memberInitials(m)}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontWeight: 500,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {name}
+                      </span>
+                      {email && (
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: 10,
+                            color: 'var(--pv-fg-3)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {email}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       ) : (
         <div
           style={{
@@ -137,6 +510,76 @@ export default function MarkdownEditor({
         </div>
       )}
     </div>
+  )
+}
+
+// Toolbar primitives. Kept tiny so the editor file stays readable.
+function TBtn({
+  title,
+  onClick,
+  children,
+}: {
+  title: string
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 24,
+        minWidth: 24,
+        padding: '0 4px',
+        background: 'transparent',
+        border: '1px solid transparent',
+        borderRadius: 3,
+        cursor: 'pointer',
+        color: 'var(--pv-fg-2)',
+      }}
+      onMouseDown={(e) => e.preventDefault()} // keep textarea focused
+      onMouseOver={(e) => {
+        e.currentTarget.style.background = 'var(--pv-bg)'
+        e.currentTarget.style.borderColor = 'var(--pv-line)'
+      }}
+      onMouseOut={(e) => {
+        e.currentTarget.style.background = 'transparent'
+        e.currentTarget.style.borderColor = 'transparent'
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TSep() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-block',
+        width: 1,
+        height: 16,
+        background: 'var(--pv-line)',
+        margin: '0 2px',
+      }}
+    />
+  )
+}
+
+function memberInitials(m: MarkdownMember): string {
+  const src = (m.name && m.name.trim()) || (m.email ? m.email.split('@')[0] : '?')
+  return (
+    src
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() ?? '')
+      .join('') || '?'
   )
 }
 
