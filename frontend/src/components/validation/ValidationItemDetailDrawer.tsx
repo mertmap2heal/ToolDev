@@ -152,8 +152,6 @@ export default function ValidationItemDetailDrawer({
   }, [draft, item])
   const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
 
-  if (!isOpen) return null
-
   const close = () => {
     if (isDirty) {
       const ok = window.confirm(
@@ -321,6 +319,13 @@ export default function ValidationItemDetailDrawer({
       ],
     })
   }
+
+  // Early-return AFTER every hook has been declared above. Returning before
+  // any hook call (templatesFromServer / templates / templates useEffect /
+  // suggestionsOpen / suggestions) would change the hook count between
+  // opened and closed states and crash React with
+  // "Rendered more hooks than during the previous render."
+  if (!isOpen) return null
 
   const removeCriterion = (cid: string) => {
     if (!draft) return
