@@ -654,7 +654,17 @@ export default function ValidationPage() {
                       </button>
                     </td>
                     <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
-                      {it.key}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigator.clipboard?.writeText(it.key)
+                        }}
+                        title="Click to copy"
+                        style={{ background: 'none', border: 0, padding: 0, color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}
+                      >
+                        {it.key}
+                      </button>
                       {it.isSuspect && (
                         <span
                           className="vv-row-suspect"
