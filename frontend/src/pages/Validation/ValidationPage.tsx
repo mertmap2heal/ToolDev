@@ -774,6 +774,13 @@ export default function ValidationPage() {
             Baseline state
           </button>
           <Link
+            to={`/projects/${projectId}/validation/baselines`}
+            title="View saved baselines for this project"
+            className="pv-btn"
+          >
+            Baselines
+          </Link>
+          <Link
             to={`/projects/${projectId}/validation/der`}
             title="DER read-only view: milestone-indexed, sign-off-visible, print-friendly. Use this to hand off to certification authorities."
             className="pv-btn"
