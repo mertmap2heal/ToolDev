@@ -194,20 +194,13 @@ export default function EntityDiscussion({
               <p className="text" style={{ color: 'var(--pv-fg-4)', fontStyle: 'italic' }}>(deleted)</p>
             ) : editing === c.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <textarea
+                <MarkdownEditor
                   value={editDraft}
-                  onChange={(e) => setEditDraft(e.target.value)}
-                  rows={2}
-                  style={{
-                    width: '100%',
-                    padding: 6,
-                    fontSize: 12,
-                    border: '1px solid var(--pv-line)',
-                    borderRadius: 4,
-                    background: 'var(--pv-bg)',
-                    color: 'var(--pv-fg)',
-                    fontFamily: 'inherit',
-                  }}
+                  onChange={setEditDraft}
+                  rows={3}
+                  minHeight={96}
+                  actions={MD_ACTIONS_INLINE}
+                  members={members}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                   <button

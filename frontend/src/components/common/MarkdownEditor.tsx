@@ -28,7 +28,38 @@ import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
 // Public contract is unchanged (value/onChange/placeholder/members/rows/
 // disabled) so existing call sites keep working.
 
+// Legacy markup form `@[Display Name](userId-uuid)` produced before we moved
+// to plain `@handle` source. Still recognised on render so old comments / sign-off
+// notes keep their chips.
 const MENTION_TOKEN_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
+
+// Friendly handle for a member. Prefers email's local part (which is unique
+// inside a tenant), falls back to name slug, then to a short id stub.
+function mentionHandle(m: { id: string; name?: string | null; email?: string | null }): string {
+  const fromEmail = m.email?.split('@')[0]
+  const cand = (fromEmail && fromEmail.trim()) ? fromEmail : (m.name ?? '')
+  const slug = cand
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return slug || m.id.slice(0, 8)
+}
+
+// Append a small numeric suffix if two members produce the same handle, so
+// the rendered chip can resolve back to a specific user.
+function uniqueHandle(
+  m: { id: string; name?: string | null; email?: string | null },
+  members: Array<{ id: string; name?: string | null; email?: string | null }>,
+): string {
+  const base = mentionHandle(m)
+  const dupes = members.filter((o) => mentionHandle(o) === base && o.id !== m.id)
+  if (dupes.length === 0) return base
+  // Disambiguate stably by member id so we always end up at the same handle
+  // for the same user.
+  const sorted = [m, ...dupes].sort((a, b) => a.id.localeCompare(b.id))
+  const idx = sorted.findIndex((s) => s.id === m.id)
+  return idx === 0 ? base : `${base}${idx + 1}`
+}
 
 export interface MarkdownMember {
   id: string
@@ -225,10 +256,14 @@ export default function MarkdownEditor({
     const m = mentionMatches[idx]
     const ta = textareaRef.current
     if (!m || mentionAnchor < 0 || !ta) return
-    const display = (m.name ?? m.email ?? 'user').trim() || 'user'
     const before = value.slice(0, mentionAnchor)
     const afterCaret = value.slice(ta.selectionStart ?? mentionAnchor)
-    const inserted = `@[${display}](${m.id}) `
+    // Stored markdown source uses just `@handle` — no UUID exposed in the
+    // textarea. The renderer resolves @handle against the project members
+    // and emits a chip with title / link to the user. If two members share
+    // the same handle we append a small numeric suffix.
+    const handle = uniqueHandle(m, members)
+    const inserted = `@${handle} `
     const next = before + inserted + afterCaret
     onChange(next)
     setMentionQuery(null)
@@ -774,23 +809,34 @@ export function MarkdownPreview({ source, members }: PreviewProps) {
     if (!root) return null
     let keyCounter = 0
     const nextKey = () => `mdn-${keyCounter++}`
-    const renderMentionChip = (name: string, userId: string): ReactNode => {
-      const known = memberById.get(userId)
+    const renderMentionChip = (name: string, userIdOrHandle: string): ReactNode => {
+      // Look up either by uuid (legacy `@[Name](uuid)` form) or by handle
+      // (plain `@handle` form).
+      const known =
+        memberById.get(userIdOrHandle) ??
+        members.find((m) => uniqueHandle(m, members) === userIdOrHandle) ??
+        null
       const display = known?.name ?? known?.email ?? name
-      return (
-        <span
-          key={nextKey()}
-          title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
-          style={{
-            display: 'inline',
-            padding: '0 4px',
-            margin: '0 1px',
-            borderRadius: 3,
-            background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
-            color: 'var(--pv-blue-ink, #1e4778)',
-            fontWeight: 500,
-          }}
-        >
+      const title = known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'
+      // The chip itself is a clickable mailto link when an email is known; it
+      // gives the user something to navigate to instead of a dead pill.
+      const href = known?.email ? `mailto:${known.email}` : undefined
+      const style: React.CSSProperties = {
+        display: 'inline',
+        padding: '0 4px',
+        margin: '0 1px',
+        borderRadius: 3,
+        background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
+        color: 'var(--pv-blue-ink, #1e4778)',
+        fontWeight: 500,
+        textDecoration: 'none',
+      }
+      return href ? (
+        <a key={nextKey()} href={href} title={title} style={style}>
+          @{display}
+        </a>
+      ) : (
+        <span key={nextKey()} title={title} style={style}>
           @{display}
         </span>
       )
@@ -821,16 +867,38 @@ export function MarkdownPreview({ source, members }: PreviewProps) {
       if (out.length === 0) out.push(...decorateRawMention(text))
       return out
     }
-    // Fallback: detect literal `@[Name](uuid)` in a text node. Splits the
-    // text and emits chips inline.
+    // Build a set of known handles for `@handle` recognition. Members whose
+    // handle clashes get a numeric suffix via uniqueHandle.
+    const handleToMember = new Map<string, typeof members[number]>()
+    for (const mem of members) {
+      handleToMember.set(uniqueHandle(mem, members), mem)
+    }
+    // Detect both `@[Name](uuid)` (legacy) and `@handle` (current). Each is
+    // emitted as a chip; surrounding text falls through to entity-ref render.
     const decorateRawMention = (text: string): ReactNode[] => {
       const out: ReactNode[] = []
-      const re = /@\[([^\]]+)\]\(([^)]+)\)/g
+      // Combined regex: legacy `@[Name](uuid)` OR plain `@handle` where handle
+      // starts on a word boundary and consists of a-z 0-9 _ . - (matching the
+      // slug shape produced by mentionHandle).
+      const re = /@\[([^\]]+)\]\(([^)]+)\)|(?:^|(?<=\s|[(\[]))@([a-z0-9][a-z0-9._-]*)/gi
       let lastIndex = 0
       let m: RegExpExecArray | null
       while ((m = re.exec(text)) !== null) {
         if (m.index > lastIndex) out.push(...withEntityRefs(text.slice(lastIndex, m.index)))
-        out.push(renderMentionChip(m[1], m[2]))
+        if (m[1] && m[2]) {
+          // Legacy form
+          out.push(renderMentionChip(m[1], m[2]))
+        } else if (m[3]) {
+          const handle = m[3]
+          const known = handleToMember.get(handle)
+          if (known) {
+            out.push(renderMentionChip(known.name ?? handle, handle))
+          } else {
+            // Unknown handle — show as plain text so we don't lie about who
+            // got mentioned.
+            out.push(<span key={nextKey()}>{`@${handle}`}</span>)
+          }
+        }
         lastIndex = m.index + m[0].length
       }
       if (lastIndex < text.length) out.push(...withEntityRefs(text.slice(lastIndex)))
