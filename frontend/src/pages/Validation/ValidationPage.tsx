@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import './validation-v2.css'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
@@ -55,8 +55,9 @@ export default function ValidationPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const user = useAuthStore((s) => s.user)
   const currentUserId = user?.id ?? ''
+  const [urlParams, setUrlParams] = useSearchParams()
 
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => urlParams.get('q') ?? '')
   const [statusFilter, setStatusFilter] = useState<ValidationStatus | ''>('')
   const [methodFilter, setMethodFilter] = useState<ValidationMethodType | ''>('')
   const [milestoneFilter, setMilestoneFilter] = useState<ValidationMilestone | ''>('')
@@ -90,7 +91,10 @@ export default function ValidationPage() {
       if (!raw) return
       const v = JSON.parse(raw)
       if (typeof v !== 'object' || v === null) return
-      if (typeof v.search === 'string') setSearch(v.search)
+      // URL ?q= wins over the persisted search box value on mount, otherwise
+      // chip deep-links land on the project's stored search instead of the
+      // requested key.
+      if (typeof v.search === 'string' && !urlParams.get('q')) setSearch(v.search)
       if (typeof v.statusFilter === 'string') setStatusFilter(v.statusFilter)
       if (typeof v.methodFilter === 'string') setMethodFilter(v.methodFilter)
       if (typeof v.milestoneFilter === 'string') setMilestoneFilter(v.milestoneFilter)
@@ -113,6 +117,34 @@ export default function ValidationPage() {
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  // Keep ?q= in the URL in sync with the search box. URL is authoritative on
+  // mount (so deep-links from entity-ref chips land filtered); after that the
+  // user's typing wins and we push back to the URL with replaceState so
+  // Back/Forward stay sane.
+  useEffect(() => {
+    const next = new URLSearchParams(urlParams)
+    const cur = next.get('q') ?? ''
+    if (search === cur) return
+    if (search) next.set('q', search)
+    else next.delete('q')
+    setUrlParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search])
+
+  // ?open=<itemId> deep-link — open drawer to a specific item on mount, then
+  // strip the param so closing the drawer does not retrigger the open on a
+  // subsequent re-render.
+  useEffect(() => {
+    const open = urlParams.get('open')
+    if (open) {
+      setSelectedItemId(open)
+      const next = new URLSearchParams(urlParams)
+      next.delete('open')
+      setUrlParams(next, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const filters = useMemo(
     () => ({
