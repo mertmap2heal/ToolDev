@@ -6,6 +6,7 @@ import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrA
 import {
   listItems,
   exportItemsCsv,
+  exportItemsMarkdown,
   getItem,
   createItem,
   updateItem,
@@ -66,6 +67,7 @@ router.get('/projects/:projectId/uncovered-requirements', listUncoveredRequireme
 // Items
 router.get('/projects/:projectId/items', listItems)
 router.get('/projects/:projectId/items.csv', exportItemsCsv)
+router.get('/projects/:projectId/report.md', exportItemsMarkdown)
 router.post('/projects/:projectId/items', createItem)
 router.post('/projects/:projectId/items/from-requirements', createFromRequirements)
 router.post('/projects/:projectId/items/bulk', bulkUpdate)

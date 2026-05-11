@@ -502,6 +502,16 @@ export default function ValidationPage() {
           <button type="button" onClick={downloadCsv} className="pv-btn">
             <Download size={14} /> Export CSV
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              window.open(validationService.markdownExportUrl(projectId, filters), '_blank')
+            }
+            className="pv-btn"
+            title="Download a Markdown validation report for the current view"
+          >
+            <Download size={14} /> Report (MD)
+          </button>
         </div>
       </div>
 

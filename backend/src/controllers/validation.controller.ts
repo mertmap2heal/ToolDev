@@ -59,6 +59,26 @@ export async function listItems(req: AuthRequest, res: Response) {
   }
 }
 
+export async function exportItemsMarkdown(req: AuthRequest, res: Response) {
+  try {
+    const md = await svc.exportItemsMarkdown(req.params.projectId, {
+      status: req.query.status as string | undefined,
+      methodType: req.query.methodType as string | undefined,
+      milestone: req.query.milestone as string | undefined,
+      ownerId: req.query.ownerId as string | undefined,
+      search: req.query.search as string | undefined,
+    })
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="validation-report.md"',
+    )
+    res.send(md)
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function exportItemsCsv(req: AuthRequest, res: Response) {
   try {
     const csv = await svc.exportItemsCsv(req.params.projectId, {

@@ -1362,6 +1362,74 @@ function csvCell(v: unknown): string {
   return s
 }
 
+export async function exportItemsMarkdown(
+  projectId: string,
+  filters: ListFilters = {},
+) {
+  const items = await prisma.validationItem.findMany({
+    where: buildWhere(projectId, filters),
+    orderBy: [{ targetMilestone: 'asc' }, { key: 'asc' }],
+    include: {
+      owner: { select: { name: true, email: true } },
+      signOffs: {
+        where: { supersededById: null },
+        include: { signer: { select: { name: true } } },
+      },
+    },
+  })
+  const lines: string[] = [
+    '# Validation Report',
+    '',
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    `Total items: ${items.length}`,
+    '',
+  ]
+  for (const i of items) {
+    const criteria = (i.criteria as ValidationCriterion[] | null) ?? []
+    const met = criteria.filter((c) => c.outcome === 'MET').length
+    lines.push(`## ${i.key} — ${i.title}`)
+    lines.push('')
+    lines.push(
+      `- Method: ${i.methodType} · Milestone: ${i.targetMilestone} · Status: ${i.status} · Priority: ${i.priority}`,
+    )
+    if (i.owner?.name) lines.push(`- Owner: ${i.owner.name}`)
+    if (i.tags.length) lines.push(`- Tags: ${i.tags.join(', ')}`)
+    if (i.description) {
+      lines.push('')
+      lines.push(i.description)
+    }
+    lines.push('')
+    lines.push(`### Acceptance criteria (${met}/${criteria.length} met)`)
+    lines.push('')
+    for (const c of criteria) {
+      const mark =
+        c.outcome === 'MET'
+          ? '[x]'
+          : c.outcome === 'PARTIAL'
+          ? '[~]'
+          : c.outcome === 'NOT_MET'
+          ? '[!]'
+          : '[ ]'
+      lines.push(`- ${mark} ${c.text}${c.notes ? ` — _${c.notes}_` : ''}`)
+    }
+    if (i.signOffs.length) {
+      lines.push('')
+      lines.push('### Sign-offs')
+      lines.push('')
+      for (const s of i.signOffs) {
+        lines.push(
+          `- ${s.signer?.name ?? 'Unknown'} (${s.signerRoleLabel}) — ${new Date(s.signedAt).toISOString()}`,
+        )
+      }
+    }
+    lines.push('')
+    lines.push('---')
+    lines.push('')
+  }
+  return lines.join('\n')
+}
+
 export async function exportItemsCsv(projectId: string, filters: ListFilters = {}) {
   const items = await prisma.validationItem.findMany({
     where: buildWhere(projectId, filters),

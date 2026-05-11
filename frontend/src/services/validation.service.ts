@@ -278,6 +278,10 @@ export const validationService = {
     return `/api/v1/validation/projects/${projectId}/items.csv${qs(filters)}`
   },
 
+  markdownExportUrl(projectId: string, filters: ListFilters = {}): string {
+    return `/api/v1/validation/projects/${projectId}/report.md${qs(filters)}`
+  },
+
   async coverage(projectId: string): Promise<ApiResponse<ValidationCoverage>> {
     return apiClient.get(`/validation/projects/${projectId}/coverage`)
   },
