@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Fragment } from 'react'
 import './validation-v2.css'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -80,6 +80,8 @@ export default function ValidationPage() {
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [density, setDensity] = useState<'compact' | 'comfortable'>('compact')
   const [criterionFilter, setCriterionFilter] = useState<'' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria'>('')
+  const [groupByMilestone, setGroupByMilestone] = useState(false)
+  const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
   const toast = useValidationToast()
 
   // Persist last filter state per project across reloads so users come back to
@@ -113,6 +115,10 @@ export default function ValidationPage() {
         v.criterionFilter === 'noCriteria'
       ) {
         setCriterionFilter(v.criterionFilter)
+      }
+      if (typeof v.groupByMilestone === 'boolean') setGroupByMilestone(v.groupByMilestone)
+      if (Array.isArray(v.collapsedMilestones)) {
+        setCollapsedMilestones(new Set(v.collapsedMilestones as string[]))
       }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,10 +186,12 @@ export default function ValidationPage() {
           sortBy,
           sortDir,
           criterionFilter,
+          groupByMilestone,
+          collapsedMilestones: Array.from(collapsedMilestones),
         }),
       )
     } catch { /* ignore */ }
-  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter])
+  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter, groupByMilestone, collapsedMilestones])
 
   const toggleSort = (col: ValidationSortBy) => {
     if (sortBy === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -235,6 +243,10 @@ export default function ValidationPage() {
     settings?.tags.forEach((t) => m.set(t.label, t.color))
     return m
   }, [settings])
+
+  // Total number of columns in the table - kept in sync with <thead> so the
+  // group-header colSpan stays correct as columns are added or removed.
+  const TABLE_COL_COUNT = 11
 
   const items = useMemo(() => {
     let arr = rawItems
@@ -344,6 +356,218 @@ export default function ValidationPage() {
   const downloadCsv = () => {
     const url = validationService.csvExportUrl(projectId, filters)
     window.open(url, '_blank')
+  }
+
+  // Shared row renderer. Extracted from the inline items.map so the same
+  // markup serves both flat-list and grouped-by-milestone views.
+  const renderRow = (it: ValidationItemSummary) => {
+    const total = it.criteria?.length ?? 0
+    const met = it.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
+    return (
+      <tr
+        key={it.id}
+        onClick={() => setSelectedItemId(it.id)}
+        className={`${it.deletedAt ? 'is-archived' : ''} ${selectedIds.has(it.id) ? 'is-selected' : ''}`}
+        style={{ cursor: 'pointer', opacity: it.deletedAt ? 0.6 : 1 }}
+      >
+        <td className="col-check" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="pv-check"
+            aria-label={`Select ${it.key}`}
+            checked={selectedIds.has(it.id)}
+            onChange={(e) => {
+              setSelectedIds((prev) => {
+                const next = new Set(prev)
+                if (e.target.checked) next.add(it.id)
+                else next.delete(it.id)
+                return next
+              })
+            }}
+          />
+        </td>
+        <td onClick={(e) => e.stopPropagation()} style={{ paddingLeft: 6 }}>
+          <button
+            type="button"
+            aria-label={it.starredByMe ? 'Unstar' : 'Star'}
+            title={it.starredByMe ? 'Unstar' : 'Star this item'}
+            onClick={async () => {
+              if (it.starredByMe) {
+                const res = await validationService.unstar(projectId, it.id)
+                if (res.success) toast.info(`Unstarred ${it.key}`)
+              } else {
+                const res = await validationService.star(projectId, it.id)
+                if (res.success) toast.success(`Starred ${it.key}`)
+              }
+              refetchAll()
+            }}
+            className={`vv-star-btn ${it.starredByMe ? 'on' : ''}`}
+          >
+            <Star size={14} fill={it.starredByMe ? 'currentColor' : 'none'} />
+          </button>
+        </td>
+        <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigator.clipboard?.writeText(it.key)
+            }}
+            title="Click to copy"
+            style={{ background: 'none', border: 0, padding: 0, color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}
+          >
+            {it.key}
+          </button>
+          {it.isSuspect && (
+            <span
+              className="vv-row-suspect"
+              title="A linked requirement was updated after this validation. Re-run recommended."
+            >
+              <AlertTriangle size={10} /> suspect
+            </span>
+          )}
+          {it.deletedAt && (
+            <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--pv-amber)' }}>
+              (archived)
+            </span>
+          )}
+        </td>
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {it.priority && it.priority !== 'medium' && (
+              <span
+                className="vv-tag"
+                style={{
+                  background:
+                    it.priority === 'critical'
+                      ? 'var(--pv-red-tint)'
+                      : it.priority === 'high'
+                      ? 'var(--pv-amber-tint)'
+                      : 'var(--pv-gray-tint)',
+                  color:
+                    it.priority === 'critical'
+                      ? 'var(--pv-red)'
+                      : it.priority === 'high'
+                      ? 'var(--pv-amber)'
+                      : 'var(--pv-fg-3)',
+                  border: '1px solid transparent',
+                  flexShrink: 0,
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                }}
+                title={`Priority: ${it.priority}`}
+              >
+                {it.priority}
+              </span>
+            )}
+            {it.dueDate && (() => {
+              const due = new Date(it.dueDate)
+              const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
+              return (
+                <span
+                  className="vv-tag"
+                  style={{
+                    background: overdue ? 'var(--pv-red-tint)' : 'var(--pv-surface)',
+                    color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-3)',
+                    border: '1px solid transparent',
+                    flexShrink: 0,
+                  }}
+                  title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
+                >
+                  {overdue ? 'overdue · ' : 'due '}
+                  {due.toLocaleDateString()}
+                </span>
+              )
+            })()}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
+            {it.tags?.map((tag) => {
+              const color = tagColors.get(tag) ?? 'var(--pv-fg-3)'
+              return (
+                <span
+                  key={tag}
+                  className="vv-tag"
+                  style={{
+                    background: `${color}22`,
+                    color,
+                    border: `1px solid ${color}44`,
+                    flexShrink: 0,
+                  }}
+                >
+                  {tag}
+                </span>
+              )
+            })}
+          </div>
+        </td>
+        <td
+          style={{ color: 'var(--pv-fg-2)' }}
+          title={METHOD_TOOLTIP[it.methodType]}
+        >
+          {METHOD_LABEL[it.methodType]}
+        </td>
+        <td
+          style={{ color: 'var(--pv-fg-2)', fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}
+          title={MILESTONE_TOOLTIP[it.targetMilestone]}
+        >
+          {it.targetMilestone}
+        </td>
+        <td>
+          <span
+            className={`pv-status ${
+              it.status === 'VALIDATED'
+                ? 'approved'
+                : it.status === 'EXECUTED'
+                ? 'review'
+                : it.status === 'BLOCKED'
+                ? 'deprecated'
+                : it.status === 'OBSOLETE'
+                ? 'obsolete'
+                : 'draft'
+            }`}
+          >
+            {STATUS_LABEL[it.status]}
+          </span>
+        </td>
+        <td className="cell-used" style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
+          <span className="num">{met}</span>/{total}
+          {total > 0 && (
+            <span className="bar" style={{ marginLeft: 6 }} title={`${Math.round((met / total) * 100)}% met`}>
+              <i style={{ width: `${(met / total) * 100}%` }} />
+            </span>
+          )}
+        </td>
+        <td
+          style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}
+          title={it.owner?.email ?? ''}
+        >
+          {it.owner?.name ?? '—'}
+        </td>
+        <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
+          {it._count?.signOffs ?? 0}
+          {(it._count?.comments ?? 0) > 0 && (
+            <span
+              style={{
+                marginLeft: 6,
+                color: 'var(--pv-fg-3)',
+                fontSize: 11,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 2,
+              }}
+              title={`${it._count?.comments} comment${(it._count?.comments ?? 0) === 1 ? '' : 's'}`}
+            >
+              <MessageCircle size={11} /> {it._count?.comments}
+            </span>
+          )}
+        </td>
+        <td
+          className="cell-updated"
+          title={new Date(it.updatedAt).toLocaleString()}
+        >
+          {relativeTime(it.updatedAt)}
+        </td>
+      </tr>
+    )
   }
 
   return (
@@ -543,6 +767,14 @@ export default function ValidationPage() {
           className={`pv-pill ${showArchived ? 'active' : ''}`}
         >
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setGroupByMilestone((v) => !v)}
+          title={groupByMilestone ? 'Switch back to a flat list' : 'Group rows under collapsible milestone headers'}
+          className={`pv-pill ${groupByMilestone ? 'active' : ''}`}
+        >
+          Group: Milestone
         </button>
         <label
           className={`pv-pill ${criterionFilter ? 'active' : ''}`}
@@ -956,219 +1188,76 @@ export default function ValidationPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((it: ValidationItemSummary) => {
-                const total = it.criteria?.length ?? 0
-                const met = it.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
-                return (
-                  <tr
-                    key={it.id}
-                    onClick={() => setSelectedItemId(it.id)}
-                    className={`${it.deletedAt ? 'is-archived' : ''} ${selectedIds.has(it.id) ? 'is-selected' : ''}`}
-                    style={{ cursor: 'pointer', opacity: it.deletedAt ? 0.6 : 1 }}
-                  >
-                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        className="pv-check"
-                        aria-label={`Select ${it.key}`}
-                        checked={selectedIds.has(it.id)}
-                        onChange={(e) => {
-                          setSelectedIds((prev) => {
+              {(() => {
+                // Without grouping we render the flat list. Grouping keeps the
+                // table's existing row markup intact and adds bordered headers
+                // around each milestone block; the headers themselves are
+                // single-cell colSpan rows so .first() data-row selectors in
+                // tests still work (see kb/playwright-e2e.md).
+                if (!groupByMilestone) {
+                  return items.map((it) => renderRow(it))
+                }
+                const groups = new Map<string, ValidationItemSummary[]>()
+                for (const it of items) {
+                  const k = it.targetMilestone || 'OTHER'
+                  const arr = groups.get(k) ?? []
+                  arr.push(it)
+                  groups.set(k, arr)
+                }
+                const order = VALIDATION_MILESTONES.filter((m) => groups.has(m))
+                return order.map((ms) => {
+                  const collapsed = collapsedMilestones.has(ms)
+                  const rows = groups.get(ms) ?? []
+                  return (
+                    <Fragment key={ms}>
+                      <tr
+                        onClick={() =>
+                          setCollapsedMilestones((prev) => {
                             const next = new Set(prev)
-                            if (e.target.checked) next.add(it.id)
-                            else next.delete(it.id)
+                            if (next.has(ms)) next.delete(ms)
+                            else next.add(ms)
                             return next
                           })
+                        }
+                        style={{
+                          cursor: 'pointer',
+                          background: 'var(--pv-surface-soft)',
+                          borderTop: '1px solid var(--pv-line)',
+                          borderBottom: '1px solid var(--pv-line)',
                         }}
-                      />
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()} style={{ paddingLeft: 6 }}>
-                      <button
-                        type="button"
-                        aria-label={it.starredByMe ? 'Unstar' : 'Star'}
-                        title={it.starredByMe ? 'Unstar' : 'Star this item'}
-                        onClick={async () => {
-                          if (it.starredByMe) {
-                            const res = await validationService.unstar(projectId, it.id)
-                            if (res.success) toast.info(`Unstarred ${it.key}`)
-                          } else {
-                            const res = await validationService.star(projectId, it.id)
-                            if (res.success) toast.success(`Starred ${it.key}`)
-                          }
-                          refetchAll()
-                        }}
-                        className={`vv-star-btn ${it.starredByMe ? 'on' : ''}`}
+                        title={collapsed ? `Expand ${ms}` : `Collapse ${ms}`}
                       >
-                        <Star size={14} fill={it.starredByMe ? 'currentColor' : 'none'} />
-                      </button>
-                    </td>
-                    <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          navigator.clipboard?.writeText(it.key)
-                        }}
-                        title="Click to copy"
-                        style={{ background: 'none', border: 0, padding: 0, color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}
-                      >
-                        {it.key}
-                      </button>
-                      {it.isSuspect && (
-                        <span
-                          className="vv-row-suspect"
-                          title="A linked requirement was updated after this validation. Re-run recommended."
-                        >
-                          <AlertTriangle size={10} /> suspect
-                        </span>
-                      )}
-                      {it.deletedAt && (
-                        <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--pv-amber)' }}>
-                          (archived)
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {it.priority && it.priority !== 'medium' && (
-                          <span
-                            className="vv-tag"
-                            style={{
-                              background:
-                                it.priority === 'critical'
-                                  ? 'var(--pv-red-tint)'
-                                  : it.priority === 'high'
-                                  ? 'var(--pv-amber-tint)'
-                                  : 'var(--pv-gray-tint)',
-                              color:
-                                it.priority === 'critical'
-                                  ? 'var(--pv-red)'
-                                  : it.priority === 'high'
-                                  ? 'var(--pv-amber)'
-                                  : 'var(--pv-fg-3)',
-                              border: '1px solid transparent',
-                              flexShrink: 0,
-                              textTransform: 'uppercase',
-                              fontWeight: 600,
-                            }}
-                            title={`Priority: ${it.priority}`}
-                          >
-                            {it.priority}
-                          </span>
-                        )}
-                        {it.dueDate && (() => {
-                          const due = new Date(it.dueDate)
-                          const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
-                          return (
-                            <span
-                              className="vv-tag"
-                              style={{
-                                background: overdue ? 'var(--pv-red-tint)' : 'var(--pv-surface)',
-                                color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-3)',
-                                border: '1px solid transparent',
-                                flexShrink: 0,
-                              }}
-                              title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
-                            >
-                              {overdue ? 'overdue · ' : 'due '}
-                              {due.toLocaleDateString()}
-                            </span>
-                          )
-                        })()}
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
-                        {it.tags?.map((tag) => {
-                          const color = tagColors.get(tag) ?? 'var(--pv-fg-3)'
-                          return (
-                            <span
-                              key={tag}
-                              className="vv-tag"
-                              style={{
-                                background: `${color}22`,
-                                color,
-                                border: `1px solid ${color}44`,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    </td>
-                    <td
-                      style={{ color: 'var(--pv-fg-2)' }}
-                      title={METHOD_TOOLTIP[it.methodType]}
-                    >
-                      {METHOD_LABEL[it.methodType]}
-                    </td>
-                    <td
-                      style={{ color: 'var(--pv-fg-2)', fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}
-                      title={MILESTONE_TOOLTIP[it.targetMilestone]}
-                    >
-                      {it.targetMilestone}
-                    </td>
-                    <td>
-                      <span
-                        className={`pv-status ${
-                          it.status === 'VALIDATED'
-                            ? 'approved'
-                            : it.status === 'EXECUTED'
-                            ? 'review'
-                            : it.status === 'BLOCKED'
-                            ? 'deprecated'
-                            : it.status === 'OBSOLETE'
-                            ? 'obsolete'
-                            : 'draft'
-                        }`}
-                      >
-                        {STATUS_LABEL[it.status]}
-                      </span>
-                    </td>
-                    <td className="cell-used" style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
-                      <span className="num">{met}</span>/{total}
-                      {total > 0 && (
-                        <span className="bar" style={{ marginLeft: 6 }} title={`${Math.round((met / total) * 100)}% met`}>
-                          <i style={{ width: `${(met / total) * 100}%` }} />
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}
-                      title={it.owner?.email ?? ''}
-                    >
-                      {it.owner?.name ?? '—'}
-                    </td>
-                    <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
-                      {it._count?.signOffs ?? 0}
-                      {(it._count?.comments ?? 0) > 0 && (
-                        <span
+                        <td
+                          colSpan={TABLE_COL_COUNT}
                           style={{
-                            marginLeft: 6,
-                            color: 'var(--pv-fg-3)',
-                            fontSize: 11,
-                            display: 'inline-flex',
+                            padding: '4px 8px',
+                            fontFamily: 'var(--pv-font-mono)',
+                            fontSize: 12,
+                            color: 'var(--pv-fg-2)',
+                            display: 'flex',
                             alignItems: 'center',
-                            gap: 2,
+                            gap: 4,
                           }}
-                          title={`${it._count?.comments} comment${(it._count?.comments ?? 0) === 1 ? '' : 's'}`}
                         >
-                          <MessageCircle size={11} /> {it._count?.comments}
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className="cell-updated"
-                      title={new Date(it.updatedAt).toLocaleString()}
-                    >
-                      {relativeTime(it.updatedAt)}
-                    </td>
-                  </tr>
-                )
-              })}
+                          {collapsed ? <ArrowDown size={11} /> : <ArrowUp size={11} />}
+                          <strong style={{ marginLeft: 4, fontWeight: 600 }}>
+                            {MILESTONE_LABEL[ms]}
+                          </strong>
+                          <span style={{ marginLeft: 6, color: 'var(--pv-fg-3)' }}>
+                            ({rows.length})
+                          </span>
+                        </td>
+                      </tr>
+                      {!collapsed && rows.map((it) => renderRow(it))}
+                    </Fragment>
+                  )
+                })
+              })()}
             </tbody>
           </table>
         </div>
       )}
+
 
       {selectedIds.size > 0 && (
         <div className="pv-bulk-dock">
