@@ -7,6 +7,7 @@ import {
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import { RenderWithEntityRefs } from '../../utils/entityRefs'
 import { checkAmbiguity } from '../../utils/ambiguityCheck'
+import MarkdownEditor from '../common/MarkdownEditor'
 import { projectService } from '../../services/project.service'
 import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
@@ -457,12 +458,16 @@ export default function ValidationItemDetailDrawer({
                 </div>
               )
             })()}
-            <textarea
+            <MarkdownEditor
               value={draft?.description ?? ''}
-              onChange={(e) => draft && setDraft({ ...draft, description: e.target.value })}
+              onChange={(next) => draft && setDraft({ ...draft, description: next })}
               rows={3}
-              placeholder="Why this validation matters. Reference REQ-001, PRM-014, VAL-… and @mention teammates."
-              style={{ width: '100%', padding: 8, fontSize: 13, lineHeight: 1.5, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit', resize: 'vertical' }}
+              placeholder="Why this validation matters. Reference REQ-001, PRM-014, VAL-… and @mention teammates. Markdown supported."
+              members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
+                id: m.userId,
+                name: m.user?.name ?? null,
+                email: m.user?.email ?? null,
+              }))}
             />
             {draft?.description && (() => {
               const findings = checkAmbiguity(draft.description)

@@ -9,6 +9,8 @@ import {
   type ValidationMilestone,
 } from '../../services/validation.service'
 import { METHOD_LABEL, METHOD_TOOLTIP, MILESTONE_LABEL, MILESTONE_TOOLTIP } from './validationLabels'
+import MarkdownEditor from '../common/MarkdownEditor'
+import { projectService } from '../../services/project.service'
 
 interface Props {
   projectId: string
@@ -34,6 +36,16 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
       const res = await validationService.getSettings(projectId)
       return res.success && res.data ? res.data : null
     },
+  })
+
+  const { data: members = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await projectService.getProjectMembers(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    staleTime: 5 * 60_000,
   })
 
   useEffect(() => {
@@ -150,12 +162,16 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
               Description
             </label>
-            <textarea
+            <MarkdownEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
               rows={2}
-              placeholder="Why this validation matters; the stakeholder need being addressed."
-              style={{ width: '100%', height: 30, padding: '0 10px', fontSize: 13, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+              placeholder="Why this validation matters; the stakeholder need being addressed. Reference REQ-001 / PRM-014. Markdown supported."
+              members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
+                id: m.userId,
+                name: m.user?.name ?? null,
+                email: m.user?.email ?? null,
+              }))}
             />
           </div>
 
