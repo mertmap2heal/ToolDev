@@ -94,6 +94,8 @@ export default function ValidationPage() {
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
+  const [dragItemId, setDragItemId] = useState<string | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<ValidationStatus | null>(null)
 
   // Named filter views. Persisted per project alongside the active-filter
   // state but in their own LS key so clearing one does not affect the other.
@@ -1535,18 +1537,59 @@ export default function ValidationPage() {
                 : s === 'OBSOLETE'
                 ? 'obsolete'
                 : 'draft'
+            const isOver = dragOverStatus === s
             return (
               <div
                 key={s}
+                onDragOver={(e) => {
+                  if (!dragItemId) return
+                  e.preventDefault()
+                  if (dragOverStatus !== s) setDragOverStatus(s)
+                }}
+                onDragLeave={() => {
+                  if (dragOverStatus === s) setDragOverStatus(null)
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault()
+                  const id = e.dataTransfer.getData('text/plain') || dragItemId
+                  setDragItemId(null)
+                  setDragOverStatus(null)
+                  if (!id) return
+                  const card = items.find((i) => i.id === id)
+                  if (!card || card.status === s) return
+                  if (s === 'VALIDATED') {
+                    const ok = window.confirm(
+                      `Move ${card.key} to VALIDATED?\n\n` +
+                        'This signs the validation as complete. Make sure execution evidence ' +
+                        'and criterion outcomes are recorded first.',
+                    )
+                    if (!ok) return
+                  }
+                  const res = await validationService.update(projectId, id, { status: s })
+                  if (!res.success) {
+                    const r = res as unknown as { code?: string; allowedNext?: string[]; from?: string; to?: string; error?: string }
+                    if (r.code === 'ILLEGAL_STATUS_TRANSITION') {
+                      toast.error(
+                        `Cannot move ${r.from} → ${r.to}. Allowed next: ${(r.allowedNext ?? []).join(', ') || '(none)'}`,
+                      )
+                    } else {
+                      toast.error(r.error ?? 'Status change failed')
+                    }
+                    return
+                  }
+                  toast.success(`${card.key} → ${s}`)
+                  refetchAll()
+                }}
                 style={{
-                  background: 'var(--pv-surface-soft)',
-                  border: '1px solid var(--pv-line)',
+                  background: isOver ? 'var(--pv-blue-tint, rgba(43,108,176,0.10))' : 'var(--pv-surface-soft)',
+                  border: isOver ? '1px dashed var(--pv-blue)' : '1px solid var(--pv-line)',
                   borderRadius: 6,
                   padding: 8,
                   minHeight: 200,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 6,
+                  transition: 'background 80ms ease-out, border-color 80ms ease-out',
                 }}
               >
                 <div
@@ -1586,10 +1629,21 @@ export default function ValidationPage() {
                 {cards.map((it) => {
                   const total = it.criteria?.length ?? 0
                   const met = it.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
+                  const isDragging = dragItemId === it.id
                   return (
                     <button
                       key={it.id}
                       type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        setDragItemId(it.id)
+                        e.dataTransfer.setData('text/plain', it.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragEnd={() => {
+                        setDragItemId(null)
+                        setDragOverStatus(null)
+                      }}
                       onClick={() => setSelectedItemId(it.id)}
                       style={{
                         background: 'var(--pv-bg)',
@@ -1597,7 +1651,8 @@ export default function ValidationPage() {
                         borderRadius: 4,
                         padding: 8,
                         textAlign: 'left',
-                        cursor: 'pointer',
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        opacity: isDragging ? 0.4 : 1,
                         font: 'inherit',
                         color: 'inherit',
                         display: 'flex',
