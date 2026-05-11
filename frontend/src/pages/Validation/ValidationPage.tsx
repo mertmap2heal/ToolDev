@@ -84,6 +84,25 @@ export default function ValidationPage() {
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
+
+  // Named filter views. Persisted per project alongside the active-filter
+  // state but in their own LS key so clearing one does not affect the other.
+  interface SavedView {
+    name: string
+    payload: {
+      search: string
+      statusFilter: string
+      methodFilter: string
+      milestoneFilter: string
+      ownerFilter: string
+      tagsAny: string[]
+      starredOnly: boolean
+      overdueOnly: boolean
+      showSuspectOnly: boolean
+      criterionFilter: string
+    }
+  }
+  const [savedViews, setSavedViews] = useState<SavedView[]>([])
   const toast = useValidationToast()
 
   // Persist last filter state per project across reloads so users come back to
@@ -125,6 +144,69 @@ export default function ValidationPage() {
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  // Load saved views once per project.
+  const viewsKey = `validation:savedViews:${projectId}`
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(viewsKey)
+      if (!raw) return
+      const arr = JSON.parse(raw)
+      if (Array.isArray(arr)) setSavedViews(arr as SavedView[])
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  const persistViews = (next: SavedView[]) => {
+    setSavedViews(next)
+    try {
+      localStorage.setItem(viewsKey, JSON.stringify(next))
+    } catch { /* ignore */ }
+  }
+
+  const applyView = (v: SavedView) => {
+    const p = v.payload
+    setSearch(p.search)
+    setStatusFilter(p.statusFilter as ValidationStatus | '')
+    setMethodFilter(p.methodFilter as ValidationMethodType | '')
+    setMilestoneFilter(p.milestoneFilter as ValidationMilestone | '')
+    setOwnerFilter(p.ownerFilter)
+    setTagsAny(p.tagsAny)
+    setStarredOnly(p.starredOnly)
+    setOverdueOnly(p.overdueOnly)
+    setShowSuspectOnly(p.showSuspectOnly)
+    setCriterionFilter(
+      p.criterionFilter as '' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria',
+    )
+  }
+
+  const saveCurrentAsView = () => {
+    const name = window.prompt('Save current filters as view — name:')?.trim()
+    if (!name) return
+    if (savedViews.some((v) => v.name === name)) {
+      if (!window.confirm(`A view named "${name}" already exists. Overwrite it?`)) return
+    }
+    const payload: SavedView['payload'] = {
+      search,
+      statusFilter,
+      methodFilter,
+      milestoneFilter,
+      ownerFilter,
+      tagsAny,
+      starredOnly,
+      overdueOnly,
+      showSuspectOnly,
+      criterionFilter,
+    }
+    const next = [...savedViews.filter((v) => v.name !== name), { name, payload }]
+    persistViews(next)
+    toast.success(`Saved view "${name}"`)
+  }
+
+  const deleteView = (name: string) => {
+    if (!window.confirm(`Delete saved view "${name}"?`)) return
+    persistViews(savedViews.filter((v) => v.name !== name))
+  }
 
   // Keep ?q= in the URL in sync with the search box. URL is authoritative on
   // mount (so deep-links from entity-ref chips land filtered); after that the
@@ -845,6 +927,54 @@ export default function ValidationPage() {
         >
           Group: Milestone
         </button>
+        <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Apply a saved view">
+          View
+          <select
+            value=""
+            onChange={(e) => {
+              const action = e.target.value
+              e.currentTarget.value = ''
+              if (!action) return
+              if (action === '__save__') {
+                saveCurrentAsView()
+                return
+              }
+              if (action.startsWith('__delete__:')) {
+                deleteView(action.slice('__delete__:'.length))
+                return
+              }
+              const v = savedViews.find((s) => s.name === action)
+              if (v) applyView(v)
+            }}
+            style={{
+              background: 'transparent',
+              border: 0,
+              color: 'inherit',
+              font: 'inherit',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="">Select…</option>
+            {savedViews.length > 0 && (
+              <optgroup label="Apply">
+                {savedViews.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Manage">
+              <option value="__save__">Save current filters as view…</option>
+              {savedViews.map((v) => (
+                <option key={`d-${v.name}`} value={`__delete__:${v.name}`}>
+                  Delete "{v.name}"
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
         <label
           className={`pv-pill ${criterionFilter ? 'active' : ''}`}
           style={{ cursor: 'pointer', paddingRight: 4 }}
