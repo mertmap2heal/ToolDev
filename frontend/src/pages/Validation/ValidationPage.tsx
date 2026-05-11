@@ -82,6 +82,8 @@ export default function ValidationPage() {
   const [criterionFilter, setCriterionFilter] = useState<'' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria'>('')
   const [groupByMilestone, setGroupByMilestone] = useState(false)
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null)
+  const [inlineEditValue, setInlineEditValue] = useState('')
   const toast = useValidationToast()
 
   // Persist last filter state per project across reloads so users come back to
@@ -479,7 +481,74 @@ export default function ValidationPage() {
                 </span>
               )
             })()}
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
+            {inlineEditId === it.id ? (
+              <input
+                autoFocus
+                value={inlineEditValue}
+                onChange={(e) => setInlineEditValue(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setInlineEditId(null)
+                    setInlineEditValue('')
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const trimmed = inlineEditValue.trim()
+                    if (!trimmed || trimmed === it.title) {
+                      setInlineEditId(null)
+                      setInlineEditValue('')
+                      return
+                    }
+                    const res = await validationService.update(projectId, it.id, { title: trimmed })
+                    setInlineEditId(null)
+                    setInlineEditValue('')
+                    if (res.success) {
+                      toast.success(`Renamed ${it.key}`)
+                      refetchAll()
+                    } else {
+                      toast.error(res.error ?? 'Rename failed')
+                    }
+                  }
+                }}
+                onBlur={async () => {
+                  const trimmed = inlineEditValue.trim()
+                  if (!trimmed || trimmed === it.title) {
+                    setInlineEditId(null)
+                    setInlineEditValue('')
+                    return
+                  }
+                  const res = await validationService.update(projectId, it.id, { title: trimmed })
+                  setInlineEditId(null)
+                  setInlineEditValue('')
+                  if (res.success) refetchAll()
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: 80,
+                  padding: '1px 4px',
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 3,
+                  background: 'var(--pv-bg)',
+                  color: 'var(--pv-fg)',
+                  font: 'inherit',
+                }}
+              />
+            ) : (
+              <span
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'text' }}
+                title="Double-click to rename"
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  setInlineEditId(it.id)
+                  setInlineEditValue(it.title)
+                }}
+              >
+                {it.title}
+              </span>
+            )}
             {it.tags?.map((tag) => {
               const color = tagColors.get(tag) ?? 'var(--pv-fg-3)'
               return (
