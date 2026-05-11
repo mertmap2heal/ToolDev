@@ -73,6 +73,30 @@ export default function ValidationPage() {
   const [tagsAny, setTagsAny] = useState<string[]>([])
   const [overdueOnly, setOverdueOnly] = useState(false)
 
+  // Persist last filter state per project across reloads so users come back to
+  // exactly the view they left.
+  const lsKey = `validation:filters:${projectId}`
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(lsKey)
+      if (!raw) return
+      const v = JSON.parse(raw)
+      if (typeof v !== 'object' || v === null) return
+      if (typeof v.search === 'string') setSearch(v.search)
+      if (typeof v.statusFilter === 'string') setStatusFilter(v.statusFilter)
+      if (typeof v.methodFilter === 'string') setMethodFilter(v.methodFilter)
+      if (typeof v.milestoneFilter === 'string') setMilestoneFilter(v.milestoneFilter)
+      if (typeof v.ownerFilter === 'string') setOwnerFilter(v.ownerFilter)
+      if (Array.isArray(v.tagsAny)) setTagsAny(v.tagsAny)
+      if (typeof v.starredOnly === 'boolean') setStarredOnly(v.starredOnly)
+      if (typeof v.overdueOnly === 'boolean') setOverdueOnly(v.overdueOnly)
+      if (typeof v.showSuspectOnly === 'boolean') setShowSuspectOnly(v.showSuspectOnly)
+      if (typeof v.sortBy === 'string') setSortBy(v.sortBy)
+      if (v.sortDir === 'asc' || v.sortDir === 'desc') setSortDir(v.sortDir)
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
   const filters = useMemo(
     () => ({
       search: search.trim() || undefined,
@@ -88,6 +112,28 @@ export default function ValidationPage() {
     }),
     [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir, tagsAny, ownerFilter],
   )
+
+  // Save filter state on every change.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        lsKey,
+        JSON.stringify({
+          search,
+          statusFilter,
+          methodFilter,
+          milestoneFilter,
+          ownerFilter,
+          tagsAny,
+          starredOnly,
+          overdueOnly,
+          showSuspectOnly,
+          sortBy,
+          sortDir,
+        }),
+      )
+    } catch { /* ignore */ }
+  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir])
 
   const toggleSort = (col: ValidationSortBy) => {
     if (sortBy === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
