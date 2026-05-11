@@ -151,6 +151,12 @@ export default function ValidationItemDetailDrawer({
   if (!isOpen) return null
 
   const close = () => {
+    if (isDirty) {
+      const ok = window.confirm(
+        'You have unsaved changes. Discard and close?',
+      )
+      if (!ok) return
+    }
     setDraft(null)
     setSignOffOpen(false)
     setRoleLabel('')
