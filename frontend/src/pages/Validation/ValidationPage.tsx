@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
   AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
-  MessageCircle,
+  MessageCircle, Copy,
 } from 'lucide-react'
 import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import ValidationShortcutsOverlay from '../../components/validation/ValidationShortcutsOverlay'
@@ -508,16 +508,29 @@ export default function ValidationPage() {
           </button>
         </td>
         <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
+          <span>{it.key}</span>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               navigator.clipboard?.writeText(it.key)
+              toast.info(`Copied ${it.key}`)
             }}
-            title="Click to copy"
-            style={{ background: 'none', border: 0, padding: 0, color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}
+            title="Copy key to clipboard"
+            aria-label={`Copy ${it.key}`}
+            className="vv-copy-btn"
+            style={{
+              marginLeft: 4,
+              background: 'none',
+              border: 0,
+              padding: 0,
+              color: 'var(--pv-fg-3)',
+              cursor: 'pointer',
+              opacity: 0.5,
+              verticalAlign: 'middle',
+            }}
           >
-            {it.key}
+            <Copy size={11} />
           </button>
           {it.isSuspect && (
             <span
@@ -593,7 +606,11 @@ export default function ValidationPage() {
             ) : (
               <span
                 style={{ overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'text' }}
-                title="Double-click to rename"
+                title="Double-click to rename · single-click does not open the drawer here"
+                // Single click stops the row's onClick so the drawer does not
+                // open while the user is about to double-click for rename.
+                // Open the drawer by clicking any other cell on the row.
+                onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => {
                   e.stopPropagation()
                   setInlineEditId(it.id)
