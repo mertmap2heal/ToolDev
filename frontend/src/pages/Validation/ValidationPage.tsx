@@ -24,6 +24,7 @@ import ValidationOnboardingBanner from '../../components/validation/ValidationOn
 import CreateValidationItemModal from '../../components/validation/CreateValidationItemModal'
 import CreateFromRequirementsModal from '../../components/validation/CreateFromRequirementsModal'
 import UncoveredRequirementsLauncher from '../../components/validation/UncoveredRequirementsLauncher'
+import { useValidationToast, ValidationToastRenderer } from '../../components/validation/useValidationToast'
 import ValidationItemDetailDrawer from '../../components/validation/ValidationItemDetailDrawer'
 import {
   METHOD_LABEL,
@@ -73,6 +74,7 @@ export default function ValidationPage() {
   const [tagsAny, setTagsAny] = useState<string[]>([])
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [density, setDensity] = useState<'compact' | 'comfortable'>('compact')
+  const toast = useValidationToast()
 
   // Persist last filter state per project across reloads so users come back to
   // exactly the view they left.
@@ -1052,6 +1054,8 @@ export default function ValidationPage() {
       />
 
       <ValidationHelpDrawer isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <ValidationToastRenderer toasts={toast.toasts} />
 
       <ValidationItemDetailDrawer
         projectId={projectId}
