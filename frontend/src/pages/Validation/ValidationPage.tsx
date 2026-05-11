@@ -8,6 +8,7 @@ import {
   MessageCircle,
 } from 'lucide-react'
 import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
+import ValidationShortcutsOverlay from '../../components/validation/ValidationShortcutsOverlay'
 import {
   validationService,
   VALIDATION_METHOD_TYPES,
@@ -70,6 +71,7 @@ export default function ValidationPage() {
   const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [starredOnly, setStarredOnly] = useState(false)
   const [sortBy, setSortBy] = useState<ValidationSortBy>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -272,7 +274,7 @@ export default function ValidationPage() {
       }
       if (!inField && e.key === '?') {
         e.preventDefault()
-        setHelpOpen(true)
+        setShortcutsOpen(true)
         return
       }
       if (inField) return
@@ -322,7 +324,7 @@ export default function ValidationPage() {
               type="button"
               onClick={() => setHelpOpen(true)}
               aria-label="Open Validation help"
-              title="What is this page? Who signs off? How does it work? Click for the user manual."
+              title="What is this page? Who signs off? How does it work? Click for the user manual. (Press ? for keyboard shortcuts.)"
               className="pv-icon-btn"
               style={{ width: 22, height: 22 }}
             >
@@ -1339,6 +1341,12 @@ export default function ValidationPage() {
       />
 
       <ValidationHelpDrawer isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <ValidationShortcutsOverlay
+        isOpen={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        onOpenManual={() => setHelpOpen(true)}
+      />
 
       <ValidationToastRenderer toasts={toast.toasts} />
 
