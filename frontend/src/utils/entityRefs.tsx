@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { validationService } from '../services/validation.service'
+import { requirementService } from '../services/requirement.service'
+import { parameterService } from '../services/parameter.service'
 
 // Cross-entity reference parser. Recognises plain-text IDs like REQ-001,
 // VAL-002, PRM-014 etc. that engineers will naturally type in comments,
@@ -106,20 +108,38 @@ export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: 
   const [hovering, setHovering] = useState(false)
   const upperPrefix = prefix.toUpperCase()
 
-  // For validation items we can lazily resolve the chip to a real backend
-  // record using the existing list endpoint with `search`. Other modules
-  // would need their own resolver; we add VAL today and leave the others as
-  // plain links with a generic title until each module exposes a search.
-  const isVal = upperPrefix === 'VAL'
-  const { data: preview } = useQuery({
-    queryKey: ['entity-ref-preview', 'VAL', projectId, key],
-    enabled: !!projectId && isVal && hovering,
+  // Per-prefix resolvers. Each returns { title, status? } or null. Kept here
+  // as a small registry so the chip stays decoupled from any single module's
+  // service shape. Each resolver only fires when this chip is being hovered.
+  const resolvable = upperPrefix === 'VAL' || upperPrefix === 'REQ' || upperPrefix === 'PRM'
+  const { data: preview } = useQuery<{ title: string; status?: string } | null>({
+    queryKey: ['entity-ref-preview', upperPrefix, projectId, key],
+    enabled: !!projectId && resolvable && hovering,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       if (!projectId) return null
-      const res = await validationService.list(projectId, { search: key })
-      if (!res.success || !res.data) return null
-      return res.data.find((i) => i.key === key) ?? null
+      if (upperPrefix === 'VAL') {
+        const res = await validationService.list(projectId, { search: key })
+        if (!res.success || !res.data) return null
+        const hit = res.data.find((i) => i.key === key)
+        return hit ? { title: hit.title, status: hit.status } : null
+      }
+      if (upperPrefix === 'REQ') {
+        const res = await requirementService.getRequirements(projectId, { search: key })
+        if (!res.success || !res.data) return null
+        const items = Array.isArray(res.data) ? res.data : res.data.items
+        type ReqLite = { requirementId?: string | null; title: string; status?: string }
+        const hit = (items as ReqLite[]).find((r) => r.requirementId === key)
+        return hit ? { title: hit.title, status: hit.status } : null
+      }
+      if (upperPrefix === 'PRM') {
+        const res = await parameterService.getParameters(projectId, { search: key })
+        if (!res.success || !res.data) return null
+        type PrmLite = { parameterId?: string | null; name: string; status?: string }
+        const hit = (res.data as PrmLite[]).find((p) => p.parameterId === key)
+        return hit ? { title: hit.name, status: hit.status } : null
+      }
+      return null
     },
   })
 
@@ -144,7 +164,9 @@ export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: 
   const to = `/projects/${projectId}/${entity.path}?${queryParam}=${encodeURIComponent(key)}`
   // Default tooltip; if we have a preview, swap it for a richer text.
   const tooltip = preview
-    ? `${preview.title} — ${preview.status}`
+    ? preview.status
+      ? `${preview.title} — ${preview.status}`
+      : preview.title
     : `Open ${entity.label ?? entity.module}: ${key}`
   return (
     <span
@@ -193,7 +215,7 @@ export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: 
         >
           <div style={{ fontWeight: 600, marginBottom: 2 }}>{preview.title}</div>
           <div style={{ color: 'var(--pv-fg-3, #888)', fontFamily: 'var(--pv-font-mono, monospace)' }}>
-            {entity.label} · {preview.status}
+            {entity.label}{preview.status ? ` · ${preview.status}` : ''}
           </div>
         </span>
       )}
