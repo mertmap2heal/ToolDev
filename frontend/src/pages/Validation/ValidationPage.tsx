@@ -38,6 +38,15 @@ import {
   STATUS_LABEL,
 } from '../../components/validation/validationLabels'
 
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--pv-fg-3)' }}>
+      <span style={{ width: 8, height: 8, background: color, borderRadius: 2, display: 'inline-block' }} />
+      {label}
+    </span>
+  )
+}
+
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()
   const diff = Date.now() - then
@@ -868,6 +877,141 @@ export default function ValidationPage() {
           </div>
         </div>
       )}
+
+      {(() => {
+        // Per-milestone burndown — stacked horizontal bar of counts by status.
+        // Helps a programme manager see, at a glance, which milestones are
+        // certification-ready and which are still in flight. Uses live `items`
+        // (after filters) so the bars react to the current view.
+        const live = items.filter((i) => !i.deletedAt)
+        if (live.length === 0) return null
+        const byMs = new Map<string, { v: number; e: number; p: number; b: number; o: number; total: number }>()
+        for (const it of live) {
+          const k = it.targetMilestone || 'OTHER'
+          const row = byMs.get(k) ?? { v: 0, e: 0, p: 0, b: 0, o: 0, total: 0 }
+          if (it.status === 'VALIDATED') row.v++
+          else if (it.status === 'EXECUTED') row.e++
+          else if (it.status === 'PLANNED') row.p++
+          else if (it.status === 'BLOCKED') row.b++
+          else if (it.status === 'OBSOLETE') row.o++
+          row.total++
+          byMs.set(k, row)
+        }
+        const ms = VALIDATION_MILESTONES.filter((m) => byMs.has(m))
+        if (ms.length === 0) return null
+        return (
+          <div
+            style={{
+              border: '1px solid var(--pv-line)',
+              borderRadius: 6,
+              padding: 10,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+            title="Validation readiness by milestone (filters applied)"
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 11,
+                color: 'var(--pv-fg-3)',
+                fontWeight: 600,
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <span>Milestone readiness</span>
+              <span style={{ display: 'inline-flex', gap: 8, marginLeft: 'auto', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>
+                <Legend color="var(--pv-green, #1B4332)" label="validated" />
+                <Legend color="var(--pv-blue, #2D4A63)" label="executed" />
+                <Legend color="var(--pv-fg-3)" label="planned" />
+                <Legend color="var(--pv-red, #8B0000)" label="blocked" />
+                <Legend color="var(--pv-fg-4, #aaa)" label="obsolete" />
+              </span>
+            </div>
+            {ms.map((m) => {
+              const r = byMs.get(m)!
+              const pct = (n: number) => (r.total ? (n / r.total) * 100 : 0)
+              return (
+                <div
+                  key={m}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}
+                >
+                  <span
+                    style={{
+                      width: 56,
+                      fontFamily: 'var(--pv-font-mono)',
+                      fontSize: 11,
+                      color: 'var(--pv-fg-2)',
+                      flexShrink: 0,
+                    }}
+                    title={MILESTONE_TOOLTIP[m]}
+                  >
+                    {m}
+                  </span>
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 14,
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                      background: 'var(--pv-surface-soft)',
+                      display: 'flex',
+                    }}
+                  >
+                    {r.v > 0 && (
+                      <span
+                        style={{ width: `${pct(r.v)}%`, background: 'var(--pv-green, #1B4332)' }}
+                        title={`${r.v} validated`}
+                      />
+                    )}
+                    {r.e > 0 && (
+                      <span
+                        style={{ width: `${pct(r.e)}%`, background: 'var(--pv-blue, #2D4A63)' }}
+                        title={`${r.e} executed`}
+                      />
+                    )}
+                    {r.p > 0 && (
+                      <span
+                        style={{ width: `${pct(r.p)}%`, background: 'var(--pv-fg-3)' }}
+                        title={`${r.p} planned`}
+                      />
+                    )}
+                    {r.b > 0 && (
+                      <span
+                        style={{ width: `${pct(r.b)}%`, background: 'var(--pv-red, #8B0000)' }}
+                        title={`${r.b} blocked`}
+                      />
+                    )}
+                    {r.o > 0 && (
+                      <span
+                        style={{ width: `${pct(r.o)}%`, background: 'var(--pv-fg-4, #aaa)' }}
+                        title={`${r.o} obsolete`}
+                      />
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      width: 72,
+                      textAlign: 'right',
+                      fontFamily: 'var(--pv-font-mono)',
+                      fontSize: 11,
+                      color: 'var(--pv-fg-3)',
+                      flexShrink: 0,
+                    }}
+                    title={`${r.v}/${r.total} validated`}
+                  >
+                    {r.v}/{r.total}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       <div className="pv-subbar" style={{ margin: 0, borderRadius: 6, border: '1px solid var(--pv-line)' }}>
         <div className="pv-search">
