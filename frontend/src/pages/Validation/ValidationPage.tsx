@@ -71,6 +71,7 @@ export default function ValidationPage() {
   const [sortBy, setSortBy] = useState<ValidationSortBy>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [tagsAny, setTagsAny] = useState<string[]>([])
+  const [overdueOnly, setOverdueOnly] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -139,10 +140,17 @@ export default function ValidationPage() {
     return m
   }, [settings])
 
-  const items = useMemo(
-    () => (showSuspectOnly ? rawItems.filter((i) => i.isSuspect) : rawItems),
-    [rawItems, showSuspectOnly],
-  )
+  const items = useMemo(() => {
+    let arr = rawItems
+    if (showSuspectOnly) arr = arr.filter((i) => i.isSuspect)
+    if (overdueOnly) {
+      const now = Date.now()
+      arr = arr.filter(
+        (i) => i.dueDate && new Date(i.dueDate).getTime() < now && i.status !== 'VALIDATED',
+      )
+    }
+    return arr
+  }, [rawItems, showSuspectOnly, overdueOnly])
 
   const refetchAll = () => {
     refetch()
@@ -383,6 +391,14 @@ export default function ValidationPage() {
         >
           <Filter size={14} /> Filters
           {activeFilterCount > 0 && <span className="pv-badge">{activeFilterCount}</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOverdueOnly((v) => !v)}
+          title={overdueOnly ? 'Show all items' : 'Show only items past their due date and not yet validated'}
+          className={`pv-pill ${overdueOnly ? 'active' : ''}`}
+        >
+          <AlertTriangle size={14} /> Overdue
         </button>
         <button
           type="button"
