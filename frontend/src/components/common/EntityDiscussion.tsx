@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageCircle, Send, Trash2, Edit2, X, Check } from 'lucide-react'
 import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
-import MarkdownEditor, { MarkdownPreview } from './MarkdownEditor'
+import MarkdownEditor, {
+  MarkdownPreview,
+  MD_ACTIONS_COMPACT,
+  MD_ACTIONS_INLINE,
+} from './MarkdownEditor'
 
 // Universal discussion / chat component. Multiple modules need a threaded,
 // editable, deletable comment list against an entity (parameter, validation
@@ -274,7 +278,9 @@ export default function EntityDiscussion({
             <MarkdownEditor
               value={replyDraft}
               onChange={setReplyDraft}
-              rows={2}
+              rows={3}
+              minHeight={96}
+              actions={MD_ACTIONS_INLINE}
               placeholder="Reply — @mention, REQ-/VAL-/PRM- refs and Markdown supported"
               members={members}
             />
@@ -333,7 +339,9 @@ export default function EntityDiscussion({
           onChange={setDraft}
           placeholder={placeholder}
           members={members}
-          rows={3}
+          rows={4}
+          minHeight={120}
+          actions={MD_ACTIONS_COMPACT}
         />
         <div
           style={{

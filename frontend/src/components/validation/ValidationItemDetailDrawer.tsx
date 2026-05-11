@@ -6,7 +6,11 @@ import {
 } from 'lucide-react'
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import { checkAmbiguity } from '../../utils/ambiguityCheck'
-import MarkdownEditor, { MarkdownPreview } from '../common/MarkdownEditor'
+import MarkdownEditor, {
+  MarkdownPreview,
+  MD_ACTIONS_COMPACT,
+  MD_ACTIONS_INLINE,
+} from '../common/MarkdownEditor'
 import { suggestCriteriaFromRequirement, type CriterionSuggestion } from '../../utils/suggestCriteria'
 import { projectService } from '../../services/project.service'
 import LinkRequirementPicker from './LinkRequirementPicker'
@@ -626,7 +630,13 @@ export default function ValidationItemDetailDrawer({
             <MarkdownEditor
               value={draft?.description ?? ''}
               onChange={(next) => draft && setDraft({ ...draft, description: next })}
-              rows={3}
+              rows={5}
+              minHeight={140}
+              actions={MD_ACTIONS_COMPACT}
+              // Default to Preview when the field already has content so saved
+              // mentions / refs render as chips on open; Write tab is one click
+              // away for edits.
+              defaultTab={draft?.description ? 'preview' : 'write'}
               placeholder="Why this validation matters. Reference REQ-001, PRM-014, VAL-… and @mention teammates. Markdown supported."
               members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
                 id: m.userId,
@@ -1170,7 +1180,9 @@ export default function ValidationItemDetailDrawer({
                         <MarkdownEditor
                           value={c.notes ?? ''}
                           onChange={(next) => updateCriterion(c.id, { notes: next })}
-                          rows={1}
+                          rows={2}
+                          minHeight={56}
+                          actions={MD_ACTIONS_INLINE}
                           placeholder="Notes — reference REQ-001 / @mentions / **bold** supported"
                           members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
                             id: m.userId,
@@ -1306,7 +1318,9 @@ export default function ValidationItemDetailDrawer({
                 <MarkdownEditor
                   value={comment}
                   onChange={setComment}
-                  rows={2}
+                  rows={3}
+                  minHeight={96}
+                  actions={MD_ACTIONS_INLINE}
                   placeholder="Optional comment — reference REQ-/VAL-/PRM- and @mention teammates. Markdown supported."
                   members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
                     id: m.userId,

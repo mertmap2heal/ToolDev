@@ -9,7 +9,7 @@ import {
   type ValidationMilestone,
 } from '../../services/validation.service'
 import { METHOD_LABEL, METHOD_TOOLTIP, MILESTONE_LABEL, MILESTONE_TOOLTIP } from './validationLabels'
-import MarkdownEditor from '../common/MarkdownEditor'
+import MarkdownEditor, { MD_ACTIONS_COMPACT } from '../common/MarkdownEditor'
 import { projectService } from '../../services/project.service'
 
 interface Props {
@@ -165,7 +165,9 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
             <MarkdownEditor
               value={description}
               onChange={setDescription}
-              rows={2}
+              rows={4}
+              minHeight={120}
+              actions={MD_ACTIONS_COMPACT}
               placeholder="Why this validation matters; the stakeholder need being addressed. Reference REQ-001 / PRM-014. Markdown supported."
               members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
                 id: m.userId,

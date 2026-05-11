@@ -36,6 +36,41 @@ export interface MarkdownMember {
   email?: string | null
 }
 
+// Toolbar action keys. Callers pick which buttons appear so that surfaces
+// with different conventions (a Validation description vs a Discussion comment)
+// only expose the actions that make sense in that context.
+export type MdAction =
+  | 'bold'
+  | 'italic'
+  | 'strike'
+  | 'heading'
+  | 'quote'
+  | 'code'
+  | 'codeblock'
+  | 'link'
+  | 'list'
+  | 'ol'
+  | 'task'
+  | 'table'
+  | 'mention'
+
+export const MD_ACTIONS_FULL: MdAction[] = [
+  'bold', 'italic', 'strike', 'heading', 'quote', 'code', 'codeblock', 'link',
+  'list', 'ol', 'task', 'table', 'mention',
+]
+
+// Compact set for narrative fields like Validation item description: no
+// task-list (a description is not a checklist) and no table (descriptions
+// are prose, not data).
+export const MD_ACTIONS_COMPACT: MdAction[] = [
+  'bold', 'italic', 'strike', 'heading', 'quote', 'code', 'link', 'list', 'ol', 'mention',
+]
+
+// Minimal set for inline notes (criterion notes, sign-off comments).
+export const MD_ACTIONS_INLINE: MdAction[] = [
+  'bold', 'italic', 'code', 'link', 'mention',
+]
+
 interface Props {
   value: string
   onChange: (next: string) => void
@@ -46,6 +81,12 @@ interface Props {
   rows?: number
   /** Disabled — render preview only. */
   disabled?: boolean
+  /** Which toolbar actions to render. Defaults to MD_ACTIONS_FULL. */
+  actions?: MdAction[]
+  /** Initial tab. Defaults to write. Useful for read-mostly fields. */
+  defaultTab?: 'write' | 'preview'
+  /** Minimum textarea height in px. Default 96. */
+  minHeight?: number
 }
 
 export default function MarkdownEditor({
@@ -55,8 +96,12 @@ export default function MarkdownEditor({
   members = [],
   rows = 4,
   disabled = false,
+  actions = MD_ACTIONS_FULL,
+  defaultTab = 'write',
+  minHeight = 96,
 }: Props) {
-  const [tab, setTab] = useState<'write' | 'preview'>('write')
+  const [tab, setTab] = useState<'write' | 'preview'>(defaultTab)
+  const actionSet = useMemo(() => new Set(actions), [actions])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   // Mention popover state. `mentionQuery` is the partial text after the
   // most-recent '@' before the caret. null = no active mention.
@@ -256,78 +301,104 @@ export default function MarkdownEditor({
             background: 'var(--pv-surface-soft)',
           }}
         >
-          <TBtn title="Bold (Ctrl+B)" onClick={() => wrapSelection('**', '**', 'bold')}>
-            <Bold size={14} />
-          </TBtn>
-          <TBtn title="Italic (Ctrl+I)" onClick={() => wrapSelection('_', '_', 'italic')}>
-            <Italic size={14} />
-          </TBtn>
-          <TBtn title="Strikethrough" onClick={() => wrapSelection('~~', '~~', 'strike')}>
-            <Strikethrough size={14} />
-          </TBtn>
-          <TSep />
-          <TBtn title="Heading" onClick={() => prefixLines('## ')}>
-            <Heading size={14} />
-          </TBtn>
-          <TBtn title="Quote" onClick={() => prefixLines('> ')}>
-            <Quote size={14} />
-          </TBtn>
-          <TBtn title="Inline code" onClick={() => wrapSelection('`', '`', 'code')}>
-            <Code size={14} />
-          </TBtn>
-          <TBtn title="Code block" onClick={() => insertBlock('```\ncode\n```')}>
-            <Code2 size={14} />
-          </TBtn>
-          <TBtn
-            title="Link"
-            onClick={() => {
-              const url = window.prompt('URL:', 'https://') ?? ''
-              if (!url) return
-              wrapSelection('[', `](${url})`, 'link text')
-            }}
-          >
-            <LinkIcon size={14} />
-          </TBtn>
-          <TSep />
-          <TBtn title="Bulleted list" onClick={() => prefixLines('- ')}>
-            <List size={14} />
-          </TBtn>
-          <TBtn title="Numbered list" onClick={() => prefixLines((i) => `${i + 1}. `)}>
-            <ListOrdered size={14} />
-          </TBtn>
-          <TBtn title="Task list" onClick={() => prefixLines('- [ ] ')}>
-            <CheckSquare size={14} />
-          </TBtn>
-          <TSep />
-          <TBtn
-            title="Table"
-            onClick={() =>
-              insertBlock('| Column | Column |\n| --- | --- |\n| Cell | Cell |')
-            }
-          >
-            <Table size={14} />
-          </TBtn>
-          <TSep />
-          <TBtn
-            title="Mention a teammate"
-            onClick={() => {
-              const ta = textareaRef.current
-              if (!ta) return
-              const { start } = getSel()
-              const needSpace = start > 0 && !/\s/.test(value[start - 1] ?? '')
-              const insert = `${needSpace ? ' ' : ''}@`
-              const next = value.slice(0, start) + insert + value.slice(start)
-              onChange(next)
-              requestAnimationFrame(() => {
-                const caret = start + insert.length
-                ta.focus()
-                ta.setSelectionRange(caret, caret)
-                detectMention(next, caret)
-              })
-            }}
-          >
-            <span style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, fontWeight: 600 }}>@</span>
-          </TBtn>
+          {actionSet.has('bold') && (
+            <TBtn title="Bold (Ctrl+B)" onClick={() => wrapSelection('**', '**', 'bold')}>
+              <Bold size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('italic') && (
+            <TBtn title="Italic (Ctrl+I)" onClick={() => wrapSelection('_', '_', 'italic')}>
+              <Italic size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('strike') && (
+            <TBtn title="Strikethrough" onClick={() => wrapSelection('~~', '~~', 'strike')}>
+              <Strikethrough size={14} />
+            </TBtn>
+          )}
+          {(actionSet.has('heading') || actionSet.has('quote') || actionSet.has('code') || actionSet.has('codeblock') || actionSet.has('link')) && <TSep />}
+          {actionSet.has('heading') && (
+            <TBtn title="Heading" onClick={() => prefixLines('## ')}>
+              <Heading size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('quote') && (
+            <TBtn title="Quote" onClick={() => prefixLines('> ')}>
+              <Quote size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('code') && (
+            <TBtn title="Inline code" onClick={() => wrapSelection('`', '`', 'code')}>
+              <Code size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('codeblock') && (
+            <TBtn title="Code block" onClick={() => insertBlock('```\ncode\n```')}>
+              <Code2 size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('link') && (
+            <TBtn
+              title="Link"
+              onClick={() => {
+                const url = window.prompt('URL:', 'https://') ?? ''
+                if (!url) return
+                wrapSelection('[', `](${url})`, 'link text')
+              }}
+            >
+              <LinkIcon size={14} />
+            </TBtn>
+          )}
+          {(actionSet.has('list') || actionSet.has('ol') || actionSet.has('task')) && <TSep />}
+          {actionSet.has('list') && (
+            <TBtn title="Bulleted list" onClick={() => prefixLines('- ')}>
+              <List size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('ol') && (
+            <TBtn title="Numbered list" onClick={() => prefixLines((i) => `${i + 1}. `)}>
+              <ListOrdered size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('task') && (
+            <TBtn title="Task list" onClick={() => prefixLines('- [ ] ')}>
+              <CheckSquare size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('table') && <TSep />}
+          {actionSet.has('table') && (
+            <TBtn
+              title="Table"
+              onClick={() =>
+                insertBlock('| Column | Column |\n| --- | --- |\n| Cell | Cell |')
+              }
+            >
+              <Table size={14} />
+            </TBtn>
+          )}
+          {actionSet.has('mention') && <TSep />}
+          {actionSet.has('mention') && (
+            <TBtn
+              title="Mention a teammate"
+              onClick={() => {
+                const ta = textareaRef.current
+                if (!ta) return
+                const { start } = getSel()
+                const needSpace = start > 0 && !/\s/.test(value[start - 1] ?? '')
+                const insert = `${needSpace ? ' ' : ''}@`
+                const next = value.slice(0, start) + insert + value.slice(start)
+                onChange(next)
+                requestAnimationFrame(() => {
+                  const caret = start + insert.length
+                  ta.focus()
+                  ta.setSelectionRange(caret, caret)
+                  detectMention(next, caret)
+                })
+              }}
+            >
+              <span style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, fontWeight: 600 }}>@</span>
+            </TBtn>
+          )}
         </div>
       )}
 
@@ -369,9 +440,48 @@ export default function MarkdownEditor({
               if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
                 e.preventDefault()
                 wrapSelection('**', '**', 'bold')
-              } else if ((e.metaKey || e.ctrlKey) && (e.key === 'i' || e.key === 'I')) {
+                return
+              }
+              if ((e.metaKey || e.ctrlKey) && (e.key === 'i' || e.key === 'I')) {
                 e.preventDefault()
                 wrapSelection('_', '_', 'italic')
+                return
+              }
+              // Tab / Shift+Tab — indent / outdent the selected lines by two
+              // spaces. Multi-line selection is preserved. When no selection
+              // and the caret is on an empty line, simply insert two spaces
+              // (so Tab still works as expected for short indent).
+              if (e.key === 'Tab') {
+                e.preventDefault()
+                const ta = textareaRef.current
+                if (!ta) return
+                const start = ta.selectionStart ?? 0
+                const end = ta.selectionEnd ?? 0
+                const lineStart = value.lastIndexOf('\n', start - 1) + 1
+                const lineEndIdx = value.indexOf('\n', end)
+                const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx
+                const block = value.slice(lineStart, lineEnd)
+                if (e.shiftKey) {
+                  const out = block
+                    .split('\n')
+                    .map((l) => (l.startsWith('  ') ? l.slice(2) : l.startsWith('\t') ? l.slice(1) : l))
+                    .join('\n')
+                  const next = value.slice(0, lineStart) + out + value.slice(lineEnd)
+                  onChange(next)
+                  requestAnimationFrame(() => {
+                    ta.focus()
+                    ta.setSelectionRange(lineStart, lineStart + out.length)
+                  })
+                } else {
+                  const out = block.split('\n').map((l) => '  ' + l).join('\n')
+                  const next = value.slice(0, lineStart) + out + value.slice(lineEnd)
+                  onChange(next)
+                  requestAnimationFrame(() => {
+                    ta.focus()
+                    ta.setSelectionRange(lineStart, lineStart + out.length)
+                  })
+                }
+                return
               }
             }}
             disabled={disabled}
@@ -379,6 +489,7 @@ export default function MarkdownEditor({
             placeholder={placeholder}
             style={{
               width: '100%',
+              minHeight,
               border: 0,
               outline: 0,
               padding: 8,
@@ -494,7 +605,7 @@ export default function MarkdownEditor({
         <div
           style={{
             padding: 8,
-            minHeight: rows * 20,
+            minHeight,
             fontSize: 13,
             lineHeight: 1.5,
             color: 'var(--pv-fg)',
@@ -663,9 +774,33 @@ export function MarkdownPreview({ source, members }: PreviewProps) {
     if (!root) return null
     let keyCounter = 0
     const nextKey = () => `mdn-${keyCounter++}`
+    const renderMentionChip = (name: string, userId: string): ReactNode => {
+      const known = memberById.get(userId)
+      const display = known?.name ?? known?.email ?? name
+      return (
+        <span
+          key={nextKey()}
+          title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
+          style={{
+            display: 'inline',
+            padding: '0 4px',
+            margin: '0 1px',
+            borderRadius: 3,
+            background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
+            color: 'var(--pv-blue-ink, #1e4778)',
+            fontWeight: 500,
+          }}
+        >
+          @{display}
+        </span>
+      )
+    }
     const decorateText = (text: string): ReactNode[] => {
+      // Two-pass: first the base64 sentinel produced by preProcessMentions
+      // (the normal path). Then a fallback scan for raw `@[Name](uuid)` so
+      // any body that somehow reached the walker un-preprocessed still
+      // renders as a chip instead of the raw markdown source.
       const out: ReactNode[] = []
-      // First split out mention sentinels.
       const reSentinel = new RegExp(
         `${MENTION_SENTINEL_OPEN}([A-Za-z0-9+/=]+)${MENTION_SENTINEL_CLOSE}`,
         'g',
@@ -674,35 +809,31 @@ export function MarkdownPreview({ source, members }: PreviewProps) {
       let m: RegExpExecArray | null
       while ((m = reSentinel.exec(text)) !== null) {
         if (m.index > lastIndex) {
-          out.push(...withEntityRefs(text.slice(lastIndex, m.index)))
+          out.push(...decorateRawMention(text.slice(lastIndex, m.index)))
         }
         const decoded = decodeSentinel(m[1])
-        if (decoded) {
-          const known = memberById.get(decoded.userId)
-          const display = known?.name ?? known?.email ?? decoded.name
-          out.push(
-            <span
-              key={nextKey()}
-              title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
-              style={{
-                display: 'inline',
-                padding: '0 4px',
-                margin: '0 1px',
-                borderRadius: 3,
-                background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
-                color: 'var(--pv-blue-ink, #1e4778)',
-                fontWeight: 500,
-              }}
-            >
-              @{display}
-            </span>,
-          )
-        }
+        if (decoded) out.push(renderMentionChip(decoded.name, decoded.userId))
         lastIndex = m.index + m[0].length
       }
       if (lastIndex < text.length) {
-        out.push(...withEntityRefs(text.slice(lastIndex)))
+        out.push(...decorateRawMention(text.slice(lastIndex)))
       }
+      if (out.length === 0) out.push(...decorateRawMention(text))
+      return out
+    }
+    // Fallback: detect literal `@[Name](uuid)` in a text node. Splits the
+    // text and emits chips inline.
+    const decorateRawMention = (text: string): ReactNode[] => {
+      const out: ReactNode[] = []
+      const re = /@\[([^\]]+)\]\(([^)]+)\)/g
+      let lastIndex = 0
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > lastIndex) out.push(...withEntityRefs(text.slice(lastIndex, m.index)))
+        out.push(renderMentionChip(m[1], m[2]))
+        lastIndex = m.index + m[0].length
+      }
+      if (lastIndex < text.length) out.push(...withEntityRefs(text.slice(lastIndex)))
       if (out.length === 0) out.push(...withEntityRefs(text))
       return out
     }
