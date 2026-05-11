@@ -171,12 +171,22 @@ export default function ValidationPage() {
       const isMod = e.metaKey || e.ctrlKey
       const tgt = e.target as HTMLElement | null
       const inField = !!tgt?.matches('input, textarea, select, [contenteditable="true"]')
-      if (isMod && e.key === 'f' && !inField) {
+      if (isMod && e.key === 'f' && !e.shiftKey && !inField) {
         const target = document.getElementById('validation-search') as HTMLInputElement | null
         if (target) {
           e.preventDefault()
           target.focus()
         }
+        return
+      }
+      if (isMod && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+        e.preventDefault()
+        setCreateFromReqOpen(true)
+        return
+      }
+      if (isMod && e.key === 'n') {
+        e.preventDefault()
+        setCreateOpen(true)
         return
       }
       if (inField) return
