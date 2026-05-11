@@ -1204,6 +1204,16 @@ export default function ValidationPage() {
           >
             <Download size={14} /> Report (MD)
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              window.open(validationService.pdfExportUrl(projectId, filters), '_blank')
+            }
+            className="pv-btn"
+            title="Download a PDF validation report for the current view"
+          >
+            <Download size={14} /> Report (PDF)
+          </button>
         </div>
       </div>
 

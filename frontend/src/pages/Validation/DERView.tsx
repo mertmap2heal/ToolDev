@@ -115,10 +115,20 @@ export default function DERView() {
             onClick={() =>
               window.open(validationService.markdownExportUrl(projectId, {}), '_blank')
             }
-            className="pv-btn primary"
+            className="pv-btn"
             title="Download a Markdown report of the current state"
           >
-            <Download size={14} /> Export report
+            <Download size={14} /> MD
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              window.open(validationService.pdfExportUrl(projectId, {}), '_blank')
+            }
+            className="pv-btn primary"
+            title="Download a PDF report of the current state"
+          >
+            <Download size={14} /> PDF
           </button>
         </div>
       </div>

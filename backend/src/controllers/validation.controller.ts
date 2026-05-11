@@ -91,6 +91,23 @@ export async function exportItemsMarkdown(req: AuthRequest, res: Response) {
   }
 }
 
+export async function exportItemsPdf(req: AuthRequest, res: Response) {
+  try {
+    const pdf = await svc.exportItemsPdf(req.params.projectId, {
+      status: req.query.status as string | undefined,
+      methodType: req.query.methodType as string | undefined,
+      milestone: req.query.milestone as string | undefined,
+      ownerId: req.query.ownerId as string | undefined,
+      search: req.query.search as string | undefined,
+    })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'attachment; filename="validation-report.pdf"')
+    res.send(pdf)
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function exportItemsCsv(req: AuthRequest, res: Response) {
   try {
     const csv = await svc.exportItemsCsv(req.params.projectId, {

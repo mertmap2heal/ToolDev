@@ -1491,6 +1491,109 @@ export async function exportItemsMarkdown(
   return lines.join('\n')
 }
 
+/**
+ * PDF validation report.
+ *
+ * Returns a Buffer so the controller can `res.type('pdf').send(buf)` without
+ * having to set up streaming. The pdfkit dependency is already in
+ * backend/package.json (it is also used by other exports in the codebase),
+ * so no new deps are introduced.
+ */
+export async function exportItemsPdf(
+  projectId: string,
+  filters: ListFilters = {},
+): Promise<Buffer> {
+  const items = await prisma.validationItem.findMany({
+    where: buildWhere(projectId, filters),
+    orderBy: [{ targetMilestone: 'asc' }, { key: 'asc' }],
+    include: {
+      owner: { select: { name: true, email: true } },
+      signOffs: {
+        where: { supersededById: null },
+        include: { signer: { select: { name: true } } },
+      },
+    },
+  })
+
+  // Group by milestone for the report layout.
+  const byMs = new Map<string, typeof items>()
+  for (const i of items) {
+    const k = i.targetMilestone || 'OTHER'
+    const arr = (byMs.get(k) ?? []) as typeof items
+    arr.push(i)
+    byMs.set(k, arr)
+  }
+
+  // Lazy require to keep cold-start fast for non-PDF requests.
+  const PDFDocument = (await import('pdfkit')).default
+  const doc = new PDFDocument({ size: 'A4', margin: 48 })
+  const chunks: Buffer[] = []
+  doc.on('data', (c: Buffer) => chunks.push(c))
+  const done = new Promise<Buffer>((resolve) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+  })
+
+  // ---- Header ----
+  doc.font('Helvetica-Bold').fontSize(20).text('Validation Report')
+  doc.font('Helvetica').fontSize(10).fillColor('#666')
+  doc.text(`Generated: ${new Date().toISOString()}`)
+  doc.text(`Total items: ${items.length}`)
+  doc.fillColor('#000')
+  doc.moveDown(0.8)
+
+  for (const [ms, rows] of byMs) {
+    const validated = rows.filter((r) => r.status === 'VALIDATED').length
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#000').text(ms)
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .fillColor('#666')
+      .text(`${rows.length} item${rows.length === 1 ? '' : 's'} — ${validated} validated`)
+    doc.moveDown(0.4)
+
+    for (const i of rows) {
+      const criteria = (i.criteria as ValidationCriterion[] | null) ?? []
+      const met = criteria.filter((c) => c.outcome === 'MET').length
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#000').text(`${i.key}  ${i.title}`)
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#555')
+        .text(
+          `Method: ${i.methodType}   Status: ${i.status}   Priority: ${i.priority}   Owner: ${i.owner?.name ?? '—'}`,
+        )
+      if (i.description) {
+        doc.fillColor('#222').text(i.description, { width: 500 })
+      }
+      doc.fontSize(9).fillColor('#222').text(`Criteria (${met}/${criteria.length} met):`)
+      for (const c of criteria) {
+        const mark =
+          c.outcome === 'MET'
+            ? '[x]'
+            : c.outcome === 'PARTIAL'
+            ? '[~]'
+            : c.outcome === 'NOT_MET'
+            ? '[!]'
+            : '[ ]'
+        doc.text(`  ${mark} ${c.text}${c.notes ? ` — ${c.notes}` : ''}`, { width: 500 })
+      }
+      if (i.signOffs.length) {
+        doc.text('Sign-offs:')
+        for (const s of i.signOffs) {
+          doc.text(
+            `  ${s.signer?.name ?? 'Unknown'} (${s.signerRoleLabel}) — ${new Date(s.signedAt).toISOString()}`,
+          )
+        }
+      }
+      doc.moveDown(0.6)
+    }
+    doc.moveDown(0.4)
+  }
+
+  doc.end()
+  return done
+}
+
 export async function exportItemsCsv(projectId: string, filters: ListFilters = {}) {
   const items = await prisma.validationItem.findMany({
     where: buildWhere(projectId, filters),

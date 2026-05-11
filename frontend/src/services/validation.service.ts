@@ -282,6 +282,10 @@ export const validationService = {
     return `/api/v1/validation/projects/${projectId}/report.md${qs(filters)}`
   },
 
+  pdfExportUrl(projectId: string, filters: ListFilters = {}): string {
+    return `/api/v1/validation/projects/${projectId}/report.pdf${qs(filters)}`
+  },
+
   async coverage(projectId: string): Promise<ApiResponse<ValidationCoverage>> {
     return apiClient.get(`/validation/projects/${projectId}/coverage`)
   },
