@@ -248,6 +248,11 @@ export default function ValidationPage() {
         setCreateOpen(true)
         return
       }
+      if (!inField && e.key === '?') {
+        e.preventDefault()
+        setHelpOpen(true)
+        return
+      }
       if (inField) return
       if (e.key === 'j' || e.key === 'k') {
         if (items.length === 0) return
