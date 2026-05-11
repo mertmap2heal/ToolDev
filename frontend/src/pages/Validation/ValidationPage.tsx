@@ -1587,14 +1587,14 @@ export default function ValidationPage() {
                   refetchAll()
                 }}
                 style={{
-                  background: isOver ? 'var(--pv-blue-tint, rgba(43,108,176,0.10))' : 'var(--pv-surface-soft)',
+                  background: isOver ? 'var(--pv-blue-tint, rgba(43,108,176,0.08))' : 'var(--pv-surface-soft)',
                   border: isOver ? '1px dashed var(--pv-blue)' : '1px solid var(--pv-line)',
-                  borderRadius: 6,
-                  padding: 8,
+                  borderRadius: 4,
+                  padding: '8px 8px 12px',
                   minHeight: 200,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 6,
+                  gap: 8,
                   transition: 'background 80ms ease-out, border-color 80ms ease-out',
                 }}
               >
@@ -1653,9 +1653,25 @@ export default function ValidationPage() {
                       onClick={() => setSelectedItemId(it.id)}
                       style={{
                         background: 'var(--pv-bg)',
-                        border: '1px solid var(--pv-line)',
+                        // Left accent stripe carrying the status colour — a
+                        // quiet way to tell columns apart at a glance without
+                        // a heavier card chrome.
+                        borderLeft: `2px solid ${
+                          s === 'VALIDATED'
+                            ? 'var(--pv-green)'
+                            : s === 'EXECUTED'
+                            ? 'var(--pv-amber)'
+                            : s === 'BLOCKED'
+                            ? 'var(--pv-red)'
+                            : s === 'OBSOLETE'
+                            ? 'var(--pv-line-strong)'
+                            : 'var(--pv-line-strong)'
+                        }`,
+                        borderTop: '1px solid var(--pv-line)',
+                        borderRight: '1px solid var(--pv-line)',
+                        borderBottom: '1px solid var(--pv-line)',
                         borderRadius: 4,
-                        padding: 8,
+                        padding: '8px 10px',
                         textAlign: 'left',
                         cursor: isDragging ? 'grabbing' : 'grab',
                         opacity: isDragging ? 0.4 : 1,
@@ -1663,7 +1679,7 @@ export default function ValidationPage() {
                         color: 'inherit',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 4,
+                        gap: 6,
                       }}
                       title={it.title}
                     >
@@ -1684,8 +1700,9 @@ export default function ValidationPage() {
                       </div>
                       <div
                         style={{
-                          fontSize: 12,
+                          fontSize: 13,
                           color: 'var(--pv-fg)',
+                          lineHeight: 1.35,
                           display: '-webkit-box',
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: 'vertical',
