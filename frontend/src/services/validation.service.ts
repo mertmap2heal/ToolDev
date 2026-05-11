@@ -327,6 +327,10 @@ export const validationService = {
         targetMilestone?: ValidationMilestone
         status?: ValidationStatus
         deletedAt?: 'now' | 'null'
+        priority?: ValidationPriority
+        ownerUserId?: string | null
+        addTags?: string[]
+        removeTags?: string[]
       }
     },
   ): Promise<ApiResponse<{ count: number }>> {

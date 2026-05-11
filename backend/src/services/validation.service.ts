@@ -928,6 +928,10 @@ interface BulkUpdatePayload {
     targetMilestone?: string
     status?: string
     deletedAt?: 'now' | 'null' // 'now' = soft delete; 'null' = restore
+    priority?: string
+    ownerUserId?: string | null
+    addTags?: string[]
+    removeTags?: string[]
   }
 }
 
@@ -954,6 +958,12 @@ export async function bulkUpdate(
   const data: Prisma.ValidationItemUpdateManyMutationInput = {}
   if (payload.patch.targetMilestone) data.targetMilestone = payload.patch.targetMilestone
   if (payload.patch.status) data.status = payload.patch.status
+  if (
+    payload.patch.priority &&
+    (PRIORITIES as readonly string[]).includes(payload.patch.priority)
+  )
+    data.priority = payload.patch.priority
+  if (payload.patch.ownerUserId !== undefined) data.ownerUserId = payload.patch.ownerUserId
   if (payload.patch.deletedAt === 'now') {
     data.deletedAt = new Date()
     data.deletedById = userId
@@ -965,10 +975,38 @@ export async function bulkUpdate(
     data.restoredAt = new Date()
   }
 
-  const result = await prisma.validationItem.updateMany({
-    where: { id: { in: payload.ids }, projectId },
-    data,
-  })
+  let result: { count: number }
+  if (payload.patch.addTags?.length || payload.patch.removeTags?.length) {
+    // Tag set-merge requires per-row read+write because Prisma's updateMany
+    // can't merge a String[]. Done in a transaction so it stays atomic.
+    const items = await prisma.validationItem.findMany({
+      where: { id: { in: payload.ids }, projectId },
+      select: { id: true, tags: true },
+    })
+    const settings = await ensureSettings(projectId)
+    const lib = Array.isArray(settings.tags)
+      ? (settings.tags as unknown as ValidationTag[]).map((t) => t.label)
+      : []
+    const addSet = new Set((payload.patch.addTags ?? []).filter((t) => lib.includes(t)))
+    const removeSet = new Set(payload.patch.removeTags ?? [])
+    const ops = items.map((it) => {
+      const next = Array.from(
+        new Set([...it.tags.filter((t) => !removeSet.has(t)), ...addSet]),
+      )
+      return prisma.validationItem.update({
+        where: { id: it.id },
+        data: { ...data, tags: next },
+        select: { id: true },
+      })
+    })
+    await prisma.$transaction(ops)
+    result = { count: ops.length }
+  } else {
+    result = await prisma.validationItem.updateMany({
+      where: { id: { in: payload.ids }, projectId },
+      data,
+    })
+  }
   await writeAudit(projectId, userId, 'validation:bulk-update', {
     count: result.count,
     patch: payload.patch,
