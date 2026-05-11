@@ -5,6 +5,7 @@ import {
   GitPullRequestArrow, Link2, AlertOctagon,
 } from 'lucide-react'
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
+import { projectService } from '../../services/project.service'
 import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
 import RequirementHoverCard from './RequirementHoverCard'
@@ -113,6 +114,15 @@ export default function ValidationItemDetailDrawer({
     },
   })
 
+  const { data: members = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await projectService.getProjectMembers(projectId)
+      return res.success && res.data ? res.data : []
+    },
+  })
+
   const isAuthor = useMemo(() => draft?.createdById === currentUserId, [draft, currentUserId])
   const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
 
@@ -174,6 +184,7 @@ export default function ValidationItemDetailDrawer({
         description: draft.description ?? '',
         methodType: draft.methodType,
         targetMilestone: draft.targetMilestone,
+        ownerUserId: draft.ownerUserId ?? null,
         criteria: draft.criteria.filter((c) => c.text.trim().length > 0),
         tags: draft.tags,
       })
@@ -349,6 +360,25 @@ export default function ValidationItemDetailDrawer({
                     {METHOD_TOOLTIP[draft.methodType]}
                   </p>
                 )}
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
+                  Owner
+                </label>
+                <select
+                  value={draft?.ownerUserId ?? ''}
+                  onChange={(e) =>
+                    draft && setDraft({ ...draft, ownerUserId: e.target.value || null })
+                  }
+                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+                >
+                  <option value="">— Unassigned —</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.user?.name ?? m.user?.email ?? m.userId.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
