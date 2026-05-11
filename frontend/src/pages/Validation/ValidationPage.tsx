@@ -1186,10 +1186,21 @@ export default function ValidationPage() {
                 )
                 if (!ok) return
               }
-              await validationService.bulkUpdate(projectId, {
+              const res = await validationService.bulkUpdate(projectId, {
                 ids: Array.from(selectedIds),
                 patch: { status: s },
               })
+              if (!res.success) {
+                const r = res as unknown as { code?: string; allowedNext?: string[]; from?: string; to?: string; error?: string }
+                if (r.code === 'ILLEGAL_STATUS_TRANSITION') {
+                  toast.error(
+                    `Cannot move ${r.from} → ${r.to}. Allowed next: ${(r.allowedNext ?? []).join(', ') || '(none)'}`,
+                  )
+                } else {
+                  toast.error(r.error ?? 'Bulk update failed')
+                }
+                return
+              }
               if (s === 'VALIDATED') toast.success(`Marked ${selectedIds.size} item(s) VALIDATED`)
               setSelectedIds(new Set())
               refetchAll()

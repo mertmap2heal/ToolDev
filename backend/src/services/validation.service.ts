@@ -18,6 +18,42 @@ export type ValidationMilestone = (typeof MILESTONES)[number]
 export const STATUSES = ['PLANNED', 'EXECUTED', 'VALIDATED', 'BLOCKED', 'OBSOLETE'] as const
 export type ValidationStatus = (typeof STATUSES)[number]
 
+// Allowed forward transitions per status. The state machine is intentionally
+// liberal: anything *not* listed here is a hard-illegal jump (e.g. PLANNED ->
+// VALIDATED skipping EXECUTED, which would mean signing off without recording
+// any execution evidence). Hard-illegals 409 from the API.
+//
+// Same-state transitions are no-ops (allowed). NULL transitions (no status in
+// payload) bypass the check entirely.
+export const STATUS_TRANSITIONS: Record<ValidationStatus, ValidationStatus[]> = {
+  PLANNED: ['EXECUTED', 'BLOCKED', 'OBSOLETE'],
+  EXECUTED: ['VALIDATED', 'BLOCKED', 'PLANNED', 'OBSOLETE'],
+  VALIDATED: ['EXECUTED', 'OBSOLETE'],
+  BLOCKED: ['PLANNED', 'EXECUTED', 'OBSOLETE'],
+  OBSOLETE: ['PLANNED'],
+}
+
+export class IllegalStatusTransition extends Error {
+  from: ValidationStatus
+  to: ValidationStatus
+  allowedNext: ValidationStatus[]
+  constructor(from: ValidationStatus, to: ValidationStatus) {
+    super(`Illegal status transition ${from} -> ${to}`)
+    this.from = from
+    this.to = to
+    this.allowedNext = STATUS_TRANSITIONS[from] ?? []
+    this.name = 'IllegalStatusTransition'
+  }
+}
+
+export function isAllowedTransition(
+  from: ValidationStatus,
+  to: ValidationStatus,
+): boolean {
+  if (from === to) return true
+  return (STATUS_TRANSITIONS[from] ?? []).includes(to)
+}
+
 export const CRITERION_OUTCOMES = ['PENDING', 'MET', 'PARTIAL', 'NOT_MET'] as const
 export type CriterionOutcome = (typeof CRITERION_OUTCOMES)[number]
 
@@ -587,6 +623,15 @@ export async function updateItem(
   if (payload.status && !STATUSES.includes(payload.status as ValidationStatus))
     throw new Error('invalid status')
 
+  // Reject hard-illegal transitions (e.g. PLANNED -> VALIDATED). The criteria
+  // auto-advance below picks legal transitions only, so this only fires on a
+  // user-set status that violates the state machine.
+  if (payload.status) {
+    const from = existing.status as ValidationStatus
+    const to = payload.status as ValidationStatus
+    if (!isAllowedTransition(from, to)) throw new IllegalStatusTransition(from, to)
+  }
+
   // Auto-advance status when criteria change
   let nextStatus = payload.status ?? existing.status
   if (payload.criteria) {
@@ -954,6 +999,22 @@ export async function bulkUpdate(
     !STATUSES.includes(payload.patch.status as ValidationStatus)
   )
     throw new Error('invalid status')
+
+  // Reject the whole batch when ANY selected item would make an illegal
+  // transition. Surface the first offending pair so the UI can explain it.
+  if (payload.patch.status) {
+    const targetStatus = payload.patch.status as ValidationStatus
+    const rows = await prisma.validationItem.findMany({
+      where: { id: { in: payload.ids }, projectId },
+      select: { id: true, key: true, status: true },
+    })
+    for (const r of rows) {
+      const from = r.status as ValidationStatus
+      if (!isAllowedTransition(from, targetStatus)) {
+        throw new IllegalStatusTransition(from, targetStatus)
+      }
+    }
+  }
 
   const data: Prisma.ValidationItemUpdateManyMutationInput = {}
   if (payload.patch.targetMilestone) data.targetMilestone = payload.patch.targetMilestone

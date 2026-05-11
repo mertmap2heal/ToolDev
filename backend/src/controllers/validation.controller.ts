@@ -13,6 +13,18 @@ function fail(res: Response, status: number, error: string) {
 }
 
 function err(res: Response, e: unknown) {
+  // Map domain-typed errors to specific HTTP statuses so the UI can show a
+  // helpful message instead of a generic 500.
+  if (e instanceof svc.IllegalStatusTransition) {
+    return res.status(409).json({
+      success: false,
+      error: e.message,
+      code: 'ILLEGAL_STATUS_TRANSITION',
+      from: e.from,
+      to: e.to,
+      allowedNext: e.allowedNext,
+    })
+  }
   return res.status(500).json({ success: false, error: (e as Error).message })
 }
 
