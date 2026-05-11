@@ -209,6 +209,63 @@ export default function ValidationItemDetailDrawer({
     })
   }
 
+  // Criterion templates - first cut is per-browser localStorage. Schema-level
+  // backing requires a schema change (CLAUDE.md rule 4), so this v1 stays
+  // client-side; templates appear under a project key but only on the
+  // browser that created them.
+  interface CriterionTemplate {
+    label: string
+    criteria: string[]
+  }
+  const templatesKey = `validation:criterionTemplates:${projectId}`
+  const [templates, setTemplates] = useState<CriterionTemplate[]>([])
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(templatesKey)
+      if (!raw) return
+      const arr = JSON.parse(raw)
+      if (Array.isArray(arr)) setTemplates(arr as CriterionTemplate[])
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+  const persistTemplates = (next: CriterionTemplate[]) => {
+    setTemplates(next)
+    try {
+      localStorage.setItem(templatesKey, JSON.stringify(next))
+    } catch { /* ignore */ }
+  }
+  const insertTemplate = (tpl: CriterionTemplate) => {
+    if (!draft) return
+    const base = draft.criteria.length
+    const next = tpl.criteria.map((text, i) => ({
+      id: `tmp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      text,
+      outcome: 'PENDING' as CriterionOutcome,
+      orderIndex: base + i,
+    }))
+    setDraft({ ...draft, criteria: [...draft.criteria, ...next] })
+  }
+  const saveCurrentAsTemplate = () => {
+    if (!draft || draft.criteria.length === 0) return
+    const label = window.prompt('Save current criteria as a template — name:')?.trim()
+    if (!label) return
+    if (templates.some((t) => t.label === label)) {
+      if (!window.confirm(`A template named "${label}" already exists. Overwrite it?`)) return
+    }
+    const next = [
+      ...templates.filter((t) => t.label !== label),
+      {
+        label,
+        criteria: draft.criteria.map((c) => c.text).filter((s) => s.trim().length > 0),
+      },
+    ]
+    persistTemplates(next)
+  }
+  const deleteTemplate = (label: string) => {
+    if (!window.confirm(`Delete template "${label}"?`)) return
+    persistTemplates(templates.filter((t) => t.label !== label))
+  }
+
   const removeCriterion = (cid: string) => {
     if (!draft) return
     setDraft({
@@ -755,13 +812,62 @@ export default function ValidationItemDetailDrawer({
               <h3 className="pv-dr-section-title">
                 Acceptance criteria
               </h3>
-              <button
-                type="button"
-                onClick={addCriterion}
-                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-              >
-                <Plus size={12} /> Add
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const action = e.target.value
+                    e.currentTarget.value = ''
+                    if (!action) return
+                    if (action === '__save__') {
+                      saveCurrentAsTemplate()
+                      return
+                    }
+                    if (action.startsWith('__delete__:')) {
+                      deleteTemplate(action.slice('__delete__:'.length))
+                      return
+                    }
+                    const tpl = templates.find((t) => t.label === action)
+                    if (tpl) insertTemplate(tpl)
+                  }}
+                  title="Insert a saved criterion template, or save the current criteria as a new one"
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 4px',
+                    border: '1px solid var(--pv-line)',
+                    borderRadius: 3,
+                    background: 'var(--pv-bg)',
+                    color: 'var(--pv-fg-2)',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="">Templates…</option>
+                  {templates.length > 0 && (
+                    <optgroup label="Insert">
+                      {templates.map((t) => (
+                        <option key={t.label} value={t.label}>
+                          {t.label} ({t.criteria.length})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Manage">
+                    <option value="__save__">Save current as template…</option>
+                    {templates.map((t) => (
+                      <option key={`d-${t.label}`} value={`__delete__:${t.label}`}>
+                        Delete "{t.label}"
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <button
+                  type="button"
+                  onClick={addCriterion}
+                  className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                >
+                  <Plus size={12} /> Add
+                </button>
+              </div>
             </div>
             {draft && draft.criteria.length === 0 ? (
               <p className="text-sm text-gray-500 italic">No criteria yet — add at least one.</p>
