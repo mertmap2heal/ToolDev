@@ -566,6 +566,116 @@ export default function ValidationPage() {
         </div>
       </div>
 
+      {(statusFilter || methodFilter || milestoneFilter ||
+        (ownerFilter && ownerFilter !== currentUserId) ||
+        tagsAny.length > 0 || criterionFilter) && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 4,
+            alignItems: 'center',
+            fontSize: 11,
+            color: 'var(--pv-fg-3)',
+          }}
+        >
+          <span style={{ marginRight: 4 }}>Filters:</span>
+          {statusFilter && (
+            <span className="vv-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Status: {STATUS_LABEL[statusFilter as ValidationStatus]}
+              <button
+                type="button"
+                onClick={() => setStatusFilter('')}
+                aria-label="Clear status filter"
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )}
+          {methodFilter && (
+            <span className="vv-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Method: {METHOD_LABEL[methodFilter as ValidationMethodType]}
+              <button
+                type="button"
+                onClick={() => setMethodFilter('')}
+                aria-label="Clear method filter"
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )}
+          {milestoneFilter && (
+            <span className="vv-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Milestone: {MILESTONE_LABEL[milestoneFilter as ValidationMilestone]}
+              <button
+                type="button"
+                onClick={() => setMilestoneFilter('')}
+                aria-label="Clear milestone filter"
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )}
+          {ownerFilter && ownerFilter !== currentUserId && (() => {
+            const m = projectMembers.find((pm) => pm.userId === ownerFilter)
+            const label = m?.user?.name ?? m?.user?.email ?? ownerFilter.slice(0, 8)
+            return (
+              <span className="vv-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                Owner: {label}
+                <button
+                  type="button"
+                  onClick={() => setOwnerFilter('')}
+                  aria-label="Clear owner filter"
+                  style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )
+          })()}
+          {tagsAny.map((tag) => (
+            <span key={tag} className="vv-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Tag: {tag}
+              <button
+                type="button"
+                onClick={() => setTagsAny((prev) => prev.filter((t) => t !== tag))}
+                aria-label={`Clear tag ${tag}`}
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+          {criterionFilter && (
+            <span className="vv-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Criteria: {criterionFilter === 'allMet' ? 'All met' : criterionFilter === 'anyPartial' ? 'Any partial' : criterionFilter === 'anyNotMet' ? 'Any not met' : 'No criteria'}
+              <button
+                type="button"
+                onClick={() => setCriterionFilter('')}
+                aria-label="Clear criterion filter"
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters()
+              setTagsAny([])
+              setCriterionFilter('')
+            }}
+            style={{ marginLeft: 4, fontSize: 11, color: 'var(--pv-blue)', background: 'none', border: 0, cursor: 'pointer' }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {filtersOpen && (
         <div
           style={{
