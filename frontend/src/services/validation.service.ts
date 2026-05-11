@@ -382,6 +382,15 @@ export const validationService = {
     return apiClient.get(`/validation/projects/${projectId}/items/${id}/activity`)
   },
 
+  async listProjectActivity(
+    projectId: string,
+    limit = 200,
+  ): Promise<ApiResponse<ValidationActivityRow[]>> {
+    return apiClient.get(
+      `/validation/projects/${projectId}/activity?limit=${limit}`,
+    )
+  },
+
   async listComments(
     projectId: string,
     id: string,

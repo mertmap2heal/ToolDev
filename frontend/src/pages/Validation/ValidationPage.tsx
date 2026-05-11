@@ -788,6 +788,13 @@ export default function ValidationPage() {
             Baselines
           </Link>
           <Link
+            to={`/projects/${projectId}/validation/activity`}
+            title="Chronological audit log of every validation action"
+            className="pv-btn"
+          >
+            Activity
+          </Link>
+          <Link
             to={`/projects/${projectId}/validation/der`}
             title="DER read-only view: milestone-indexed, sign-off-visible, print-friendly. Use this to hand off to certification authorities."
             className="pv-btn"
