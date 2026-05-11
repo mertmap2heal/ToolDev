@@ -545,7 +545,11 @@ interface UpdatePayload {
   criteria?: ValidationCriterion[]
   status?: string
   tags?: string[]
+  priority?: string
+  dueDate?: string | null
 }
+
+const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 
 export async function updateItem(
   projectId: string,
@@ -593,6 +597,16 @@ export async function updateItem(
           ? (payload.criteria as unknown as Prisma.InputJsonValue)
           : (existing.criteria as Prisma.InputJsonValue),
       tags: payload.tags !== undefined ? payload.tags : existing.tags,
+      priority:
+        payload.priority !== undefined && (PRIORITIES as readonly string[]).includes(payload.priority)
+          ? payload.priority
+          : existing.priority,
+      dueDate:
+        payload.dueDate !== undefined
+          ? payload.dueDate === null
+            ? null
+            : new Date(payload.dueDate)
+          : existing.dueDate,
       status: nextStatus,
     },
     include: { owner: true, createdBy: true },

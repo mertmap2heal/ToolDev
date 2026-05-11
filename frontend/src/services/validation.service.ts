@@ -59,7 +59,12 @@ export interface ValidationItemSummary {
   /** True when the calling user has starred this item. */
   starredByMe?: boolean
   tags?: string[]
+  priority?: 'low' | 'medium' | 'high' | 'critical'
+  dueDate?: string | null
 }
+
+export const VALIDATION_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
+export type ValidationPriority = (typeof VALIDATION_PRIORITIES)[number]
 
 export type ValidationSortBy = 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone'
 
@@ -178,7 +183,7 @@ export const validationService = {
         ValidationItemSummary,
         'title' | 'description' | 'methodType' | 'targetMilestone' | 'ownerUserId' | 'status'
       >
-    > & { criteria?: ValidationCriterion[]; tags?: string[] },
+    > & { criteria?: ValidationCriterion[]; tags?: string[]; priority?: ValidationPriority; dueDate?: string | null },
   ): Promise<ApiResponse<ValidationItemSummary>> {
     return apiClient.put(`/validation/projects/${projectId}/items/${id}`, payload)
   },

@@ -15,11 +15,13 @@ import {
   CRITERION_OUTCOMES,
   VALIDATION_METHOD_TYPES,
   VALIDATION_MILESTONES,
+  VALIDATION_PRIORITIES,
   type ValidationItemSummary,
   type ValidationCriterion,
   type CriterionOutcome,
   type ValidationMethodType,
   type ValidationMilestone,
+  type ValidationPriority,
 } from '../../services/validation.service'
 import {
   METHOD_LABEL,
@@ -202,6 +204,8 @@ export default function ValidationItemDetailDrawer({
         ownerUserId: draft.ownerUserId ?? null,
         criteria: draft.criteria.filter((c) => c.text.trim().length > 0),
         tags: draft.tags,
+        priority: draft.priority,
+        dueDate: draft.dueDate ?? null,
       })
       if (res.success) {
         reload()
@@ -351,7 +355,7 @@ export default function ValidationItemDetailDrawer({
               placeholder="Why this validation matters"
               style={{ width: '100%', padding: 8, fontSize: 13, lineHeight: 1.5, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit', resize: 'vertical' }}
             />
-            <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
                   Method
@@ -375,6 +379,37 @@ export default function ValidationItemDetailDrawer({
                     {METHOD_TOOLTIP[draft.methodType]}
                   </p>
                 )}
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
+                  Priority
+                </label>
+                <select
+                  value={draft?.priority ?? 'medium'}
+                  onChange={(e) =>
+                    draft && setDraft({ ...draft, priority: e.target.value as ValidationPriority })
+                  }
+                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+                >
+                  {VALIDATION_PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
+                  Due date
+                </label>
+                <input
+                  type="date"
+                  value={draft?.dueDate ? draft.dueDate.slice(0, 10) : ''}
+                  onChange={(e) =>
+                    draft && setDraft({ ...draft, dueDate: e.target.value || null })
+                  }
+                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+                />
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">

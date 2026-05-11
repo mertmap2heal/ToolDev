@@ -3971,6 +3971,11 @@ model ValidationItem {
   // Tags chosen from the project's ValidationSettings.tags library. Storing
   // labels (not ids) keeps each row self-describing.
   tags            String[] @default([])
+  // Free-text priority bucket (low | medium | high | critical). String not
+  // enum to match the Requirement.priority pattern.
+  priority        String   @default("medium")
+  // Optional target completion date.
+  dueDate         DateTime?
 
   // Soft-delete (mirrors Requirement)
   deletedAt    DateTime?
