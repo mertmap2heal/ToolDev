@@ -599,6 +599,7 @@ export default function ValidationPage() {
                   Status<SortArrow col="status" />
                 </th>
                 <th style={{ width: 84 }}>Criteria</th>
+                <th style={{ width: 100 }}>Owner</th>
                 <th style={{ width: 80 }}>Sign-offs</th>
                 <th
                   className="sortable"
@@ -732,6 +733,12 @@ export default function ValidationPage() {
                     </td>
                     <td className="cell-used" style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
                       <span className="num">{met}</span>/{total}
+                    </td>
+                    <td
+                      style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}
+                      title={it.owner?.email ?? ''}
+                    >
+                      {it.owner?.name ?? '—'}
                     </td>
                     <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
                       {it._count?.signOffs ?? 0}
