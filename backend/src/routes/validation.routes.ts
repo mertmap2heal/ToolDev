@@ -11,6 +11,7 @@ import {
   updateItem,
   deleteItem,
   restoreItem,
+  duplicateItem,
   createFromRequirements,
   signOffItem,
   revokeSignOff,
@@ -72,6 +73,7 @@ router.get('/projects/:projectId/items/:id', getItem)
 router.put('/projects/:projectId/items/:id', updateItem)
 router.delete('/projects/:projectId/items/:id', deleteItem)
 router.post('/projects/:projectId/items/:id/restore', restoreItem)
+router.post('/projects/:projectId/items/:id/duplicate', duplicateItem)
 router.post('/projects/:projectId/items/:id/star', star)
 router.delete('/projects/:projectId/items/:id/star', unstar)
 

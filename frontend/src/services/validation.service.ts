@@ -200,6 +200,10 @@ export const validationService = {
     return apiClient.post(`/validation/projects/${projectId}/items/${id}/restore`, {})
   },
 
+  async duplicate(projectId: string, id: string): Promise<ApiResponse<ValidationItemSummary>> {
+    return apiClient.post(`/validation/projects/${projectId}/items/${id}/duplicate`, {})
+  },
+
   async createFromRequirements(
     projectId: string,
     payload: {

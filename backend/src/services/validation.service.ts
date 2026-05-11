@@ -636,6 +636,48 @@ export async function updateItem(
   return updated
 }
 
+export async function duplicateItem(projectId: string, id: string, userId: string) {
+  const source = await prisma.validationItem.findFirst({
+    where: { id, projectId },
+  })
+  if (!source) return null
+  const settings = await ensureSettings(projectId)
+  const prefix = defaultPrefix(settings.prefixes)
+  // Clone with fresh criteria ids and PENDING outcomes.
+  const sourceCriteria = (source.criteria as ValidationCriterion[] | null) ?? []
+  const newCriteria: ValidationCriterion[] = sourceCriteria.map((c, i) => ({
+    id: randomUUID(),
+    text: c.text,
+    outcome: 'PENDING',
+    notes: c.notes,
+    orderIndex: i,
+  }))
+  const dup = await createWithUniqueKey(projectId, prefix, (tx, key) =>
+    tx.validationItem.create({
+      data: {
+        projectId,
+        key,
+        title: `${source.title} (copy)`,
+        description: source.description,
+        methodType: source.methodType,
+        targetMilestone: source.targetMilestone,
+        ownerUserId: source.ownerUserId,
+        tags: source.tags,
+        priority: source.priority,
+        criteria: newCriteria as unknown as Prisma.InputJsonValue,
+        status: 'PLANNED',
+        createdById: userId,
+      },
+      include: { owner: true, createdBy: true },
+    }),
+  )
+  await writeAudit(projectId, userId, 'validation:duplicate', {
+    sourceId: id,
+    newId: dup.id,
+  })
+  return dup
+}
+
 export async function softDeleteItem(
   projectId: string,
   id: string,

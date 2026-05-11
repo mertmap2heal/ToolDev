@@ -125,6 +125,16 @@ export async function deleteItem(req: AuthRequest, res: Response) {
   }
 }
 
+export async function duplicateItem(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.duplicateItem(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
 export async function restoreItem(req: AuthRequest, res: Response) {
   try {
     const item = await svc.restoreItem(req.params.projectId, req.params.id, userId(req))
