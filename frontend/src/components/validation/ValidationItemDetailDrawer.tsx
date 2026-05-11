@@ -8,6 +8,7 @@ import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import { RenderWithEntityRefs } from '../../utils/entityRefs'
 import { checkAmbiguity } from '../../utils/ambiguityCheck'
 import MarkdownEditor from '../common/MarkdownEditor'
+import { suggestCriteriaFromRequirement, type CriterionSuggestion } from '../../utils/suggestCriteria'
 import { projectService } from '../../services/project.service'
 import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
@@ -264,6 +265,34 @@ export default function ValidationItemDetailDrawer({
   const deleteTemplate = (label: string) => {
     if (!window.confirm(`Delete template "${label}"?`)) return
     persistTemplates(templates.filter((t) => t.label !== label))
+  }
+
+  // T1 criterion seeding (per ai-ready-vision.md §5). Engineers stay in
+  // control: the engine emits proposals; nothing is auto-saved.
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  type LinkedReqLite = {
+    requirement?: { title?: string | null; description?: string | null } | null
+  }
+  const suggestions: CriterionSuggestion[] = useMemo(() => {
+    if (!suggestionsOpen) return []
+    const titles = (linkedReqs as LinkedReqLite[])
+      .map((l) => l.requirement?.title ?? '')
+      .join('\n')
+    const descs = (linkedReqs as LinkedReqLite[])
+      .map((l) => l.requirement?.description ?? '')
+      .join('\n')
+    return suggestCriteriaFromRequirement({ title: titles, description: descs })
+  }, [suggestionsOpen, linkedReqs])
+  const acceptSuggestion = (s: CriterionSuggestion) => {
+    if (!draft) return
+    const id = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    setDraft({
+      ...draft,
+      criteria: [
+        ...draft.criteria,
+        { id, text: s.text, outcome: 'PENDING', orderIndex: draft.criteria.length },
+      ],
+    })
   }
 
   const removeCriterion = (cid: string) => {
@@ -862,6 +891,19 @@ export default function ValidationItemDetailDrawer({
                 </select>
                 <button
                   type="button"
+                  onClick={() => setSuggestionsOpen((v) => !v)}
+                  disabled={linkedReqs.length === 0}
+                  className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  title={
+                    linkedReqs.length === 0
+                      ? 'Link at least one requirement to enable T1 criterion seed suggestions'
+                      : 'Suggest criterion seeds from the linked requirements (advisory only, no auto-save)'
+                  }
+                >
+                  Suggest
+                </button>
+                <button
+                  type="button"
                   onClick={addCriterion}
                   className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
                 >
@@ -869,6 +911,100 @@ export default function ValidationItemDetailDrawer({
                 </button>
               </div>
             </div>
+            {suggestionsOpen && (
+              <div
+                style={{
+                  border: '1px solid var(--pv-line)',
+                  background: 'var(--pv-surface-soft)',
+                  borderRadius: 4,
+                  padding: 8,
+                  marginBottom: 8,
+                  fontSize: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                      textTransform: 'uppercase',
+                      fontSize: 10,
+                      color: 'var(--pv-fg-3)',
+                    }}
+                    title="T1 advisory per ai-ready-vision.md §5 - deterministic rule engine, no model call. Every seed is a proposal until you accept it."
+                  >
+                    Suggested seeds — advisory
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSuggestionsOpen(false)}
+                    style={{
+                      background: 'none',
+                      border: 0,
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: 'var(--pv-fg-3)',
+                      fontSize: 11,
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+                {suggestions.length === 0 ? (
+                  <p style={{ margin: 0, color: 'var(--pv-fg-3)', fontStyle: 'italic' }}>
+                    No measurable / normative sentences found in linked requirements. Add detail to the
+                    linked requirement description.
+                  </p>
+                ) : (
+                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {suggestions.map((s, i) => (
+                      <li
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 8,
+                          padding: '4px 6px',
+                          background: 'var(--pv-bg)',
+                          border: '1px solid var(--pv-line)',
+                          borderRadius: 3,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => acceptSuggestion(s)}
+                          className="pv-btn primary compact"
+                          style={{ height: 22, fontSize: 11, padding: '0 8px', flexShrink: 0 }}
+                          title="Accept this seed into the criteria list"
+                        >
+                          Accept
+                        </button>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block' }}>{s.text}</span>
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: 10,
+                              color: 'var(--pv-fg-3)',
+                              marginTop: 2,
+                            }}
+                          >
+                            {s.reason}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             {draft && draft.criteria.length === 0 ? (
               <p className="text-sm text-gray-500 italic">No criteria yet — add at least one.</p>
             ) : (
