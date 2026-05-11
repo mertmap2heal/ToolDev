@@ -764,9 +764,13 @@ export default function ValidationPage() {
                         aria-label={it.starredByMe ? 'Unstar' : 'Star'}
                         title={it.starredByMe ? 'Unstar' : 'Star this item'}
                         onClick={async () => {
-                          if (it.starredByMe)
-                            await validationService.unstar(projectId, it.id)
-                          else await validationService.star(projectId, it.id)
+                          if (it.starredByMe) {
+                            const res = await validationService.unstar(projectId, it.id)
+                            if (res.success) toast.info(`Unstarred ${it.key}`)
+                          } else {
+                            const res = await validationService.star(projectId, it.id)
+                            if (res.success) toast.success(`Starred ${it.key}`)
+                          }
                           refetchAll()
                         }}
                         className={`vv-star-btn ${it.starredByMe ? 'on' : ''}`}
@@ -949,10 +953,11 @@ export default function ValidationPage() {
               const ms = e.target.value as ValidationMilestone
               if (!ms) return
               setBulkMilestone('')
-              await validationService.bulkUpdate(projectId, {
+              const res = await validationService.bulkUpdate(projectId, {
                 ids: Array.from(selectedIds),
                 patch: { targetMilestone: ms },
               })
+              if (res.success) toast.success(`Set milestone on ${res.data?.count ?? 0} items`)
               setSelectedIds(new Set())
               refetchAll()
             }}
