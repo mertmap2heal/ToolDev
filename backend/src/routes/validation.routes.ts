@@ -39,6 +39,10 @@ import {
   deleteComment,
   getSettings,
   updateSettings,
+  listBaselines,
+  getBaseline,
+  createBaseline,
+  deleteBaseline,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
 
@@ -74,6 +78,12 @@ router.put(
 // Coverage rollup + gap finder
 router.get('/projects/:projectId/coverage', getCoverage)
 router.get('/projects/:projectId/uncovered-requirements', listUncoveredRequirements)
+
+// Baselines (point-in-time snapshots)
+router.get('/projects/:projectId/baselines', listBaselines)
+router.post('/projects/:projectId/baselines', createBaseline)
+router.get('/projects/:projectId/baselines/:id', getBaseline)
+router.delete('/projects/:projectId/baselines/:id', deleteBaseline)
 
 // Items
 router.get('/projects/:projectId/items', listItems)

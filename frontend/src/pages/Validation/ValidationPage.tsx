@@ -756,6 +756,23 @@ export default function ValidationPage() {
           </p>
         </div>
         <div className="pv-right">
+          <button
+            type="button"
+            onClick={async () => {
+              const label = window.prompt(
+                'Baseline label (e.g. "PDR snapshot 2026-05-15"):',
+                `Baseline ${new Date().toISOString().slice(0, 10)}`,
+              )?.trim()
+              if (!label) return
+              const res = await validationService.createBaseline(projectId, { label })
+              if (res.success) toast.success(`Baselined ${res.data?.itemCount ?? 0} items as "${label}"`)
+              else toast.error(res.error ?? 'Baseline failed')
+            }}
+            title="Take a point-in-time snapshot of every live validation item. Frozen — later edits do not alter the baseline."
+            className="pv-btn"
+          >
+            Baseline state
+          </button>
           <Link
             to={`/projects/${projectId}/validation/der`}
             title="DER read-only view: milestone-indexed, sign-off-visible, print-friendly. Use this to hand off to certification authorities."

@@ -264,6 +264,44 @@ export async function listEvidence(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listBaselines(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listBaselines(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function getBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.getBaseline(req.params.projectId, req.params.id)
+    if (!data) return fail(res, 404, 'Baseline not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.createBaseline(req.params.projectId, userId(req), req.body ?? {})
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function deleteBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.deleteBaseline(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Baseline not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function uploadEvidenceFile(req: AuthRequest, res: Response) {
   try {
     // multer attaches the parsed file at req.file

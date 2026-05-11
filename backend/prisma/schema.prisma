@@ -50,6 +50,7 @@ model User {
   validationSignOffs                  ValidationSignOff[]
   validationItemStars                 ValidationItemStar[]
   validationComments                  ValidationComment[]
+  validationBaselinesCreated          ValidationBaseline[]              @relation("ValidationBaselineCreatedBy")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -271,6 +272,7 @@ model Project {
   parameterFolders            ParameterFolder[]
   validationItems             ValidationItem[]
   validationSettings          ValidationSettings?
+  validationBaselines         ValidationBaseline[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -4033,6 +4035,31 @@ model ValidationSettings {
   updatedAt DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+/// Point-in-time snapshot of all live Validation items for a project. Created
+/// by the design-system §8.3 "Baseline this state" action. The snapshot is
+/// frozen Json so subsequent edits to the live items do not retroactively
+/// change the baseline content. Compared / restored later via separate APIs.
+model ValidationBaseline {
+  id           String   @id @default(uuid())
+  projectId    String
+  label        String
+  description  String?
+  // Frozen array of item summaries. Shape: [{
+  //   id, key, title, description, methodType, targetMilestone, status,
+  //   priority, criteria, tags, ownerUserId, signOffCount, isSuspect
+  // }]
+  snapshot     Json
+  itemCount    Int
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("ValidationBaselineCreatedBy", fields: [createdById], references: [id])
+
+  @@index([projectId])
+  @@index([createdAt])
 }
 
 model ValidationComment {

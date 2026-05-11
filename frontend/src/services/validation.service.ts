@@ -413,6 +413,28 @@ export const validationService = {
     )
   },
 
+  async listBaselines(projectId: string): Promise<ApiResponse<ValidationBaseline[]>> {
+    return apiClient.get(`/validation/projects/${projectId}/baselines`)
+  },
+
+  async getBaseline(projectId: string, id: string): Promise<ApiResponse<ValidationBaseline>> {
+    return apiClient.get(`/validation/projects/${projectId}/baselines/${id}`)
+  },
+
+  async createBaseline(
+    projectId: string,
+    payload: { label: string; description?: string | null },
+  ): Promise<ApiResponse<ValidationBaseline>> {
+    return apiClient.post(`/validation/projects/${projectId}/baselines`, payload)
+  },
+
+  async deleteBaseline(
+    projectId: string,
+    id: string,
+  ): Promise<ApiResponse<{ deleted: boolean }>> {
+    return apiClient.delete(`/validation/projects/${projectId}/baselines/${id}`)
+  },
+
   async getSettings(projectId: string): Promise<ApiResponse<ValidationSettings>> {
     return apiClient.get(`/validation/projects/${projectId}/settings`)
   },
@@ -444,6 +466,33 @@ export interface ValidationTag {
 export interface ValidationCriterionTemplate {
   label: string
   criteria: string[]
+}
+
+export interface ValidationBaselineItem {
+  id: string
+  key: string
+  title: string
+  description?: string | null
+  methodType: string
+  targetMilestone: string
+  status: string
+  priority: string
+  criteria: ValidationCriterion[]
+  tags: string[]
+  ownerName: string | null
+  signOffCount: number
+}
+
+export interface ValidationBaseline {
+  id: string
+  projectId: string
+  label: string
+  description: string | null
+  snapshot: ValidationBaselineItem[]
+  itemCount: number
+  createdById: string
+  createdAt: string
+  createdBy?: { id: string; name: string; email: string }
 }
 
 export interface ValidationSettings {

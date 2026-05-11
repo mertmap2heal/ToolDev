@@ -1107,6 +1107,85 @@ export async function bulkUpdate(
   return { count: result.count }
 }
 
+// ---- Baselines (point-in-time snapshots) ----
+
+export async function listBaselines(projectId: string) {
+  return prisma.validationBaseline.findMany({
+    where: { projectId },
+    orderBy: { createdAt: 'desc' },
+    include: { createdBy: { select: { id: true, name: true, email: true } } },
+  })
+}
+
+export async function getBaseline(projectId: string, id: string) {
+  return prisma.validationBaseline.findFirst({
+    where: { id, projectId },
+    include: { createdBy: { select: { id: true, name: true, email: true } } },
+  })
+}
+
+export async function createBaseline(
+  projectId: string,
+  userId: string,
+  payload: { label: string; description?: string | null },
+) {
+  const label = payload.label?.trim()
+  if (!label) throw new Error('label is required')
+
+  const items = await prisma.validationItem.findMany({
+    where: { projectId, deletedAt: null },
+    orderBy: [{ targetMilestone: 'asc' }, { key: 'asc' }],
+    include: {
+      owner: { select: { id: true, name: true } },
+      _count: { select: { signOffs: true } },
+    },
+  })
+  // Freeze a minimal but reviewer-useful slice. Full descriptions are kept so
+  // the snapshot is self-contained for a DER review later.
+  const snapshot = items.map((i) => ({
+    id: i.id,
+    key: i.key,
+    title: i.title,
+    description: i.description,
+    methodType: i.methodType,
+    targetMilestone: i.targetMilestone,
+    status: i.status,
+    priority: i.priority,
+    criteria: i.criteria,
+    tags: i.tags,
+    ownerName: i.owner?.name ?? null,
+    signOffCount: i._count.signOffs,
+  }))
+  const baseline = await prisma.validationBaseline.create({
+    data: {
+      projectId,
+      label,
+      description: payload.description ?? null,
+      snapshot: snapshot as unknown as Prisma.InputJsonValue,
+      itemCount: items.length,
+      createdById: userId,
+    },
+    include: { createdBy: { select: { id: true, name: true, email: true } } },
+  })
+  await writeAudit(projectId, userId, 'validation:baseline-create', {
+    baselineId: baseline.id,
+    itemCount: items.length,
+    label,
+  })
+  return baseline
+}
+
+export async function deleteBaseline(projectId: string, id: string, userId: string) {
+  const bl = await prisma.validationBaseline.findFirst({ where: { id, projectId } })
+  if (!bl) return null
+  await prisma.validationBaseline.delete({ where: { id } })
+  await writeAudit(projectId, userId, 'validation:baseline-delete', {
+    baselineId: id,
+    label: bl.label,
+  })
+  return { deleted: true }
+}
+
 // ---- Sign-off ----
 
 interface SignOffPayload {
