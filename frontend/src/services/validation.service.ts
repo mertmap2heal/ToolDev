@@ -264,6 +264,19 @@ export const validationService = {
     return apiClient.post(`/validation/projects/${projectId}/items/${id}/evidence`, payload)
   },
 
+  async uploadEvidence(
+    projectId: string,
+    id: string,
+    file: File,
+  ): Promise<ApiResponse<ValidationEvidenceLink>> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiClient.postForm(
+      `/validation/projects/${projectId}/items/${id}/evidence/upload`,
+      fd,
+    )
+  },
+
   async detachEvidence(
     projectId: string,
     id: string,

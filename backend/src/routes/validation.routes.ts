@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
@@ -20,6 +21,7 @@ import {
   listSignOffs,
   listEvidence,
   attachEvidence,
+  uploadEvidenceFile,
   detachEvidence,
   listLinkedRequirements,
   linkRequirement,
@@ -45,6 +47,14 @@ import { ensureValidationApproverRole } from '../services/validation.service'
 ensureValidationApproverRole().catch((e) => {
   // eslint-disable-next-line no-console
   console.error('[validation] ensureValidationApproverRole failed:', (e as Error).message)
+})
+
+// 25 MB cap per uploaded evidence file. Matches a typical PDF / DOCX / image
+// size that engineers attach; larger artefacts are referenced by URL via the
+// existing attachEvidence endpoint.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
 })
 
 const router = Router()
@@ -107,6 +117,11 @@ router.post('/projects/:projectId/items/:id/sign-off/:signOffId/revoke', revokeS
 // Evidence (reuses VerEvidence + VerEvidenceLink with linkedEntityType='ValidationItem')
 router.get('/projects/:projectId/items/:id/evidence', listEvidence)
 router.post('/projects/:projectId/items/:id/evidence', attachEvidence)
+router.post(
+  '/projects/:projectId/items/:id/evidence/upload',
+  upload.single('file'),
+  uploadEvidenceFile,
+)
 router.delete(
   '/projects/:projectId/items/:id/evidence/:linkId',
   detachEvidence,

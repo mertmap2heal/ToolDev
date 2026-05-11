@@ -1,6 +1,8 @@
 import { prisma } from '../lib/prisma'
 import { Prisma } from '@prisma/client'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHash } from 'crypto'
+import { promises as fs } from 'fs'
+import * as path from 'path'
 
 // Method types and statuses (string-typed for DB compatibility, validated at controller boundary)
 export const METHOD_TYPES = [
@@ -1239,6 +1241,81 @@ export async function attachEvidence(
     evidenceId: evidence.id,
   })
   return link
+}
+
+/**
+ * Persist an uploaded file as evidence on a validation item.
+ *
+ * The controller passes the multer file object. We hash the buffer (sha-256)
+ * so two uploads of the same file dedupe to one stored copy, write under
+ * /uploads/validation/<itemId>/, and create the VerEvidence + VerEvidenceLink
+ * rows with `storageRef` pointing to a relative URL the static handler
+ * already serves.
+ */
+export async function uploadEvidenceFile(
+  projectId: string,
+  itemId: string,
+  userId: string,
+  file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
+) {
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+
+  const checksum = createHash('sha256').update(file.buffer).digest('hex')
+  const uploadsRoot = path.resolve(__dirname, '../../uploads/validation', itemId)
+  await fs.mkdir(uploadsRoot, { recursive: true })
+
+  // Filename = sha-prefix + sanitised original name; keeps a hint of source
+  // while making collisions impossible. The full sha is in `checksum` for
+  // dedupe and audit.
+  const safeName = file.originalname.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)
+  const stored = `${checksum.slice(0, 12)}-${safeName}`
+  const target = path.join(uploadsRoot, stored)
+  await fs.writeFile(target, file.buffer)
+
+  const storageRef = `/uploads/validation/${itemId}/${stored}`
+  const evidenceType = guessEvidenceType(file.mimetype, file.originalname)
+
+  const evidence = await prisma.verEvidence.create({
+    data: {
+      projectId,
+      title: file.originalname,
+      evidenceType,
+      storageRef,
+      description: null,
+      checksum,
+      createdByUserId: userId,
+    },
+  })
+  const link = await prisma.verEvidenceLink.create({
+    data: {
+      userId,
+      evidenceId: evidence.id,
+      linkedEntityType: 'ValidationItem',
+      linkedEntityId: itemId,
+      relation: 'PRIMARY',
+    },
+    include: { evidence: true },
+  })
+  await writeAudit(projectId, userId, 'validation:evidence-upload', {
+    validationItemId: itemId,
+    evidenceId: evidence.id,
+    bytes: file.size,
+    mime: file.mimetype,
+  })
+  return link
+}
+
+function guessEvidenceType(mime: string, name: string): string {
+  if (mime.startsWith('image/')) return 'IMAGE'
+  if (mime === 'application/pdf') return 'PDF'
+  if (mime.includes('spreadsheet') || /\.(xlsx|csv)$/i.test(name)) return 'SPREADSHEET'
+  if (mime.includes('word') || /\.docx?$/i.test(name)) return 'DOCUMENT'
+  if (mime.startsWith('text/')) return 'TEXT'
+  return 'OTHER'
 }
 
 export async function detachEvidence(

@@ -264,6 +264,24 @@ export async function listEvidence(req: AuthRequest, res: Response) {
   }
 }
 
+export async function uploadEvidenceFile(req: AuthRequest, res: Response) {
+  try {
+    // multer attaches the parsed file at req.file
+    const file = (req as AuthRequest & { file?: { originalname: string; mimetype: string; buffer: Buffer; size: number } }).file
+    if (!file) return fail(res, 400, 'file is required')
+    const link = await svc.uploadEvidenceFile(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      file,
+    )
+    if (!link) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data: link })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function attachEvidence(req: AuthRequest, res: Response) {
   try {
     const data = await svc.attachEvidence(

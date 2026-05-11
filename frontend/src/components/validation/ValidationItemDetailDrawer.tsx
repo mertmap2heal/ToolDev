@@ -1140,7 +1140,7 @@ export default function ValidationItemDetailDrawer({
             <h3 className="pv-dr-section-title">
               Evidence
             </h3>
-            {evidence && evidence.length > 0 ? (
+            {evidence && evidence.length > 0 && (
               <div className="pv-dr-refs">
                 {evidence.map((link) => (
                   <div key={link.id} className="pv-dr-ref">
@@ -1148,7 +1148,20 @@ export default function ValidationItemDetailDrawer({
                       <Paperclip size={12} />
                     </span>
                     <span className="ref-id">{link.evidence.evidenceType}</span>
-                    <span className="ref-title">{link.evidence.title}</span>
+                    {link.evidence.storageRef?.startsWith('/uploads/') ? (
+                      <a
+                        href={link.evidence.storageRef}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ref-title"
+                        style={{ color: 'var(--pv-blue)' }}
+                        title={`Open ${link.evidence.title}`}
+                      >
+                        {link.evidence.title}
+                      </a>
+                    ) : (
+                      <span className="ref-title">{link.evidence.title}</span>
+                    )}
                     <button
                       type="button"
                       onClick={async () => {
@@ -1164,12 +1177,12 @@ export default function ValidationItemDetailDrawer({
                   </div>
                 ))}
               </div>
-            ) : (
-              <p style={{ fontSize: 12, color: 'var(--pv-fg-3)', fontStyle: 'italic', margin: 0 }}>
-                No evidence attached. (File upload UI is wired in a follow-up; use the API
-                or attach via a Verification test run.)
-              </p>
             )}
+            <EvidenceDropzone
+              projectId={projectId}
+              itemId={itemId!}
+              onUploaded={reload}
+            />
           </section>
 
           <section>
@@ -1390,6 +1403,87 @@ export default function ValidationItemDetailDrawer({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Drag-and-drop / click-to-pick upload zone for evidence. Keeps each upload
+// scoped to a single validation item; large files (>25 MB) are rejected by the
+// backend multer limit and reported here as a small inline error.
+function EvidenceDropzone({
+  projectId,
+  itemId,
+  onUploaded,
+}: {
+  projectId: string
+  itemId: string
+  onUploaded: () => void
+}) {
+  const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  const upload = async (files: FileList | File[]) => {
+    setErrorMsg(null)
+    const list = Array.from(files)
+    if (list.length === 0) return
+    setUploading(true)
+    for (const f of list) {
+      const res = await validationService.uploadEvidence(projectId, itemId, f)
+      if (!res.success) {
+        setErrorMsg(res.error ?? `Upload failed for ${f.name}`)
+        break
+      }
+    }
+    setUploading(false)
+    onUploaded()
+  }
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <label
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          if (e.dataTransfer.files?.length) void upload(e.dataTransfer.files)
+        }}
+        style={{
+          display: 'block',
+          border: `1px dashed ${dragging ? 'var(--pv-blue)' : 'var(--pv-line)'}`,
+          background: dragging ? 'var(--pv-blue-tint, rgba(43,108,176,0.06))' : 'var(--pv-surface-soft)',
+          borderRadius: 4,
+          padding: '8px 12px',
+          fontSize: 12,
+          color: 'var(--pv-fg-3)',
+          cursor: uploading ? 'progress' : 'pointer',
+          textAlign: 'center',
+        }}
+        title="Drag a file here or click to pick. Max 25 MB per file."
+      >
+        <input
+          type="file"
+          multiple
+          disabled={uploading}
+          onChange={(e) => {
+            if (e.target.files) void upload(e.target.files)
+            e.target.value = ''
+          }}
+          style={{ display: 'none' }}
+        />
+        {uploading
+          ? 'Uploading…'
+          : dragging
+          ? 'Drop to upload'
+          : 'Drag a file here, or click to pick (PDF, image, doc — 25 MB max)'}
+      </label>
+      {errorMsg && (
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--pv-red)' }}>{errorMsg}</p>
+      )}
     </div>
   )
 }
