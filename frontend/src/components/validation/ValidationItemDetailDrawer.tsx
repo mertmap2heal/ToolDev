@@ -210,30 +210,57 @@ export default function ValidationItemDetailDrawer({
     })
   }
 
-  // Criterion templates - first cut is per-browser localStorage. Schema-level
-  // backing requires a schema change (CLAUDE.md rule 4), so this v1 stays
-  // client-side; templates appear under a project key but only on the
-  // browser that created them.
+  // Criterion templates - now backed by ValidationSettings.criterionTemplates.
+  // The pre-backend localStorage entries are migrated on first load so users
+  // do not lose previously-saved templates.
   interface CriterionTemplate {
     label: string
     criteria: string[]
   }
   const templatesKey = `validation:criterionTemplates:${projectId}`
+  const templatesFromServer: CriterionTemplate[] = useMemo(
+    () => settings?.criterionTemplates ?? [],
+    [settings],
+  )
   const [templates, setTemplates] = useState<CriterionTemplate[]>([])
   useEffect(() => {
+    // Merge: backend wins, but legacy localStorage entries are surfaced (and
+    // pushed back to the backend transparently on the next save).
+    let legacy: CriterionTemplate[] = []
     try {
       const raw = localStorage.getItem(templatesKey)
-      if (!raw) return
-      const arr = JSON.parse(raw)
-      if (Array.isArray(arr)) setTemplates(arr as CriterionTemplate[])
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) legacy = arr as CriterionTemplate[]
+      }
     } catch { /* ignore */ }
+    const merged = [
+      ...templatesFromServer,
+      ...legacy.filter(
+        (l) => !templatesFromServer.some((s) => s.label === l.label),
+      ),
+    ]
+    setTemplates(merged)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
-  const persistTemplates = (next: CriterionTemplate[]) => {
+  }, [projectId, templatesFromServer])
+
+  const persistTemplates = async (next: CriterionTemplate[]) => {
     setTemplates(next)
+    // Clear the legacy LS once we have written to the backend.
     try {
-      localStorage.setItem(templatesKey, JSON.stringify(next))
+      localStorage.removeItem(templatesKey)
     } catch { /* ignore */ }
+    const res = await validationService.updateSettings(projectId, {
+      criterionTemplates: next,
+    })
+    if (!res.success) {
+      // Fall back to LS persistence so the change is not lost.
+      try {
+        localStorage.setItem(templatesKey, JSON.stringify(next))
+      } catch { /* ignore */ }
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['validation-settings', projectId] })
+    }
   }
   const insertTemplate = (tpl: CriterionTemplate) => {
     if (!draft) return

@@ -4025,6 +4025,10 @@ model ValidationSettings {
   // library; arbitrary free-text tags are not allowed so the set stays
   // navigable.
   tags      Json     @default("[]")
+  // Project-shared criterion templates. JSON array of { label, criteria: string[] }.
+  // Replaces the per-browser localStorage v1 so templates are visible to every
+  // team member working in the same project.
+  criterionTemplates Json @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

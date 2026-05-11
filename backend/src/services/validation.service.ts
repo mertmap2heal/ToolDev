@@ -272,6 +272,11 @@ export interface ValidationTag {
   color: string
 }
 
+export interface ValidationCriterionTemplate {
+  label: string
+  criteria: string[]
+}
+
 async function ensureSettings(projectId: string) {
   return prisma.validationSettings.upsert({
     where: { projectId },
@@ -287,7 +292,11 @@ export async function getSettings(projectId: string) {
 export async function updateSettings(
   projectId: string,
   userId: string,
-  payload: { prefixes?: ValidationKeyPrefix[]; tags?: ValidationTag[] },
+  payload: {
+    prefixes?: ValidationKeyPrefix[]
+    tags?: ValidationTag[]
+    criterionTemplates?: ValidationCriterionTemplate[]
+  },
 ) {
   if (payload.prefixes) {
     if (!Array.isArray(payload.prefixes) || payload.prefixes.length === 0)
@@ -315,6 +324,20 @@ export async function updateSettings(
         throw new Error(`tag "${t.label}" — color must be a #rrggbb hex`)
     }
   }
+  if (payload.criterionTemplates) {
+    const seen = new Set<string>()
+    for (const t of payload.criterionTemplates) {
+      if (!t.label?.trim()) throw new Error('template label is required')
+      if (seen.has(t.label)) throw new Error(`duplicate template "${t.label}"`)
+      seen.add(t.label)
+      if (!Array.isArray(t.criteria) || t.criteria.length === 0)
+        throw new Error(`template "${t.label}" — at least one criterion is required`)
+      for (const c of t.criteria) {
+        if (typeof c !== 'string' || !c.trim())
+          throw new Error(`template "${t.label}" — criterion must be a non-empty string`)
+      }
+    }
+  }
   await ensureSettings(projectId)
   const updated = await prisma.validationSettings.update({
     where: { projectId },
@@ -325,11 +348,18 @@ export async function updateSettings(
       ...(payload.tags
         ? { tags: payload.tags as unknown as Prisma.InputJsonValue }
         : {}),
+      ...(payload.criterionTemplates
+        ? {
+            criterionTemplates:
+              payload.criterionTemplates as unknown as Prisma.InputJsonValue,
+          }
+        : {}),
     },
   })
   await writeAudit(projectId, userId, 'validation:settings-update', {
     prefixesChanged: !!payload.prefixes,
     tagsChanged: !!payload.tags,
+    criterionTemplatesChanged: !!payload.criterionTemplates,
   })
   return updated
 }

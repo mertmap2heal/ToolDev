@@ -419,7 +419,11 @@ export const validationService = {
 
   async updateSettings(
     projectId: string,
-    payload: { prefixes?: ValidationKeyPrefix[]; tags?: ValidationTag[] },
+    payload: {
+      prefixes?: ValidationKeyPrefix[]
+      tags?: ValidationTag[]
+      criterionTemplates?: ValidationCriterionTemplate[]
+    },
   ): Promise<ApiResponse<ValidationSettings>> {
     return apiClient.put(`/validation/projects/${projectId}/settings`, payload)
   },
@@ -437,11 +441,17 @@ export interface ValidationTag {
   color: string
 }
 
+export interface ValidationCriterionTemplate {
+  label: string
+  criteria: string[]
+}
+
 export interface ValidationSettings {
   id: string
   projectId: string
   prefixes: ValidationKeyPrefix[]
   tags: ValidationTag[]
+  criterionTemplates?: ValidationCriterionTemplate[]
   createdAt: string
   updatedAt: string
 }
