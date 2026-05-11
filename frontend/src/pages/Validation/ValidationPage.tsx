@@ -84,6 +84,7 @@ export default function ValidationPage() {
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
 
   // Named filter views. Persisted per project alongside the active-filter
   // state but in their own LS key so clearing one does not affect the other.
@@ -141,6 +142,7 @@ export default function ValidationPage() {
       if (Array.isArray(v.collapsedMilestones)) {
         setCollapsedMilestones(new Set(v.collapsedMilestones as string[]))
       }
+      if (v.viewMode === 'list' || v.viewMode === 'board') setViewMode(v.viewMode)
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
@@ -272,10 +274,11 @@ export default function ValidationPage() {
           criterionFilter,
           groupByMilestone,
           collapsedMilestones: Array.from(collapsedMilestones),
+          viewMode,
         }),
       )
     } catch { /* ignore */ }
-  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter, groupByMilestone, collapsedMilestones])
+  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter, groupByMilestone, collapsedMilestones, viewMode])
 
   const toggleSort = (col: ValidationSortBy) => {
     if (sortBy === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -919,14 +922,36 @@ export default function ValidationPage() {
         >
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
-        <button
-          type="button"
-          onClick={() => setGroupByMilestone((v) => !v)}
-          title={groupByMilestone ? 'Switch back to a flat list' : 'Group rows under collapsible milestone headers'}
-          className={`pv-pill ${groupByMilestone ? 'active' : ''}`}
-        >
-          Group: Milestone
-        </button>
+        <div style={{ display: 'inline-flex', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--pv-line)' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`pv-pill ${viewMode === 'list' ? 'active' : ''}`}
+            title="Table view"
+            style={{ borderRadius: 0, border: 0 }}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('board')}
+            className={`pv-pill ${viewMode === 'board' ? 'active' : ''}`}
+            title="Kanban view grouped by status"
+            style={{ borderRadius: 0, border: 0 }}
+          >
+            Board
+          </button>
+        </div>
+        {viewMode === 'list' && (
+          <button
+            type="button"
+            onClick={() => setGroupByMilestone((v) => !v)}
+            title={groupByMilestone ? 'Switch back to a flat list' : 'Group rows under collapsible milestone headers'}
+            className={`pv-pill ${groupByMilestone ? 'active' : ''}`}
+          >
+            Group: Milestone
+          </button>
+        )}
         <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Apply a saved view">
           View
           <select
@@ -1280,7 +1305,162 @@ export default function ValidationPage() {
         </div>
       )}
 
-      {items.length === 0 ? (
+      {viewMode === 'board' && items.length > 0 ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${VALIDATION_STATUSES.length}, minmax(220px, 1fr))`,
+            gap: 8,
+          }}
+        >
+          {VALIDATION_STATUSES.map((s) => {
+            const cards = items.filter((i) => i.status === s)
+            const colorClass =
+              s === 'VALIDATED'
+                ? 'approved'
+                : s === 'EXECUTED'
+                ? 'review'
+                : s === 'BLOCKED'
+                ? 'deprecated'
+                : s === 'OBSOLETE'
+                ? 'obsolete'
+                : 'draft'
+            return (
+              <div
+                key={s}
+                style={{
+                  background: 'var(--pv-surface-soft)',
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 6,
+                  padding: 8,
+                  minHeight: 200,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 2,
+                  }}
+                >
+                  <span className={`pv-status ${colorClass}`}>{STATUS_LABEL[s]}</span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--pv-font-mono)',
+                      fontSize: 11,
+                      color: 'var(--pv-fg-3)',
+                    }}
+                  >
+                    {cards.length}
+                  </span>
+                </div>
+                {cards.length === 0 && (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--pv-fg-3)',
+                      fontSize: 11,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    Empty
+                  </div>
+                )}
+                {cards.map((it) => {
+                  const total = it.criteria?.length ?? 0
+                  const met = it.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
+                  return (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => setSelectedItemId(it.id)}
+                      style={{
+                        background: 'var(--pv-bg)',
+                        border: '1px solid var(--pv-line)',
+                        borderRadius: 4,
+                        padding: 8,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        color: 'inherit',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                      }}
+                      title={it.title}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontFamily: 'var(--pv-font-mono)',
+                          fontSize: 11,
+                          color: 'var(--pv-fg-3)',
+                        }}
+                      >
+                        <span>{it.key}</span>
+                        <span title={MILESTONE_TOOLTIP[it.targetMilestone]}>
+                          {it.targetMilestone}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--pv-fg)',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {it.title}
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontSize: 11,
+                          color: 'var(--pv-fg-3)',
+                        }}
+                      >
+                        <span title={`${met}/${total} criteria met`}>
+                          <span style={{ fontFamily: 'var(--pv-font-mono)' }}>{met}/{total}</span>
+                          {total > 0 && (
+                            <span className="bar" style={{ marginLeft: 4, display: 'inline-block' }} title={`${Math.round((met / total) * 100)}%`}>
+                              <i style={{ width: `${(met / total) * 100}%` }} />
+                            </span>
+                          )}
+                        </span>
+                        <span title={it.owner?.email ?? ''}>
+                          {it.owner?.name ?? '—'}
+                        </span>
+                      </div>
+                      {it.isSuspect && (
+                        <span
+                          className="vv-row-suspect"
+                          style={{ alignSelf: 'flex-start' }}
+                          title="A linked requirement was updated after this validation."
+                        >
+                          <AlertTriangle size={10} /> suspect
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      ) : items.length === 0 ? (
         <div
           style={{
             background: 'var(--pv-bg)',
