@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageCircle, Send, Trash2, Edit2, X, Check } from 'lucide-react'
 import { validationService, type ValidationCommentRow } from '../../services/validation.service'
+import { RenderWithEntityRefs } from '../../utils/entityRefs'
 
 interface Props {
   projectId: string
@@ -173,7 +174,9 @@ export default function ValidationCommentsSection({
                 </div>
               </div>
             ) : (
-              <p className="text">{c.body}</p>
+              <p className="text" style={{ whiteSpace: 'pre-wrap' }}>
+                <RenderWithEntityRefs text={c.body} />
+              </p>
             )}
             {!isDeleted && editing !== c.id && (
               <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -273,7 +276,7 @@ export default function ValidationCommentsSection({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={2}
-          placeholder="Leave a comment, raise a question, or document a decision…"
+          placeholder="Leave a comment, raise a question, or document a decision… Reference REQ-001, PRM-014, VAL-…"
         />
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button

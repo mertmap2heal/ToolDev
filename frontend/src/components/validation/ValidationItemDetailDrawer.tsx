@@ -5,6 +5,7 @@ import {
   GitPullRequestArrow, Link2, AlertOctagon, Copy,
 } from 'lucide-react'
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
+import { RenderWithEntityRefs } from '../../utils/entityRefs'
 import { projectService } from '../../services/project.service'
 import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
@@ -844,7 +845,12 @@ export default function ValidationItemDetailDrawer({
                       </span>
                     </div>
                     {s.comment && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{s.comment}</p>
+                      <p
+                        className="text-xs text-gray-600 dark:text-gray-400 mt-0.5"
+                        style={{ whiteSpace: 'pre-wrap' }}
+                      >
+                        <RenderWithEntityRefs text={s.comment} />
+                      </p>
                     )}
                   </li>
                 ))}
