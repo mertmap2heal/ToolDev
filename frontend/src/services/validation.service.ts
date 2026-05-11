@@ -332,6 +332,13 @@ export const validationService = {
     return apiClient.delete(`/validation/projects/${projectId}/items/${id}/star`)
   },
 
+  async listActivity(
+    projectId: string,
+    id: string,
+  ): Promise<ApiResponse<ValidationActivityRow[]>> {
+    return apiClient.get(`/validation/projects/${projectId}/items/${id}/activity`)
+  },
+
   async listComments(
     projectId: string,
     id: string,
@@ -403,6 +410,14 @@ export interface ValidationSettings {
   tags: ValidationTag[]
   createdAt: string
   updatedAt: string
+}
+
+export interface ValidationActivityRow {
+  id: string
+  action: string
+  details: string | null
+  createdAt: string
+  user?: { id: string; name: string; email: string }
 }
 
 export interface ValidationCommentRow {

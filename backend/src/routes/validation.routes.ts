@@ -26,6 +26,7 @@ import {
   listUncoveredRequirements,
   star,
   unstar,
+  listActivity,
   listComments,
   createComment,
   updateComment,
@@ -72,6 +73,9 @@ router.delete('/projects/:projectId/items/:id', deleteItem)
 router.post('/projects/:projectId/items/:id/restore', restoreItem)
 router.post('/projects/:projectId/items/:id/star', star)
 router.delete('/projects/:projectId/items/:id/star', unstar)
+
+// Activity feed (filtered audit log)
+router.get('/projects/:projectId/items/:id/activity', listActivity)
 
 // Comments / discussions
 router.get('/projects/:projectId/items/:id/comments', listComments)

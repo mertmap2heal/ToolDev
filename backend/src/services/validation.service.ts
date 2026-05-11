@@ -300,6 +300,32 @@ function defaultPrefix(prefixes: unknown): string {
 
 // ---- Comments / discussions ----
 
+export async function listActivity(projectId: string, itemId: string) {
+  // AuditLog rows have `details: String?` containing JSON. We filter to rows
+  // whose action begins with 'validation:' and whose details mention this
+  // item id. Cheap when audit log is small per project.
+  const rows = await prisma.auditLog.findMany({
+    where: { projectId, action: { startsWith: 'validation:' } },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  return rows.filter((r) => {
+    if (!r.details) return false
+    try {
+      const parsed = JSON.parse(r.details) as Record<string, unknown>
+      return (
+        parsed.validationItemId === itemId ||
+        parsed.id === itemId ||
+        // bulk operations don't carry the id — exclude unless explicit
+        false
+      )
+    } catch {
+      return false
+    }
+  })
+}
+
 export async function listComments(projectId: string, itemId: string) {
   const item = await prisma.validationItem.findFirst({
     where: { id: itemId, projectId },

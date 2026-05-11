@@ -120,6 +120,15 @@ export default function ValidationItemDetailDrawer({
     },
   })
 
+  const { data: activity = [] } = useQuery({
+    queryKey: ['validation-activity', projectId, itemId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await validationService.listActivity(projectId, itemId!)
+      return res.success && res.data ? res.data : []
+    },
+  })
+
   const { data: members = [] } = useQuery({
     queryKey: ['project-members', projectId],
     enabled: isOpen,
@@ -779,6 +788,29 @@ export default function ValidationItemDetailDrawer({
               itemId={itemId}
               currentUserId={currentUserId}
             />
+          )}
+
+          {activity.length > 0 && (
+            <section>
+              <h3 className="pv-dr-section-title">Recent activity</h3>
+              <div className="pv-dr-timeline">
+                {activity.slice(0, 10).map((a) => {
+                  const verb = a.action.replace('validation:', '').replace(/-/g, ' ')
+                  return (
+                    <div key={a.id} className="pv-dr-event is-edit">
+                      <div className="e-row">
+                        <span className="e-action">
+                          <b>{a.user?.name ?? 'Someone'}</b> {verb}
+                        </span>
+                        <span className="e-meta">
+                          {new Date(a.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
           )}
           </div>
         </div>

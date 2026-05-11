@@ -304,6 +304,15 @@ export async function updateSettings(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listActivity(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listActivity(req.params.projectId, req.params.id)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function listComments(req: AuthRequest, res: Response) {
   try {
     const data = await svc.listComments(req.params.projectId, req.params.id)
