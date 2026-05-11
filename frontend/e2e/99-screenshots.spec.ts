@@ -56,7 +56,30 @@ test('validation page + drawer screenshots', async ({ page, projectId }) => {
     }
   }
 
-  // Toolbar shot — focus on the drawer description editor
+  // Board view
+  await page.goto(`/projects/${projectId}/validation`)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(400)
+  const boardBtn = page.getByRole('button', { name: /^Board$/ })
+  if (await boardBtn.isVisible().catch(() => false)) {
+    await boardBtn.click()
+    await page.waitForTimeout(400)
+    await page.screenshot({ path: path.join(OUT, '06-board.png'), fullPage: false })
+  }
+
+  // DER view
+  await page.goto(`/projects/${projectId}/validation/der`)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: path.join(OUT, '07-der.png'), fullPage: false })
+
+  // Settings page (criterion templates panel)
+  await page.goto(`/projects/${projectId}/validation/settings`)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: path.join(OUT, '08-settings.png'), fullPage: true })
+
+  // Full list page (toolbar + table)
   await page.goto(`/projects/${projectId}/validation`)
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(400)
