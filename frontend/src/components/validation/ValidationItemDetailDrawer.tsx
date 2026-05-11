@@ -298,6 +298,8 @@ export default function ValidationItemDetailDrawer({
   // T1 criterion seeding (per ai-ready-vision.md §5). Engineers stay in
   // control: the engine emits proposals; nothing is auto-saved.
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  // Lightbox state for image-evidence previews.
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   type LinkedReqLite = {
     requirement?: { title?: string | null; description?: string | null } | null
   }
@@ -1228,6 +1230,7 @@ export default function ValidationItemDetailDrawer({
                         criterionId={c.id}
                         links={evidence.filter((l) => l.relation === `criterion:${c.id}`)}
                         onChanged={reload}
+                        onPreviewImage={(src, alt) => setLightbox({ src, alt })}
                       />
                     )}
                   </li>
@@ -1477,6 +1480,59 @@ export default function ValidationItemDetailDrawer({
           />
         )}
 
+        {lightbox && (
+          <div
+            onClick={() => setLightbox(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.78)',
+              zIndex: 70,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              cursor: 'zoom-out',
+            }}
+            role="dialog"
+            aria-label={`Evidence preview — ${lightbox.alt}`}
+          >
+            <img
+              src={lightbox.src}
+              alt={lightbox.alt}
+              style={{
+                maxWidth: '95vw',
+                maxHeight: '90vh',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                background: '#fff',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              type="button"
+              aria-label="Close preview"
+              onClick={() => setLightbox(null)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: 4,
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="pv-dr-foot">
           <div className="left">
             {draft?.deletedAt ? (
@@ -1608,6 +1664,7 @@ function CriterionEvidence({
   criterionId,
   links,
   onChanged,
+  onPreviewImage,
 }: {
   projectId: string
   itemId: string
@@ -1618,6 +1675,7 @@ function CriterionEvidence({
     evidence: { evidenceType: string; title: string; storageRef?: string }
   }>
   onChanged: () => void
+  onPreviewImage?: (src: string, alt: string) => void
 }) {
   const [uploading, setUploading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -1649,6 +1707,33 @@ function CriterionEvidence({
                 <Paperclip size={10} />
               </span>
               <span className="ref-id">{link.evidence.evidenceType}</span>
+              {link.evidence.evidenceType === 'IMAGE' && link.evidence.storageRef && onPreviewImage && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onPreviewImage(link.evidence.storageRef!, link.evidence.title)
+                  }
+                  aria-label={`Preview ${link.evidence.title}`}
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--pv-line)',
+                    borderRadius: 3,
+                    padding: 0,
+                    width: 24,
+                    height: 24,
+                    overflow: 'hidden',
+                    cursor: 'zoom-in',
+                    flexShrink: 0,
+                    marginRight: 4,
+                  }}
+                >
+                  <img
+                    src={link.evidence.storageRef}
+                    alt={link.evidence.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                </button>
+              )}
               {link.evidence.storageRef?.startsWith('/uploads/') ? (
                 <a
                   href={link.evidence.storageRef}
