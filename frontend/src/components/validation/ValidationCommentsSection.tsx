@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query'
 import EntityDiscussion, {
   type DiscussionAdapter,
   type DiscussionComment,
+  type MentionableMember,
 } from '../common/EntityDiscussion'
 import { validationService, type ValidationCommentRow } from '../../services/validation.service'
+import { projectService } from '../../services/project.service'
 
 interface Props {
   projectId: string
@@ -24,6 +27,23 @@ function toDiscussion(c: ValidationCommentRow): DiscussionComment {
 }
 
 export default function ValidationCommentsSection({ projectId, itemId, currentUserId }: Props) {
+  const { data: members = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    queryFn: async () => {
+      const res = await projectService.getProjectMembers(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    staleTime: 5 * 60_000,
+    enabled: !!projectId,
+  })
+
+  type MemberLite = { userId: string; user?: { name?: string | null; email?: string | null } }
+  const mentionables: MentionableMember[] = (members as MemberLite[]).map((m) => ({
+    id: m.userId,
+    name: m.user?.name ?? null,
+    email: m.user?.email ?? null,
+  }))
+
   const adapter: DiscussionAdapter = {
     async list() {
       const res = await validationService.listComments(projectId, itemId)
@@ -51,6 +71,7 @@ export default function ValidationCommentsSection({ projectId, itemId, currentUs
       adapter={adapter}
       queryKey={['validation-comments', projectId, itemId]}
       currentUserId={currentUserId}
+      members={mentionables}
     />
   )
 }

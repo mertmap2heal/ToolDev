@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageCircle, Send, Trash2, Edit2, X, Check } from 'lucide-react'
-import { RenderWithEntityRefs } from '../../utils/entityRefs'
+import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
 
 // Universal discussion / chat component. Multiple modules need a threaded,
 // editable, deletable comment list against an entity (parameter, validation
@@ -31,6 +31,82 @@ export interface DiscussionAdapter {
   create(body: string, parentId?: string | null): Promise<DiscussionComment | null>
   update(id: string, body: string): Promise<DiscussionComment | null>
   remove(id: string): Promise<boolean>
+}
+
+export interface MentionableMember {
+  id: string
+  name?: string | null
+  email?: string | null
+}
+
+// Body markup convention for a mention. Matches the format already in use in
+// the Parameters Discussion so the same body strings round-trip cleanly:
+//   "@[Display Name](userId-uuid)"
+const MENTION_TOKEN_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
+
+function renderCommentBody(body: string, members: MentionableMember[]): React.ReactNode[] {
+  // Two-pass: first split out mention tokens, then for every non-mention chunk
+  // run parseEntityRefs so REQ-001 style ids inside the chunk become chips.
+  const out: React.ReactNode[] = []
+  let lastIndex = 0
+  const re = new RegExp(MENTION_TOKEN_RE.source, 'g')
+  let m: RegExpExecArray | null
+  let key = 0
+  const memberById = new Map(members.map((u) => [u.id, u]))
+
+  const renderChunk = (chunk: string): React.ReactNode[] => {
+    if (!chunk) return []
+    const segs = parseEntityRefs(chunk)
+    return segs.map((s, i) =>
+      s.type === 'text' ? (
+        <span key={`t-${key}-${i}`}>{s.text}</span>
+      ) : (
+        <EntityRefChip key={`r-${key}-${i}`} prefix={s.prefix} number={s.number} />
+      ),
+    )
+  }
+
+  while ((m = re.exec(body)) !== null) {
+    const [whole, name, userId] = m
+    if (m.index > lastIndex) {
+      out.push(...renderChunk(body.slice(lastIndex, m.index)))
+    }
+    const known = memberById.get(userId)
+    const display = known?.name ?? known?.email ?? name
+    out.push(
+      <span
+        key={`mention-${key++}`}
+        title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
+        style={{
+          display: 'inline',
+          padding: '0 4px',
+          margin: '0 1px',
+          borderRadius: 3,
+          background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
+          color: 'var(--pv-blue-ink, #1e4778)',
+          fontWeight: 500,
+        }}
+      >
+        @{display}
+      </span>,
+    )
+    lastIndex = m.index + whole.length
+  }
+  if (lastIndex < body.length) {
+    out.push(...renderChunk(body.slice(lastIndex)))
+  }
+  if (out.length === 0) out.push(...renderChunk(body))
+  return out
+}
+
+function memberInitials(m: MentionableMember): string {
+  const src = (m.name && m.name.trim()) || (m.email ? m.email.split('@')[0] : '?')
+  return src
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('') || '?'
 }
 
 interface ThreadedComment extends DiscussionComment {
@@ -87,15 +163,18 @@ interface Props {
   allowReplies?: boolean
   /** Optional title override (default: "Discussion") */
   title?: string
+  /** Mentionable project members. When supplied, '@' opens an autocomplete. */
+  members?: MentionableMember[]
 }
 
 export default function EntityDiscussion({
   adapter,
   queryKey,
   currentUserId,
-  placeholder = 'Leave a comment, raise a question, or document a decision… Reference REQ-001, PRM-014, VAL-…',
+  placeholder = 'Leave a comment, raise a question, or document a decision… Reference REQ-001, PRM-014, VAL-… and @mention teammates.',
   allowReplies = true,
   title = 'Discussion',
+  members = [],
 }: Props) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
@@ -213,7 +292,7 @@ export default function EntityDiscussion({
               </div>
             ) : (
               <p className="text" style={{ whiteSpace: 'pre-wrap' }}>
-                <RenderWithEntityRefs text={c.body} />
+                {renderCommentBody(c.body, members)}
               </p>
             )}
             {!isDeleted && editing !== c.id && (
@@ -311,31 +390,258 @@ export default function EntityDiscussion({
       ) : (
         <ul className="space-y-2 mb-3">{tree.map((c) => renderComment(c, 0))}</ul>
       )}
-      <div className="pv-dr-comment-add">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault()
-              void submit()
-            }
-          }}
-          rows={2}
-          placeholder={placeholder}
-        />
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!draft.trim() || submitting}
-            aria-label="Post comment"
-            className="pv-btn primary compact"
-          >
-            <Send size={12} /> Post
-          </button>
-        </div>
-      </div>
+      <MentionComposer
+        value={draft}
+        onChange={setDraft}
+        onSubmit={submit}
+        disabled={!draft.trim() || submitting}
+        placeholder={placeholder}
+        members={members}
+      />
     </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Composer with @mention autocomplete
+// ---------------------------------------------------------------------------
+
+interface ComposerProps {
+  value: string
+  onChange: (next: string) => void
+  onSubmit: () => void
+  disabled: boolean
+  placeholder?: string
+  members: MentionableMember[]
+}
+
+function MentionComposer({
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+  placeholder,
+  members,
+}: ComposerProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  // `mentionQuery` is the partial text after the most recent '@' before the
+  // caret. null = no active mention. `mentionAnchor` is the '@' character
+  // offset into `value` so insertion can splice cleanly.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionAnchor, setMentionAnchor] = useState<number>(-1)
+  const [mentionIndex, setMentionIndex] = useState(0)
+
+  const matches = useMemo(() => {
+    if (mentionQuery === null || members.length === 0) return []
+    const q = mentionQuery.toLowerCase()
+    return members
+      .filter((m) => {
+        const name = (m.name ?? '').toLowerCase()
+        const email = (m.email ?? '').toLowerCase()
+        return name.includes(q) || email.includes(q)
+      })
+      .slice(0, 6)
+  }, [mentionQuery, members])
+
+  useEffect(() => {
+    setMentionIndex(0)
+  }, [mentionQuery])
+
+  const detectMention = (next: string, caret: number) => {
+    const upto = next.slice(0, caret)
+    const at = upto.lastIndexOf('@')
+    if (at < 0) {
+      setMentionQuery(null)
+      return
+    }
+    // Trigger only when '@' starts a token (beginning of string or after
+    // whitespace). Avoids matching e.g. "email@host" inside ordinary text.
+    const prev = upto[at - 1]
+    if (at !== 0 && prev !== ' ' && prev !== '\n' && prev !== '\t') {
+      setMentionQuery(null)
+      return
+    }
+    const after = upto.slice(at + 1)
+    if (/\s/.test(after)) {
+      setMentionQuery(null)
+      return
+    }
+    setMentionAnchor(at)
+    setMentionQuery(after)
+  }
+
+  const insertMention = (idx: number) => {
+    const m = matches[idx]
+    if (!m || mentionAnchor < 0 || !textareaRef.current) return
+    const ta = textareaRef.current
+    const display = (m.name ?? m.email ?? 'user').trim() || 'user'
+    const before = value.slice(0, mentionAnchor)
+    const afterCaret = value.slice(ta.selectionStart)
+    const inserted = `@[${display}](${m.id}) `
+    const next = before + inserted + afterCaret
+    onChange(next)
+    setMentionQuery(null)
+    setMentionAnchor(-1)
+    requestAnimationFrame(() => {
+      const newCaret = (before + inserted).length
+      ta.focus()
+      ta.setSelectionRange(newCaret, newCaret)
+    })
+  }
+
+  return (
+    <div className="pv-dr-comment-add" style={{ position: 'relative' }}>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value
+          onChange(v)
+          detectMention(v, e.target.selectionStart ?? v.length)
+        }}
+        onKeyDown={(e) => {
+          if (mentionQuery !== null && matches.length > 0) {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setMentionIndex((i) => (i + 1) % matches.length)
+              return
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setMentionIndex((i) => (i - 1 + matches.length) % matches.length)
+              return
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault()
+              insertMention(mentionIndex)
+              return
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              setMentionQuery(null)
+              return
+            }
+          }
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault()
+            onSubmit()
+          }
+        }}
+        rows={2}
+        placeholder={placeholder}
+      />
+      {mentionQuery !== null && matches.length > 0 && (
+        <div
+          role="listbox"
+          aria-label="Mention teammate"
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 4px)',
+            left: 4,
+            zIndex: 50,
+            minWidth: 220,
+            maxWidth: 320,
+            background: 'var(--pv-bg)',
+            border: '1px solid var(--pv-line)',
+            borderRadius: 6,
+            boxShadow: '0 6px 24px rgba(15,20,25,0.12)',
+            padding: 4,
+            fontSize: 12,
+          }}
+        >
+          {matches.map((m, i) => {
+            const name = m.name || m.email || 'Unknown'
+            const email = m.email ?? ''
+            const active = i === mentionIndex
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  insertMention(i)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '6px 8px',
+                  border: 0,
+                  borderRadius: 4,
+                  background: active ? 'var(--pv-blue-tint)' : 'transparent',
+                  color: active ? 'var(--pv-blue-ink)' : 'var(--pv-fg)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'inherit',
+                  fontSize: 12,
+                }}
+              >
+                <span
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 999,
+                    background: 'linear-gradient(135deg, #d6e2ec, #bccddb)',
+                    color: 'var(--pv-fg-2)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {memberInitials(m)}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontWeight: 500,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {name}
+                  </span>
+                  {email && (
+                    <span
+                      style={{
+                        display: 'block',
+                        fontSize: 10,
+                        color: 'var(--pv-fg-3)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {email}
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span style={{ flex: 1, color: 'var(--pv-fg-3)', fontSize: 11 }}>
+          @ to mention · Ctrl+Enter to post
+        </span>
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={disabled}
+          aria-label="Post comment"
+          className="pv-btn primary compact"
+        >
+          <Send size={12} /> Post
+        </button>
+      </div>
+    </div>
   )
 }
