@@ -5,9 +5,8 @@ import {
   GitPullRequestArrow, Link2, AlertOctagon, Copy, AlertTriangle,
 } from 'lucide-react'
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
-import { RenderWithEntityRefs } from '../../utils/entityRefs'
 import { checkAmbiguity } from '../../utils/ambiguityCheck'
-import MarkdownEditor from '../common/MarkdownEditor'
+import MarkdownEditor, { MarkdownPreview } from '../common/MarkdownEditor'
 import { suggestCriteriaFromRequirement, type CriterionSuggestion } from '../../utils/suggestCriteria'
 import { projectService } from '../../services/project.service'
 import LinkRequirementPicker from './LinkRequirementPicker'
@@ -1363,12 +1362,16 @@ export default function ValidationItemDetailDrawer({
                       </span>
                     </div>
                     {s.comment && (
-                      <p
-                        className="text-xs text-gray-600 dark:text-gray-400 mt-0.5"
-                        style={{ whiteSpace: 'pre-wrap' }}
-                      >
-                        <RenderWithEntityRefs text={s.comment} />
-                      </p>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                        <MarkdownPreview
+                          source={s.comment}
+                          members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
+                            id: m.userId,
+                            name: m.user?.name ?? null,
+                            email: m.user?.email ?? null,
+                          }))}
+                        />
+                      </div>
                     )}
                   </li>
                 ))}

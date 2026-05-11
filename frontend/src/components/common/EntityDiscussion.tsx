@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageCircle, Send, Trash2, Edit2, X, Check } from 'lucide-react'
 import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
-import MarkdownEditor from './MarkdownEditor'
+import MarkdownEditor, { MarkdownPreview } from './MarkdownEditor'
 
 // Universal discussion / chat component. Multiple modules need a threaded,
 // editable, deletable comment list against an entity (parameter, validation
@@ -40,65 +40,9 @@ export interface MentionableMember {
   email?: string | null
 }
 
-// Body markup convention for a mention. Matches the format already in use in
-// the Parameters Discussion so the same body strings round-trip cleanly:
-//   "@[Display Name](userId-uuid)"
-const MENTION_TOKEN_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
-
-function renderCommentBody(body: string, members: MentionableMember[]): React.ReactNode[] {
-  // Two-pass: first split out mention tokens, then for every non-mention chunk
-  // run parseEntityRefs so REQ-001 style ids inside the chunk become chips.
-  const out: React.ReactNode[] = []
-  let lastIndex = 0
-  const re = new RegExp(MENTION_TOKEN_RE.source, 'g')
-  let m: RegExpExecArray | null
-  let key = 0
-  const memberById = new Map(members.map((u) => [u.id, u]))
-
-  const renderChunk = (chunk: string): React.ReactNode[] => {
-    if (!chunk) return []
-    const segs = parseEntityRefs(chunk)
-    return segs.map((s, i) =>
-      s.type === 'text' ? (
-        <span key={`t-${key}-${i}`}>{s.text}</span>
-      ) : (
-        <EntityRefChip key={`r-${key}-${i}`} prefix={s.prefix} number={s.number} />
-      ),
-    )
-  }
-
-  while ((m = re.exec(body)) !== null) {
-    const [whole, name, userId] = m
-    if (m.index > lastIndex) {
-      out.push(...renderChunk(body.slice(lastIndex, m.index)))
-    }
-    const known = memberById.get(userId)
-    const display = known?.name ?? known?.email ?? name
-    out.push(
-      <span
-        key={`mention-${key++}`}
-        title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
-        style={{
-          display: 'inline',
-          padding: '0 4px',
-          margin: '0 1px',
-          borderRadius: 3,
-          background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
-          color: 'var(--pv-blue-ink, #1e4778)',
-          fontWeight: 500,
-        }}
-      >
-        @{display}
-      </span>,
-    )
-    lastIndex = m.index + whole.length
-  }
-  if (lastIndex < body.length) {
-    out.push(...renderChunk(body.slice(lastIndex)))
-  }
-  if (out.length === 0) out.push(...renderChunk(body))
-  return out
-}
+// Saved comment bodies are rendered through MarkdownPreview (cycle 101) so
+// formatting / lists / tables / code / mention chips / entity-ref chips all
+// share one pipeline with the composer's Preview tab.
 
 interface ThreadedComment extends DiscussionComment {
   children: ThreadedComment[]
@@ -282,9 +226,9 @@ export default function EntityDiscussion({
                 </div>
               </div>
             ) : (
-              <p className="text" style={{ whiteSpace: 'pre-wrap' }}>
-                {renderCommentBody(c.body, members)}
-              </p>
+              <div className="text">
+                <MarkdownPreview source={c.body} members={members} />
+              </div>
             )}
             {!isDeleted && editing !== c.id && (
               <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 12 }}>

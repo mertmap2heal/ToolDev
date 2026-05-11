@@ -642,7 +642,7 @@ function decodeSentinel(payload: string): { name: string; userId: string } | nul
   }
 }
 
-function MarkdownPreview({ source, members }: PreviewProps) {
+export function MarkdownPreview({ source, members }: PreviewProps) {
   const memberById = useMemo(
     () => new Map(members.map((m) => [m.id, m])),
     [members],
