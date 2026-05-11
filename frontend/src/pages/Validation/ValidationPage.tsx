@@ -13,11 +13,13 @@ import {
   VALIDATION_METHOD_TYPES,
   VALIDATION_MILESTONES,
   VALIDATION_STATUSES,
+  VALIDATION_PRIORITIES,
   type ValidationItemSummary,
   type ValidationStatus,
   type ValidationMethodType,
   type ValidationMilestone,
   type ValidationSortBy,
+  type ValidationPriority,
 } from '../../services/validation.service'
 import { useAuthStore } from '../../store/authStore'
 import ValidationOnboardingBanner from '../../components/validation/ValidationOnboardingBanner'
@@ -991,6 +993,29 @@ export default function ValidationPage() {
             {VALIDATION_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s}
+              </option>
+            ))}
+          </select>
+          <select
+            defaultValue=""
+            onChange={async (e) => {
+              const p = e.target.value as ValidationPriority
+              e.currentTarget.value = ''
+              if (!p) return
+              await validationService.bulkUpdate(projectId, {
+                ids: Array.from(selectedIds),
+                patch: { priority: p },
+              })
+              setSelectedIds(new Set())
+              refetchAll()
+            }}
+            className="b"
+            style={{ background: 'transparent', border: 0, color: 'inherit' }}
+          >
+            <option value="">Set priority…</option>
+            {VALIDATION_PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
               </option>
             ))}
           </select>
