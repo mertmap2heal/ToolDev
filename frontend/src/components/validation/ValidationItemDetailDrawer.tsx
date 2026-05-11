@@ -1251,12 +1251,16 @@ export default function ValidationItemDetailDrawer({
                   placeholder="Your role (e.g. Customer Operations Lead)"
                   style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
                 />
-                <textarea
+                <MarkdownEditor
                   value={comment}
-                  onChange={(e) => setComment(e.target.value)}
+                  onChange={setComment}
                   rows={2}
-                  placeholder="Optional comment"
-                  style={{ width: '100%', padding: 6, fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+                  placeholder="Optional comment — reference REQ-/VAL-/PRM- and @mention teammates. Markdown supported."
+                  members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
+                    id: m.userId,
+                    name: m.user?.name ?? null,
+                    email: m.user?.email ?? null,
+                  }))}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                   <button
