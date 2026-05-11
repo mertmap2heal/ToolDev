@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Trash2, X } from 'lucide-react'

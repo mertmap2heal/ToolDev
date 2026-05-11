@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Download, Printer, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react'
@@ -235,14 +236,14 @@ export default function DERView() {
                   const met = it.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
                   const colorClass =
                     it.status === 'VALIDATED'
-                      ? 'approved'
+                      ? 'is-validated'
                       : it.status === 'EXECUTED'
-                      ? 'review'
+                      ? 'is-executed'
                       : it.status === 'BLOCKED'
-                      ? 'deprecated'
+                      ? 'is-blocked'
                       : it.status === 'OBSOLETE'
-                      ? 'obsolete'
-                      : 'draft'
+                      ? 'is-obsolete'
+                      : 'is-planned'
                   return (
                     <tr key={it.id}>
                       <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
@@ -260,7 +261,7 @@ export default function DERView() {
                       <td>{it.title}</td>
                       <td style={{ color: 'var(--pv-fg-2)' }}>{METHOD_LABEL[it.methodType]}</td>
                       <td>
-                        <span className={`pv-status ${colorClass}`}>{STATUS_LABEL[it.status]}</span>
+                        <span className={`vv-status-pill ${colorClass}`}>{STATUS_LABEL[it.status]}</span>
                       </td>
                       <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
                         {met}/{total}

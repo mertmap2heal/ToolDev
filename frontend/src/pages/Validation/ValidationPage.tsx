@@ -47,6 +47,20 @@ function Legend({ color, label }: { color: string; label: string }) {
   )
 }
 
+// Map a validation status to the restrained pill className declared in
+// validation-v2.css. Kept inline to avoid an extra import for two callers.
+function statusPillCls(s: string): string {
+  return s === 'VALIDATED'
+    ? 'is-validated'
+    : s === 'EXECUTED'
+    ? 'is-executed'
+    : s === 'BLOCKED'
+    ? 'is-blocked'
+    : s === 'OBSOLETE'
+    ? 'is-obsolete'
+    : 'is-planned'
+}
+
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()
   const diff = Date.now() - then
@@ -653,16 +667,16 @@ export default function ValidationPage() {
         </td>
         <td>
           <span
-            className={`pv-status ${
+            className={`vv-status-pill ${
               it.status === 'VALIDATED'
-                ? 'approved'
+                ? 'is-validated'
                 : it.status === 'EXECUTED'
-                ? 'review'
+                ? 'is-executed'
                 : it.status === 'BLOCKED'
-                ? 'deprecated'
+                ? 'is-blocked'
                 : it.status === 'OBSOLETE'
-                ? 'obsolete'
-                : 'draft'
+                ? 'is-obsolete'
+                : 'is-planned'
             }`}
           >
             {STATUS_LABEL[it.status]}
@@ -855,19 +869,8 @@ export default function ValidationPage() {
                   key={s}
                   type="button"
                   onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
-                  className={`pv-status ${
-                    s === 'VALIDATED'
-                      ? 'approved'
-                      : s === 'EXECUTED'
-                      ? 'review'
-                      : s === 'BLOCKED'
-                      ? 'deprecated'
-                      : s === 'OBSOLETE'
-                      ? 'obsolete'
-                      : 'draft'
-                  }`}
+                  className={`vv-status-pill ${statusPillCls(s)}`}
                   style={{
-                    border: '1px solid transparent',
                     cursor: 'pointer',
                     outline: statusFilter === s ? '2px solid var(--pv-blue)' : 'none',
                     outlineOffset: 1,
@@ -1539,16 +1542,7 @@ export default function ValidationPage() {
         >
           {VALIDATION_STATUSES.map((s) => {
             const cards = items.filter((i) => i.status === s)
-            const colorClass =
-              s === 'VALIDATED'
-                ? 'approved'
-                : s === 'EXECUTED'
-                ? 'review'
-                : s === 'BLOCKED'
-                ? 'deprecated'
-                : s === 'OBSOLETE'
-                ? 'obsolete'
-                : 'draft'
+            const colorClass = statusPillCls(s)
             const isOver = dragOverStatus === s
             return (
               <div
@@ -1612,7 +1606,7 @@ export default function ValidationPage() {
                     marginBottom: 2,
                   }}
                 >
-                  <span className={`pv-status ${colorClass}`}>{STATUS_LABEL[s]}</span>
+                  <span className={`vv-status-pill ${colorClass}`}>{STATUS_LABEL[s]}</span>
                   <span
                     style={{
                       fontFamily: 'var(--pv-font-mono)',

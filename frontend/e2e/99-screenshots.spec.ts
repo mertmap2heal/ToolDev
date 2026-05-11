@@ -10,7 +10,14 @@ const OUT = path.resolve(process.cwd(), 'screenshots')
 test('validation page + drawer screenshots', async ({ page, projectId }) => {
   test.setTimeout(60_000)
 
-  // Validation page — list view
+  // Validation page — list view. Clear persisted filters first so a stale
+  // filter from a prior run does not show an empty table in the screenshot.
+  await page.goto(`/projects/${projectId}/validation`)
+  await page.evaluate(() => {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('validation:'))
+      .forEach((k) => localStorage.removeItem(k))
+  })
   await page.goto(`/projects/${projectId}/validation`)
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(800)
