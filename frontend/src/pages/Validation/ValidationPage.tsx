@@ -953,6 +953,29 @@ export default function ValidationPage() {
               </option>
             ))}
           </select>
+          <select
+            defaultValue=""
+            onChange={async (e) => {
+              const s = e.target.value as ValidationStatus
+              e.currentTarget.value = ''
+              if (!s) return
+              await validationService.bulkUpdate(projectId, {
+                ids: Array.from(selectedIds),
+                patch: { status: s },
+              })
+              setSelectedIds(new Set())
+              refetchAll()
+            }}
+            className="b"
+            style={{ background: 'transparent', border: 0, color: 'inherit' }}
+          >
+            <option value="">Set status…</option>
+            {VALIDATION_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
           {showArchived ? (
             <button
               type="button"
