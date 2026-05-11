@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { validationService } from '../services/validation.service'
 
 // Cross-entity reference parser. Recognises plain-text IDs like REQ-001,
 // VAL-002, PRM-014 etc. that engineers will naturally type in comments,
@@ -98,6 +101,27 @@ export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: 
   const projectId = projectIdOverride ?? params.projectId
   const entity = PREFIX_BY_NAME.get(prefix.toUpperCase())
   const key = `${prefix.toUpperCase()}-${number}`
+  // Hover state declared unconditionally so hook count stays constant whether
+  // the prefix resolves or not (cf. the drawer rules-of-hooks fix).
+  const [hovering, setHovering] = useState(false)
+  const upperPrefix = prefix.toUpperCase()
+
+  // For validation items we can lazily resolve the chip to a real backend
+  // record using the existing list endpoint with `search`. Other modules
+  // would need their own resolver; we add VAL today and leave the others as
+  // plain links with a generic title until each module exposes a search.
+  const isVal = upperPrefix === 'VAL'
+  const { data: preview } = useQuery({
+    queryKey: ['entity-ref-preview', 'VAL', projectId, key],
+    enabled: !!projectId && isVal && hovering,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      if (!projectId) return null
+      const res = await validationService.list(projectId, { search: key })
+      if (!res.success || !res.data) return null
+      return res.data.find((i) => i.key === key) ?? null
+    },
+  })
 
   if (!entity || !projectId) {
     return (
@@ -118,25 +142,62 @@ export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: 
 
   const queryParam = entity.queryParam ?? 'q'
   const to = `/projects/${projectId}/${entity.path}?${queryParam}=${encodeURIComponent(key)}`
+  // Default tooltip; if we have a preview, swap it for a richer text.
+  const tooltip = preview
+    ? `${preview.title} — ${preview.status}`
+    : `Open ${entity.label ?? entity.module}: ${key}`
   return (
-    <Link
-      to={to}
-      title={`Open ${entity.label ?? entity.module}: ${key}`}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'baseline',
-        fontFamily: 'var(--pv-font-mono, monospace)',
-        background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
-        color: 'var(--pv-blue-ink, #1e4778)',
-        border: '1px solid var(--pv-blue-line, rgba(43,108,176,0.25))',
-        padding: '0 4px',
-        borderRadius: 3,
-        fontSize: 12,
-        textDecoration: 'none',
-      }}
+    <span
+      style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
     >
-      {key}
-    </Link>
+      <Link
+        to={to}
+        title={tooltip}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'baseline',
+          fontFamily: 'var(--pv-font-mono, monospace)',
+          background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
+          color: 'var(--pv-blue-ink, #1e4778)',
+          border: '1px solid var(--pv-blue-line, rgba(43,108,176,0.25))',
+          padding: '0 4px',
+          borderRadius: 3,
+          fontSize: 12,
+          textDecoration: 'none',
+        }}
+      >
+        {key}
+      </Link>
+      {hovering && preview && (
+        <span
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 50,
+            minWidth: 220,
+            maxWidth: 320,
+            background: 'var(--pv-bg, #fff)',
+            color: 'var(--pv-fg, #111)',
+            border: '1px solid var(--pv-line, #e0e0e0)',
+            borderRadius: 4,
+            padding: '6px 8px',
+            fontSize: 11,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            whiteSpace: 'normal',
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>{preview.title}</div>
+          <div style={{ color: 'var(--pv-fg-3, #888)', fontFamily: 'var(--pv-font-mono, monospace)' }}>
+            {entity.label} · {preview.status}
+          </div>
+        </span>
+      )}
+    </span>
   )
 }
 
