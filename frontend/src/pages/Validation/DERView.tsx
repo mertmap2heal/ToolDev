@@ -112,9 +112,13 @@ export default function DERView() {
           </button>
           <button
             type="button"
-            onClick={() =>
-              window.open(validationService.markdownExportUrl(projectId, {}), '_blank')
-            }
+            onClick={async () => {
+              try {
+                await validationService.downloadMarkdown(projectId, {})
+              } catch (e) {
+                alert((e as Error).message || 'Markdown export failed')
+              }
+            }}
             className="pv-btn"
             title="Download a Markdown report of the current state"
           >
@@ -122,9 +126,13 @@ export default function DERView() {
           </button>
           <button
             type="button"
-            onClick={() =>
-              window.open(validationService.pdfExportUrl(projectId, {}), '_blank')
-            }
+            onClick={async () => {
+              try {
+                await validationService.downloadPdf(projectId, {})
+              } catch (e) {
+                alert((e as Error).message || 'PDF export failed')
+              }
+            }}
             className="pv-btn primary"
             title="Download a PDF report of the current state"
           >

@@ -449,9 +449,12 @@ export default function ValidationPage() {
     setOwnerFilter('')
   }
 
-  const downloadCsv = () => {
-    const url = validationService.csvExportUrl(projectId, filters)
-    window.open(url, '_blank')
+  const downloadCsv = async () => {
+    try {
+      await validationService.downloadCsv(projectId, filters)
+    } catch (e) {
+      toast.error((e as Error).message || 'CSV export failed')
+    }
   }
 
   // Shared row renderer. Extracted from the inline items.map so the same
@@ -1234,9 +1237,13 @@ export default function ValidationPage() {
           </button>
           <button
             type="button"
-            onClick={() =>
-              window.open(validationService.markdownExportUrl(projectId, filters), '_blank')
-            }
+            onClick={async () => {
+              try {
+                await validationService.downloadMarkdown(projectId, filters)
+              } catch (e) {
+                toast.error((e as Error).message || 'Markdown export failed')
+              }
+            }}
             className="pv-btn"
             title="Download a Markdown validation report for the current view"
           >
@@ -1244,9 +1251,13 @@ export default function ValidationPage() {
           </button>
           <button
             type="button"
-            onClick={() =>
-              window.open(validationService.pdfExportUrl(projectId, filters), '_blank')
-            }
+            onClick={async () => {
+              try {
+                await validationService.downloadPdf(projectId, filters)
+              } catch (e) {
+                toast.error((e as Error).message || 'PDF export failed')
+              }
+            }}
             className="pv-btn"
             title="Download a PDF validation report for the current view"
           >

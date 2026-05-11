@@ -1,6 +1,21 @@
 import { apiClient } from './api'
 import type { ApiResponse } from 'shared/types/api.types'
 
+// Build a synthetic <a download> click for an in-memory Blob. Used by the
+// authenticated export helpers below — see the note on downloadCsv for why
+// window.open(url) does not work for protected endpoints.
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  // Revoke after a tick so the navigation has captured the URL.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 export const VALIDATION_METHOD_TYPES = [
   'DEMONSTRATION',
   'OPERATIONAL_TEST',
@@ -289,16 +304,33 @@ export const validationService = {
     )
   },
 
-  csvExportUrl(projectId: string, filters: ListFilters = {}): string {
-    return `/api/v1/validation/projects/${projectId}/items.csv${qs(filters)}`
+  /**
+   * Fetch an export endpoint with the user's JWT attached, then trigger a
+   * client-side download via a synthetic <a download>. The earlier
+   * window.open(url) pattern failed because new-tab navigations do not
+   * include axios's Authorization header, and the backend rejected with
+   * "no token provided". Going through apiClient.getBlob reuses the same
+   * authenticated axios instance as every other request.
+   */
+  async downloadCsv(projectId: string, filters: ListFilters = {}): Promise<void> {
+    const blob = await apiClient.getBlob(
+      `/validation/projects/${projectId}/items.csv${qs(filters)}`,
+    )
+    triggerDownload(blob, 'validation-items.csv')
   },
 
-  markdownExportUrl(projectId: string, filters: ListFilters = {}): string {
-    return `/api/v1/validation/projects/${projectId}/report.md${qs(filters)}`
+  async downloadMarkdown(projectId: string, filters: ListFilters = {}): Promise<void> {
+    const blob = await apiClient.getBlob(
+      `/validation/projects/${projectId}/report.md${qs(filters)}`,
+    )
+    triggerDownload(blob, 'validation-report.md')
   },
 
-  pdfExportUrl(projectId: string, filters: ListFilters = {}): string {
-    return `/api/v1/validation/projects/${projectId}/report.pdf${qs(filters)}`
+  async downloadPdf(projectId: string, filters: ListFilters = {}): Promise<void> {
+    const blob = await apiClient.getBlob(
+      `/validation/projects/${projectId}/report.pdf${qs(filters)}`,
+    )
+    triggerDownload(blob, 'validation-report.pdf')
   },
 
   async coverage(projectId: string): Promise<ApiResponse<ValidationCoverage>> {
