@@ -999,6 +999,30 @@ export default function ValidationPage() {
           <select
             defaultValue=""
             onChange={async (e) => {
+              const owner = e.target.value
+              e.currentTarget.value = ''
+              if (owner === '') return
+              await validationService.bulkUpdate(projectId, {
+                ids: Array.from(selectedIds),
+                patch: { ownerUserId: owner === 'NULL' ? null : owner },
+              })
+              setSelectedIds(new Set())
+              refetchAll()
+            }}
+            className="b"
+            style={{ background: 'transparent', border: 0, color: 'inherit' }}
+          >
+            <option value="">Assign owner…</option>
+            <option value="NULL">— Unassigned —</option>
+            {projectMembers.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.user?.name ?? m.user?.email ?? m.userId.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+          <select
+            defaultValue=""
+            onChange={async (e) => {
               const p = e.target.value as ValidationPriority
               e.currentTarget.value = ''
               if (!p) return
