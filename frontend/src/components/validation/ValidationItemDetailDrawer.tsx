@@ -141,6 +141,11 @@ export default function ValidationItemDetailDrawer({
   })
 
   const isAuthor = useMemo(() => draft?.createdById === currentUserId, [draft, currentUserId])
+
+  const isDirty = useMemo(() => {
+    if (!draft || !item) return false
+    return JSON.stringify(draft) !== JSON.stringify(item)
+  }, [draft, item])
   const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
 
   if (!isOpen) return null
@@ -282,6 +287,15 @@ export default function ValidationItemDetailDrawer({
             </span>
           )}
           {draft?.deletedAt && <span className="pv-dr-pill deprecated">DELETED</span>}
+          {isDirty && (
+            <span
+              className="pv-dr-pill"
+              style={{ background: 'var(--pv-amber-tint)', color: 'var(--pv-amber)', borderColor: 'var(--pv-amber-line)' }}
+              title="Unsaved changes — press Cmd/Ctrl+S to save"
+            >
+              UNSAVED
+            </span>
+          )}
           <div className="pv-dr-spacer" />
           {itemId && (
             <button
