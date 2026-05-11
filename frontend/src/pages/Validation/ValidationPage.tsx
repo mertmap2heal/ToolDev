@@ -76,6 +76,7 @@ export default function ValidationPage() {
   const [tagsAny, setTagsAny] = useState<string[]>([])
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [density, setDensity] = useState<'compact' | 'comfortable'>('compact')
+  const [criterionFilter, setCriterionFilter] = useState<'' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria'>('')
   const toast = useValidationToast()
 
   // Persist last filter state per project across reloads so users come back to
@@ -98,6 +99,15 @@ export default function ValidationPage() {
       if (typeof v.showSuspectOnly === 'boolean') setShowSuspectOnly(v.showSuspectOnly)
       if (typeof v.sortBy === 'string') setSortBy(v.sortBy)
       if (v.sortDir === 'asc' || v.sortDir === 'desc') setSortDir(v.sortDir)
+      if (
+        v.criterionFilter === '' ||
+        v.criterionFilter === 'allMet' ||
+        v.criterionFilter === 'anyPartial' ||
+        v.criterionFilter === 'anyNotMet' ||
+        v.criterionFilter === 'noCriteria'
+      ) {
+        setCriterionFilter(v.criterionFilter)
+      }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
@@ -135,10 +145,11 @@ export default function ValidationPage() {
           showSuspectOnly,
           sortBy,
           sortDir,
+          criterionFilter,
         }),
       )
     } catch { /* ignore */ }
-  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir])
+  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter])
 
   const toggleSort = (col: ValidationSortBy) => {
     if (sortBy === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -200,8 +211,19 @@ export default function ValidationPage() {
         (i) => i.dueDate && new Date(i.dueDate).getTime() < now && i.status !== 'VALIDATED',
       )
     }
+    if (criterionFilter === 'allMet') {
+      arr = arr.filter(
+        (i) => i.criteria.length > 0 && i.criteria.every((c) => c.outcome === 'MET'),
+      )
+    } else if (criterionFilter === 'anyPartial') {
+      arr = arr.filter((i) => i.criteria.some((c) => c.outcome === 'PARTIAL'))
+    } else if (criterionFilter === 'anyNotMet') {
+      arr = arr.filter((i) => i.criteria.some((c) => c.outcome === 'NOT_MET'))
+    } else if (criterionFilter === 'noCriteria') {
+      arr = arr.filter((i) => i.criteria.length === 0)
+    }
     return arr
-  }, [rawItems, showSuspectOnly, overdueOnly])
+  }, [rawItems, showSuspectOnly, overdueOnly, criterionFilter])
 
   const refetchAll = () => {
     refetch()
@@ -488,6 +510,35 @@ export default function ValidationPage() {
         >
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
+        <label
+          className={`pv-pill ${criterionFilter ? 'active' : ''}`}
+          style={{ cursor: 'pointer', paddingRight: 4 }}
+          title="Filter by acceptance-criteria outcomes"
+        >
+          Criteria
+          <select
+            value={criterionFilter}
+            onChange={(e) =>
+              setCriterionFilter(
+                e.target.value as '' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria',
+              )
+            }
+            style={{
+              background: 'transparent',
+              border: 0,
+              color: 'inherit',
+              font: 'inherit',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="">Any</option>
+            <option value="allMet">All met</option>
+            <option value="anyPartial">Any partial</option>
+            <option value="anyNotMet">Any not met</option>
+            <option value="noCriteria">No criteria</option>
+          </select>
+        </label>
         <div className="pv-subbar-right">
           <button
             type="button"
