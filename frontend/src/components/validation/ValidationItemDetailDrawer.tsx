@@ -172,6 +172,20 @@ export default function ValidationItemDetailDrawer({
     onChanged()
   }
 
+  const moveCriterion = (cid: string, direction: -1 | 1) => {
+    if (!draft) return
+    const idx = draft.criteria.findIndex((c) => c.id === cid)
+    if (idx < 0) return
+    const next = idx + direction
+    if (next < 0 || next >= draft.criteria.length) return
+    const reordered = [...draft.criteria]
+    ;[reordered[idx], reordered[next]] = [reordered[next], reordered[idx]]
+    setDraft({
+      ...draft,
+      criteria: reordered.map((c, i) => ({ ...c, orderIndex: i })),
+    })
+  }
+
   const updateCriterion = (cid: string, patch: Partial<ValidationCriterion>) => {
     if (!draft) return
     setDraft({
@@ -675,8 +689,29 @@ export default function ValidationItemDetailDrawer({
                       />
                       <button
                         type="button"
+                        onClick={() => moveCriterion(c.id, -1)}
+                        className="pv-icon-btn"
+                        style={{ width: 22, height: 22 }}
+                        aria-label="Move up"
+                        title="Move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveCriterion(c.id, 1)}
+                        className="pv-icon-btn"
+                        style={{ width: 22, height: 22 }}
+                        aria-label="Move down"
+                        title="Move down"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => removeCriterion(c.id)}
-                        className="text-gray-400 hover:text-red-500"
+                        className="pv-icon-btn"
+                        style={{ width: 22, height: 22 }}
                         aria-label="Remove criterion"
                       >
                         <Trash2 size={14} />
