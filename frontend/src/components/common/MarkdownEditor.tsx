@@ -1,4 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
 
 // Markdown editor — first cut of the standardised text input promised in
@@ -154,214 +156,232 @@ function tabStyle(active: boolean): React.CSSProperties {
 }
 
 // ---------------------------------------------------------------------------
-// Minimal Markdown renderer — line-oriented. Each line is classified once
-// (heading / list-item / blank / paragraph), then inline syntax is applied
-// inside. NO third-party parser; safe by construction because we only emit
-// React nodes and never set innerHTML.
+// Markdown renderer — pipeline:
+//   1. Pre-process source: turn @[Name](userId) tokens into a sentinel that
+//      survives the marked parse (so mentions render even inside bold/em).
+//   2. marked → HTML (GFM enabled: tables, task-lists, autolinks, strikethrough).
+//   3. DOMPurify sanitise — drops scripts, event handlers, javascript: URLs.
+//      Sanitised HTML is then walked with DOMParser; each text node is
+//      replaced by React nodes that may include EntityRefChip / mention chips.
+//
+// No HTML string ever reaches dangerouslySetInnerHTML.
 
 interface PreviewProps {
   source: string
   members: MarkdownMember[]
 }
 
+// Sentinel format chosen so it survives Markdown inline parsing (no special
+// characters), is unlikely to appear in real text, and round-trips through
+// DOMPurify untouched.
+const MENTION_SENTINEL_OPEN = 'MENTIONOPEN9F2E'
+const MENTION_SENTINEL_CLOSE = 'MENTIONCLOSE9F2E'
+
+function preProcessMentions(src: string): string {
+  return src.replace(MENTION_TOKEN_RE, (_full, name: string, userId: string) => {
+    // Encode payload as base64 to keep the sentinel ASCII-only so it survives
+    // any inline tokenisation that marked applies. `unescape(encodeURIComponent)`
+    // handles non-ASCII names safely before btoa.
+    const payload = unescape(encodeURIComponent(`${name}|${userId}`))
+    const enc = window.btoa(payload)
+    return `${MENTION_SENTINEL_OPEN}${enc}${MENTION_SENTINEL_CLOSE}`
+  })
+}
+
+function decodeSentinel(payload: string): { name: string; userId: string } | null {
+  try {
+    const raw = decodeURIComponent(escape(window.atob(payload)))
+    const [name, userId] = raw.split('|')
+    if (!name || !userId) return null
+    return { name, userId }
+  } catch {
+    return null
+  }
+}
+
 function MarkdownPreview({ source, members }: PreviewProps) {
-  const lines = source.replace(/\r\n/g, '\n').split('\n')
-  const out: ReactNode[] = []
-  let listBuffer: ReactNode[] = []
-  let para: string[] = []
-  let key = 0
-
-  const flushList = () => {
-    if (listBuffer.length === 0) return
-    out.push(<ul key={`ul-${key++}`} style={{ margin: '4px 0', paddingLeft: 20 }}>{listBuffer}</ul>)
-    listBuffer = []
-  }
-  const flushPara = () => {
-    if (para.length === 0) return
-    const text = para.join(' ')
-    out.push(
-      <p key={`p-${key++}`} style={{ margin: '4px 0' }}>
-        {renderInline(text, members, key++)}
-      </p>,
-    )
-    para = []
-  }
-
-  for (const raw of lines) {
-    const line = raw
-    if (/^\s*$/.test(line)) {
-      flushPara()
-      flushList()
-      continue
-    }
-    const heading = line.match(/^(#{1,6})\s+(.+)$/)
-    if (heading) {
-      flushPara()
-      flushList()
-      const level = heading[1].length
-      const inner = renderInline(heading[2], members, key++)
-      const sizes = [20, 18, 16, 15, 14, 13]
-      out.push(
-        <div
-          key={`h-${key++}`}
-          style={{
-            fontSize: sizes[Math.min(level - 1, sizes.length - 1)],
-            fontWeight: 600,
-            margin: '6px 0 2px',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {inner}
-        </div>,
-      )
-      continue
-    }
-    const list = line.match(/^\s*[-*]\s+(.+)$/)
-    if (list) {
-      flushPara()
-      listBuffer.push(
-        <li key={`li-${key++}`} style={{ margin: '1px 0' }}>
-          {renderInline(list[1], members, key++)}
-        </li>,
-      )
-      continue
-    }
-    para.push(line.trim())
-  }
-  flushPara()
-  flushList()
-
-  return <>{out}</>
-}
-
-// Inline markdown: bold, italic, inline code, link, mention, entity-ref.
-// Processed in a single left-to-right scan via a combined regex with named
-// alternatives. Each match flushes the preceding plain-text slice through
-// the entity-ref + mention pipeline so e.g. **REQ-001** still renders as
-// a bold link.
-function renderInline(text: string, members: MarkdownMember[], baseKey: number): ReactNode[] {
-  const out: ReactNode[] = []
-  // Order matters: longer / more-specific tokens first to avoid e.g. ** matching as two *.
-  const RE = /(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|(\*[^*\n]+\*)|(_[^_\n]+_)|(`[^`\n]+`)|(\[[^\]]+\]\([^)]+\))/g
-  let lastIndex = 0
-  let m: RegExpExecArray | null
-  let k = baseKey
-  while ((m = RE.exec(text)) !== null) {
-    if (m.index > lastIndex) {
-      out.push(...renderPlainSlice(text.slice(lastIndex, m.index), members, k++))
-    }
-    const tok = m[0]
-    if ((tok.startsWith('**') && tok.endsWith('**')) || (tok.startsWith('__') && tok.endsWith('__'))) {
-      out.push(
-        <strong key={`b-${k++}`}>
-          {renderPlainSlice(tok.slice(2, -2), members, k++)}
-        </strong>,
-      )
-    } else if ((tok.startsWith('*') && tok.endsWith('*')) || (tok.startsWith('_') && tok.endsWith('_'))) {
-      out.push(
-        <em key={`i-${k++}`}>
-          {renderPlainSlice(tok.slice(1, -1), members, k++)}
-        </em>,
-      )
-    } else if (tok.startsWith('`') && tok.endsWith('`')) {
-      out.push(
-        <code
-          key={`c-${k++}`}
-          style={{
-            background: 'var(--pv-surface-soft)',
-            border: '1px solid var(--pv-line)',
-            padding: '0 4px',
-            borderRadius: 3,
-            fontFamily: 'var(--pv-font-mono)',
-            fontSize: 12,
-          }}
-        >
-          {tok.slice(1, -1)}
-        </code>,
-      )
-    } else if (tok.startsWith('[')) {
-      const link = tok.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
-      if (link) {
-        const [, label, href] = link
-        // Only allow http(s) and relative paths; reject javascript: and data:.
-        const safe = /^(https?:\/\/|\/|#)/i.test(href)
-        if (safe) {
-          out.push(
-            <a
-              key={`a-${k++}`}
-              href={href}
-              target={href.startsWith('http') ? '_blank' : undefined}
-              rel={href.startsWith('http') ? 'noreferrer' : undefined}
-              style={{ color: 'var(--pv-blue)' }}
-            >
-              {label}
-            </a>,
-          )
-        } else {
-          out.push(<span key={`x-${k++}`}>{tok}</span>)
-        }
-      } else {
-        out.push(<span key={`x-${k++}`}>{tok}</span>)
-      }
-    }
-    lastIndex = m.index + tok.length
-  }
-  if (lastIndex < text.length) {
-    out.push(...renderPlainSlice(text.slice(lastIndex), members, k++))
-  }
-  if (out.length === 0) out.push(...renderPlainSlice(text, members, k++))
-  return out
-}
-
-// Plain-text inside an already-inline-decoded slice. We still need to detect
-// mentions and entity refs here because bold / italic spans can wrap them.
-function renderPlainSlice(text: string, members: MarkdownMember[], baseKey: number): ReactNode[] {
-  const memberById = new Map(members.map((m) => [m.id, m]))
-  const out: ReactNode[] = []
-  let lastIndex = 0
-  const re = new RegExp(MENTION_TOKEN_RE.source, 'g')
-  let m: RegExpExecArray | null
-  let k = baseKey
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > lastIndex) {
-      out.push(...renderWithEntityRefs(text.slice(lastIndex, m.index), k++))
-    }
-    const [, name, userId] = m
-    const known = memberById.get(userId)
-    const display = known?.name ?? known?.email ?? name
-    out.push(
-      <span
-        key={`m-${k++}`}
-        title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
-        style={{
-          display: 'inline',
-          padding: '0 4px',
-          margin: '0 1px',
-          borderRadius: 3,
-          background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
-          color: 'var(--pv-blue-ink, #1e4778)',
-          fontWeight: 500,
-        }}
-      >
-        @{display}
-      </span>,
-    )
-    lastIndex = m.index + m[0].length
-  }
-  if (lastIndex < text.length) {
-    out.push(...renderWithEntityRefs(text.slice(lastIndex), k++))
-  }
-  if (out.length === 0) out.push(...renderWithEntityRefs(text, k++))
-  return out
-}
-
-function renderWithEntityRefs(text: string, baseKey: number): ReactNode[] {
-  const segs = parseEntityRefs(text)
-  return segs.map((s, i) =>
-    s.type === 'text' ? (
-      <span key={`t-${baseKey}-${i}`}>{s.text}</span>
-    ) : (
-      <EntityRefChip key={`r-${baseKey}-${i}`} prefix={s.prefix} number={s.number} />
-    ),
+  const memberById = useMemo(
+    () => new Map(members.map((m) => [m.id, m])),
+    [members],
   )
+  const rendered = useMemo<ReactNode>(() => {
+    const pre = preProcessMentions(source)
+    const html = marked.parse(pre, { gfm: true, breaks: false, async: false }) as string
+    const safe = DOMPurify.sanitize(html, {
+      ADD_ATTR: ['target', 'rel'],
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'],
+      FORBID_ATTR: ['onerror', 'onclick', 'onload'],
+    })
+    // Parse the sanitised HTML and walk it, swapping text nodes for React
+    // nodes that include entity-ref chips and mention chips.
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(`<div>${safe}</div>`, 'text/html')
+    const root = doc.body.firstChild as HTMLElement | null
+    if (!root) return null
+    let keyCounter = 0
+    const nextKey = () => `mdn-${keyCounter++}`
+    const decorateText = (text: string): ReactNode[] => {
+      const out: ReactNode[] = []
+      // First split out mention sentinels.
+      const reSentinel = new RegExp(
+        `${MENTION_SENTINEL_OPEN}([A-Za-z0-9+/=]+)${MENTION_SENTINEL_CLOSE}`,
+        'g',
+      )
+      let lastIndex = 0
+      let m: RegExpExecArray | null
+      while ((m = reSentinel.exec(text)) !== null) {
+        if (m.index > lastIndex) {
+          out.push(...withEntityRefs(text.slice(lastIndex, m.index)))
+        }
+        const decoded = decodeSentinel(m[1])
+        if (decoded) {
+          const known = memberById.get(decoded.userId)
+          const display = known?.name ?? known?.email ?? decoded.name
+          out.push(
+            <span
+              key={nextKey()}
+              title={known ? `${known.name ?? ''} <${known.email ?? ''}>` : 'Mentioned user'}
+              style={{
+                display: 'inline',
+                padding: '0 4px',
+                margin: '0 1px',
+                borderRadius: 3,
+                background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
+                color: 'var(--pv-blue-ink, #1e4778)',
+                fontWeight: 500,
+              }}
+            >
+              @{display}
+            </span>,
+          )
+        }
+        lastIndex = m.index + m[0].length
+      }
+      if (lastIndex < text.length) {
+        out.push(...withEntityRefs(text.slice(lastIndex)))
+      }
+      if (out.length === 0) out.push(...withEntityRefs(text))
+      return out
+    }
+    const withEntityRefs = (text: string): ReactNode[] => {
+      const segs = parseEntityRefs(text)
+      return segs.map((s) =>
+        s.type === 'text' ? (
+          <span key={nextKey()}>{s.text}</span>
+        ) : (
+          <EntityRefChip key={nextKey()} prefix={s.prefix} number={s.number} />
+        ),
+      )
+    }
+    const toReact = (node: Node): ReactNode => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const t = node.textContent ?? ''
+        return <>{decorateText(t)}</>
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return null
+      const el = node as HTMLElement
+      const tag = el.tagName.toLowerCase()
+      const children: ReactNode[] = []
+      el.childNodes.forEach((c) => {
+        const r = toReact(c)
+        if (r !== null) children.push(r)
+      })
+      // Map element to React. We only emit tags that DOMPurify already
+      // sanitised, so the whitelist here is the set we want to style.
+      const props: { [k: string]: unknown; key: string } = { key: nextKey() }
+      if (tag === 'a') {
+        const href = el.getAttribute('href') ?? '#'
+        props.href = href
+        if (href.startsWith('http')) {
+          props.target = '_blank'
+          props.rel = 'noreferrer'
+        }
+        props.style = { color: 'var(--pv-blue)' }
+        return <a {...props}>{children}</a>
+      }
+      if (tag === 'code') {
+        props.style = {
+          background: 'var(--pv-surface-soft)',
+          border: '1px solid var(--pv-line)',
+          padding: '0 4px',
+          borderRadius: 3,
+          fontFamily: 'var(--pv-font-mono)',
+          fontSize: 12,
+        }
+        return <code {...props}>{children}</code>
+      }
+      if (tag === 'pre') {
+        props.style = {
+          background: 'var(--pv-surface-soft)',
+          border: '1px solid var(--pv-line)',
+          padding: 8,
+          borderRadius: 4,
+          fontFamily: 'var(--pv-font-mono)',
+          fontSize: 12,
+          overflowX: 'auto',
+          margin: '6px 0',
+        }
+        return <pre {...props}>{children}</pre>
+      }
+      if (tag === 'table') {
+        props.style = { borderCollapse: 'collapse', margin: '6px 0', fontSize: 12 }
+        return <table {...props}>{children}</table>
+      }
+      if (tag === 'th' || tag === 'td') {
+        props.style = {
+          border: '1px solid var(--pv-line)',
+          padding: '4px 6px',
+          textAlign: 'left',
+        }
+        return tag === 'th' ? <th {...props}>{children}</th> : <td {...props}>{children}</td>
+      }
+      if (tag === 'blockquote') {
+        props.style = {
+          borderLeft: '3px solid var(--pv-line)',
+          margin: '4px 0',
+          padding: '0 8px',
+          color: 'var(--pv-fg-2)',
+        }
+        return <blockquote {...props}>{children}</blockquote>
+      }
+      if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
+        const sizes: Record<string, number> = { h1: 20, h2: 18, h3: 16, h4: 15, h5: 14, h6: 13 }
+        props.style = {
+          fontSize: sizes[tag],
+          fontWeight: 600,
+          margin: '6px 0 2px',
+          letterSpacing: '-0.01em',
+        }
+        switch (tag) {
+          case 'h1': return <h1 {...props}>{children}</h1>
+          case 'h2': return <h2 {...props}>{children}</h2>
+          case 'h3': return <h3 {...props}>{children}</h3>
+          case 'h4': return <h4 {...props}>{children}</h4>
+          case 'h5': return <h5 {...props}>{children}</h5>
+          default:   return <h6 {...props}>{children}</h6>
+        }
+      }
+      if (tag === 'ul' || tag === 'ol') {
+        props.style = { margin: '4px 0', paddingLeft: 20 }
+        return tag === 'ul' ? <ul {...props}>{children}</ul> : <ol {...props}>{children}</ol>
+      }
+      if (tag === 'li') return <li {...props}>{children}</li>
+      if (tag === 'p') {
+        props.style = { margin: '4px 0' }
+        return <p {...props}>{children}</p>
+      }
+      if (tag === 'strong' || tag === 'b') return <strong {...props}>{children}</strong>
+      if (tag === 'em' || tag === 'i') return <em {...props}>{children}</em>
+      if (tag === 'del' || tag === 's') return <del {...props}>{children}</del>
+      if (tag === 'hr') return <hr key={nextKey()} />
+      if (tag === 'br') return <br key={nextKey()} />
+      // Fallback for any tag DOMPurify let through that is not styled here -
+      // render as a generic span so structure is preserved without exposing
+      // the original element type.
+      return <span {...props}>{children}</span>
+    }
+    return <>{Array.from(root.childNodes).map((c) => toReact(c))}</>
+  }, [source, memberById])
+
+  return rendered
 }
