@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Trash2, X } from 'lucide-react'
@@ -46,6 +46,75 @@ export default function BaselinesPage() {
       return res.success && res.data ? res.data : null
     },
   })
+
+  const { data: liveItems = [] } = useQuery({
+    queryKey: ['validation-items-for-diff', projectId],
+    enabled: !!projectId && !!openId,
+    queryFn: async () => {
+      const res = await validationService.list(projectId!, {})
+      return res.success && res.data ? res.data : []
+    },
+  })
+
+  type Diff = {
+    added: Array<{ id: string; key: string; title: string }>
+    removed: Array<{ id: string; key: string; title: string }>
+    changed: Array<{
+      id: string
+      key: string
+      title: string
+      changes: Array<{ field: string; from: unknown; to: unknown }>
+    }>
+    unchanged: number
+  }
+  const diff: Diff | null = useMemo(() => {
+    if (!openBaseline) return null
+    type LiveLite = {
+      id: string
+      key: string
+      title: string
+      status: string
+      targetMilestone: string
+      methodType: string
+      priority: string
+      deletedAt: string | null
+      criteria: Array<{ outcome: string }>
+    }
+    const live = (liveItems as LiveLite[]).filter((i) => !i.deletedAt)
+    const liveById = new Map(live.map((i) => [i.id, i]))
+    const snapById = new Map(openBaseline.snapshot.map((s) => [s.id, s]))
+    const added = live
+      .filter((l) => !snapById.has(l.id))
+      .map((l) => ({ id: l.id, key: l.key, title: l.title }))
+    const removed = openBaseline.snapshot
+      .filter((s) => !liveById.has(s.id))
+      .map((s) => ({ id: s.id, key: s.key, title: s.title }))
+    const changed: Diff['changed'] = []
+    let unchanged = 0
+    for (const s of openBaseline.snapshot) {
+      const l = liveById.get(s.id)
+      if (!l) continue
+      const changes: Array<{ field: string; from: unknown; to: unknown }> = []
+      const cmpFields: Array<keyof LiveLite & keyof typeof s> = [
+        'status', 'targetMilestone', 'methodType', 'priority', 'title',
+      ]
+      for (const f of cmpFields) {
+        const sv = (s as unknown as Record<string, unknown>)[f]
+        const lv = (l as unknown as Record<string, unknown>)[f]
+        if (sv !== lv) changes.push({ field: f as string, from: sv, to: lv })
+      }
+      // Criteria-met-count is a useful summary metric on its own.
+      const sMet = (s.criteria ?? []).filter((c) => c.outcome === 'MET').length
+      const lMet = (l.criteria ?? []).filter((c) => c.outcome === 'MET').length
+      if (sMet !== lMet) changes.push({ field: 'criteriaMet', from: sMet, to: lMet })
+      if (changes.length > 0) {
+        changed.push({ id: s.id, key: s.key, title: s.title, changes })
+      } else {
+        unchanged++
+      }
+    }
+    return { added, removed, changed, unchanged }
+  }, [openBaseline, liveItems])
 
   if (!projectId) return null
 
@@ -182,6 +251,69 @@ export default function BaselinesPage() {
                 <X size={14} />
               </button>
             </div>
+
+            {diff && (
+              <div
+                style={{
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 4,
+                  padding: 10,
+                  marginBottom: 12,
+                  background: 'var(--pv-surface-soft)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: 'var(--pv-fg-3)',
+                    marginBottom: 6,
+                  }}
+                >
+                  Diff vs current state
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
+                  <span style={{ color: 'var(--pv-green, #1B4332)' }} title="Items present now but not at baseline time">
+                    +{diff.added.length} added
+                  </span>
+                  <span style={{ color: 'var(--pv-red, #8B0000)' }} title="Items present at baseline but no longer live">
+                    -{diff.removed.length} removed
+                  </span>
+                  <span style={{ color: 'var(--pv-amber, #B8860B)' }} title="Items whose status / milestone / method / priority / criteria-met have changed since the baseline">
+                    ~{diff.changed.length} changed
+                  </span>
+                  <span style={{ color: 'var(--pv-fg-3)' }}>
+                    {diff.unchanged} unchanged
+                  </span>
+                </div>
+                {diff.changed.length > 0 && (
+                  <details style={{ marginTop: 8, fontSize: 11 }}>
+                    <summary style={{ cursor: 'pointer', color: 'var(--pv-fg-2)' }}>
+                      Show changed items
+                    </summary>
+                    <ul style={{ margin: '4px 0 0', padding: 0, listStyle: 'none' }}>
+                      {diff.changed.map((c) => (
+                        <li key={c.id} style={{ padding: '2px 0', borderTop: '1px solid var(--pv-line)' }}>
+                          <span style={{ fontFamily: 'var(--pv-font-mono)' }}>{c.key}</span>{' '}
+                          <span style={{ color: 'var(--pv-fg-2)' }}>{c.title}</span>
+                          <ul style={{ margin: '2px 0 0 16px', padding: 0, listStyle: 'circle', color: 'var(--pv-fg-3)' }}>
+                            {c.changes.map((ch, i) => (
+                              <li key={i}>
+                                <code style={{ color: 'var(--pv-fg-2)' }}>{ch.field}</code>:{' '}
+                                <span style={{ color: 'var(--pv-red)' }}>{String(ch.from)}</span> →{' '}
+                                <span style={{ color: 'var(--pv-green, #1B4332)' }}>{String(ch.to)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
 
             <table className="pv-params" style={{ width: '100%' }}>
               <thead>
