@@ -748,6 +748,13 @@ export default function ValidationPage() {
         </div>
         <div className="pv-right">
           <Link
+            to={`/projects/${projectId}/validation/der`}
+            title="DER read-only view: milestone-indexed, sign-off-visible, print-friendly. Use this to hand off to certification authorities."
+            className="pv-btn"
+          >
+            DER view
+          </Link>
+          <Link
             to={`/projects/${projectId}/validation/settings`}
             title="Configure prefixes and tags. The settings page itself is editable by Project Owner / admin only — others see a read-only view."
             className="pv-btn"

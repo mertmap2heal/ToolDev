@@ -43,6 +43,7 @@ import ComplianceCheckPage from './pages/ComplianceCheck/ComplianceCheckPage'
 import CertificationPage from './pages/Certification/CertificationPage'
 import ValidationPage from './pages/Validation/ValidationPage'
 import ValidationSettingsPage from './pages/Validation/ValidationSettingsPage'
+import DERView from './pages/Validation/DERView'
 import RiskManagementPage from './pages/RiskManagement/RiskManagementPage'
 import InterfaceManagementPage from './pages/InterfaceManagement/InterfaceManagementPage'
 import ConfigurationManagementPage from './pages/ConfigurationManagement/ConfigurationManagementPage'
@@ -162,6 +163,7 @@ function App() {
             <Route path="projects/:projectId/lifecycle-status" element={<FeatureGuard moduleId="lifecycle-status"><LifecycleStatusPage /></FeatureGuard>} />
             <Route path="projects/:projectId/certification" element={<FeatureGuard moduleId="certification"><CertificationPage /></FeatureGuard>} />
             <Route path="projects/:projectId/validation" element={<FeatureGuard moduleId="validation"><ValidationPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/validation/der" element={<FeatureGuard moduleId="validation"><DERView /></FeatureGuard>} />
             <Route path="projects/:projectId/validation/settings" element={<FeatureGuard moduleId="validation"><ValidationSettingsPage /></FeatureGuard>} />
             <Route path="projects/:projectId/risk-management" element={<FeatureGuard moduleId="risk-management"><RiskManagementPage /></FeatureGuard>} />
             <Route path="projects/:projectId/interface-management" element={<FeatureGuard moduleId="interface-management"><InterfaceManagementPage /></FeatureGuard>} />
