@@ -132,6 +132,10 @@ html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
   gap: 6px;
 }
 
+/* Comfortable density */
+.validation-v2.is-comfortable table.pv-params td { height: 40px; padding: 4px 12px; }
+.validation-v2.is-comfortable table.pv-params thead th { padding: 9px 12px; }
+
 /* Tag chip */
 .validation-v2 .vv-tag {
   display: inline-flex;

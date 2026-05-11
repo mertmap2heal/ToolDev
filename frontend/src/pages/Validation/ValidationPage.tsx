@@ -72,6 +72,7 @@ export default function ValidationPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [tagsAny, setTagsAny] = useState<string[]>([])
   const [overdueOnly, setOverdueOnly] = useState(false)
+  const [density, setDensity] = useState<'compact' | 'comfortable'>('compact')
 
   // Persist last filter state per project across reloads so users come back to
   // exactly the view they left.
@@ -281,7 +282,7 @@ export default function ValidationPage() {
   }
 
   return (
-    <div className="params-v2 validation-v2 space-y-4">
+    <div className={`params-v2 validation-v2 space-y-4 ${density === 'comfortable' ? 'is-comfortable' : ''}`}>
       <div className="pv-title-row">
         <div>
           <div className="flex items-center gap-2">
@@ -467,6 +468,16 @@ export default function ValidationPage() {
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
         <div className="pv-subbar-right">
+          <button
+            type="button"
+            onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
+            title={density === 'compact' ? 'Switch to comfortable density' : 'Switch to compact density'}
+            className="pv-icon-btn"
+            style={{ width: 30, height: 30 }}
+            aria-label="Toggle density"
+          >
+            {density === 'compact' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+          </button>
           <button type="button" onClick={downloadCsv} className="pv-btn">
             <Download size={14} /> Export CSV
           </button>
