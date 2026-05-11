@@ -1,8 +1,23 @@
 import { useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Filter } from 'lucide-react'
+import { ArrowLeft, Filter, ExternalLink } from 'lucide-react'
 import { validationService } from '../../services/validation.service'
+
+// Parse the audit details JSON safely; we only need a couple of fields.
+function parseDetails(raw: string | null): { validationItemId?: string; baselineId?: string } {
+  if (!raw) return {}
+  try {
+    const v = JSON.parse(raw)
+    if (typeof v !== 'object' || v === null) return {}
+    const out: { validationItemId?: string; baselineId?: string } = {}
+    if (typeof v.validationItemId === 'string') out.validationItemId = v.validationItemId
+    if (typeof v.baselineId === 'string') out.baselineId = v.baselineId
+    return out
+  } catch {
+    return {}
+  }
+}
 
 // Project-wide validation audit feed. The backend already writes a row to
 // AuditLog for every meaningful state change (create, update, sign-off,
@@ -38,6 +53,7 @@ function actionColor(action: string): string {
 
 export default function ActivityPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
   const [actionFilter, setActionFilter] = useState<string>('')
   const [userFilter, setUserFilter] = useState<string>('')
 
@@ -142,43 +158,58 @@ export default function ActivityPage() {
           }}
         >
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {visible.map((r) => (
-              <li
-                key={r.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 160px 1fr 100px',
-                  alignItems: 'baseline',
-                  gap: 12,
-                  padding: '8px 12px',
-                  borderBottom: '1px solid var(--pv-line)',
-                  fontSize: 12,
-                }}
-              >
-                <span
+            {visible.map((r) => {
+              const det = parseDetails(r.details)
+              const target = det.validationItemId
+                ? `/projects/${projectId}/validation?open=${det.validationItemId}`
+                : det.baselineId
+                ? `/projects/${projectId}/validation/baselines`
+                : null
+              return (
+                <li
+                  key={r.id}
+                  onClick={() => target && navigate(target)}
                   style={{
-                    fontFamily: 'var(--pv-font-mono)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    color: actionColor(r.action),
-                    minWidth: 110,
+                    display: 'grid',
+                    gridTemplateColumns: 'auto 160px 1fr 100px 20px',
+                    alignItems: 'baseline',
+                    gap: 12,
+                    padding: '8px 12px',
+                    borderBottom: '1px solid var(--pv-line)',
+                    fontSize: 12,
+                    cursor: target ? 'pointer' : 'default',
                   }}
+                  className={target ? 'is-clickable' : ''}
+                  title={target ? 'Open in drawer' : 'No deep-link for this event type'}
                 >
-                  {actionLabel(r.action)}
-                </span>
-                <span style={{ color: 'var(--pv-fg-2)' }}>
-                  {r.user?.name ?? r.user?.email ?? '—'}
-                </span>
-                <span style={{ color: 'var(--pv-fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {r.details ?? ''}
-                </span>
-                <span style={{ color: 'var(--pv-fg-3)', fontFamily: 'var(--pv-font-mono)', fontSize: 11, textAlign: 'right' }} title={new Date(r.createdAt).toLocaleString()}>
-                  {relativeTime(r.createdAt)}
-                </span>
-              </li>
-            ))}
+                  <span
+                    style={{
+                      fontFamily: 'var(--pv-font-mono)',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color: actionColor(r.action),
+                      minWidth: 110,
+                    }}
+                  >
+                    {actionLabel(r.action)}
+                  </span>
+                  <span style={{ color: 'var(--pv-fg-2)' }}>
+                    {r.user?.name ?? r.user?.email ?? '—'}
+                  </span>
+                  <span style={{ color: 'var(--pv-fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {r.details ?? ''}
+                  </span>
+                  <span style={{ color: 'var(--pv-fg-3)', fontFamily: 'var(--pv-font-mono)', fontSize: 11, textAlign: 'right' }} title={new Date(r.createdAt).toLocaleString()}>
+                    {relativeTime(r.createdAt)}
+                  </span>
+                  <span style={{ color: 'var(--pv-fg-3)' }}>
+                    {target && <ExternalLink size={11} />}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
