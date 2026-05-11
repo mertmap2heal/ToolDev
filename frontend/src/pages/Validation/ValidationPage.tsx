@@ -1043,6 +1043,31 @@ export default function ValidationPage() {
               </option>
             ))}
           </select>
+          {settings && settings.tags.length > 0 && (
+            <select
+              defaultValue=""
+              onChange={async (e) => {
+                const tag = e.target.value
+                e.currentTarget.value = ''
+                if (!tag) return
+                await validationService.bulkUpdate(projectId, {
+                  ids: Array.from(selectedIds),
+                  patch: { addTags: [tag] },
+                })
+                setSelectedIds(new Set())
+                refetchAll()
+              }}
+              className="b"
+              style={{ background: 'transparent', border: 0, color: 'inherit' }}
+            >
+              <option value="">Add tag…</option>
+              {settings.tags.map((t) => (
+                <option key={t.label} value={t.label}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          )}
           {showArchived ? (
             <button
               type="button"
