@@ -38,6 +38,10 @@ export async function listItems(req: AuthRequest, res: Response) {
       includeDeleted: req.query.includeDeleted === 'true',
       starredOnly: req.query.starredOnly === 'true',
       starredByUserId: uid,
+      tagsAny:
+        typeof req.query.tagsAny === 'string'
+          ? req.query.tagsAny.split(',').filter(Boolean)
+          : undefined,
       sortBy,
       sortDir,
     })

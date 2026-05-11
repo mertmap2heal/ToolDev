@@ -122,6 +122,7 @@ interface ListFilters {
   starredOnly?: boolean
   sortBy?: ValidationSortBy
   sortDir?: 'asc' | 'desc'
+  tagsAny?: string[]
 }
 
 function qs(filters: ListFilters): string {
@@ -135,6 +136,8 @@ function qs(filters: ListFilters): string {
   if (filters.starredOnly) p.set('starredOnly', 'true')
   if (filters.sortBy) p.set('sortBy', filters.sortBy)
   if (filters.sortDir) p.set('sortDir', filters.sortDir)
+  if (filters.tagsAny && filters.tagsAny.length > 0)
+    p.set('tagsAny', filters.tagsAny.join(','))
   const s = p.toString()
   return s ? `?${s}` : ''
 }

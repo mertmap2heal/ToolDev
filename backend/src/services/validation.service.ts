@@ -40,6 +40,7 @@ interface ListFilters {
   starredByUserId?: string // required when starredOnly is true
   sortBy?: 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone'
   sortDir?: 'asc' | 'desc'
+  tagsAny?: string[]
 }
 
 async function nextKey(projectId: string): Promise<string> {
@@ -112,6 +113,9 @@ function buildWhere(projectId: string, filters: ListFilters): Prisma.ValidationI
   }
   if (filters.starredOnly && filters.starredByUserId) {
     where.stars = { some: { userId: filters.starredByUserId } }
+  }
+  if (filters.tagsAny && filters.tagsAny.length > 0) {
+    where.tags = { hasSome: filters.tagsAny }
   }
   return where
 }

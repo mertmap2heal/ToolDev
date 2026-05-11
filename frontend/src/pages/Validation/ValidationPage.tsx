@@ -69,6 +69,7 @@ export default function ValidationPage() {
   const [starredOnly, setStarredOnly] = useState(false)
   const [sortBy, setSortBy] = useState<ValidationSortBy>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [tagsAny, setTagsAny] = useState<string[]>([])
 
   const filters = useMemo(
     () => ({
@@ -80,8 +81,9 @@ export default function ValidationPage() {
       starredOnly: starredOnly || undefined,
       sortBy,
       sortDir,
+      tagsAny: tagsAny.length > 0 ? tagsAny : undefined,
     }),
-    [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir],
+    [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir, tagsAny],
   )
 
   const toggleSort = (col: ValidationSortBy) => {
@@ -448,11 +450,54 @@ export default function ValidationPage() {
               ))}
             </select>
           </div>
+          {settings && settings.tags.length > 0 && (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                Tags
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {settings.tags.map((t) => {
+                  const active = tagsAny.includes(t.label)
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() =>
+                        setTagsAny((prev) =>
+                          prev.includes(t.label)
+                            ? prev.filter((x) => x !== t.label)
+                            : [...prev, t.label],
+                        )
+                      }
+                      className="vv-tag"
+                      style={{
+                        background: active ? `${t.color}33` : 'var(--pv-bg)',
+                        color: active ? t.color : 'var(--pv-fg-3)',
+                        border: `1px solid ${active ? `${t.color}88` : 'var(--pv-line)'}`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                })}
+                {tagsAny.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTagsAny([])}
+                    style={{ fontSize: 11, color: 'var(--pv-fg-3)', background: 'none', border: 0, cursor: 'pointer' }}
+                  >
+                    Clear tags
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {activeFilterCount > 0 && (
             <button
               type="button"
               onClick={clearFilters}
-              className="col-span-full justify-self-start text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              style={{ gridColumn: '1 / -1', justifySelf: 'flex-start', fontSize: 11, color: 'var(--pv-blue)', background: 'none', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <X size={12} /> Clear filters
             </button>
