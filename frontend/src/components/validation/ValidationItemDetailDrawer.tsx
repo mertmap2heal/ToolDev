@@ -845,13 +845,19 @@ export default function ValidationItemDetailDrawer({
                           </option>
                         ))}
                       </select>
-                      <input
-                        type="text"
-                        value={c.notes ?? ''}
-                        onChange={(e) => updateCriterion(c.id, { notes: e.target.value })}
-                        placeholder="Notes"
-                        className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
-                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <MarkdownEditor
+                          value={c.notes ?? ''}
+                          onChange={(next) => updateCriterion(c.id, { notes: next })}
+                          rows={1}
+                          placeholder="Notes — reference REQ-001 / @mentions / **bold** supported"
+                          members={(members as Array<{ userId: string; user?: { name?: string | null; email?: string | null } }>).map((m) => ({
+                            id: m.userId,
+                            name: m.user?.name ?? null,
+                            email: m.user?.email ?? null,
+                          }))}
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => moveCriterion(c.id, -1)}
