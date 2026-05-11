@@ -1172,10 +1172,23 @@ export default function ValidationPage() {
               const s = e.target.value as ValidationStatus
               e.currentTarget.value = ''
               if (!s) return
+              // Soft-warn on the most common illogical jump: setting many items
+              // to VALIDATED in bulk skips the EXECUTED step, which is normally
+              // where evidence and outcomes are recorded. Confirm to proceed.
+              if (s === 'VALIDATED') {
+                const ok = window.confirm(
+                  `Set ${selectedIds.size} item(s) to VALIDATED?\n\n` +
+                    'This skips the EXECUTED step for any items still in PLANNED. ' +
+                    'Validation should usually go PLANNED → EXECUTED → VALIDATED so ' +
+                    'evidence and criterion outcomes are recorded first. Continue?',
+                )
+                if (!ok) return
+              }
               await validationService.bulkUpdate(projectId, {
                 ids: Array.from(selectedIds),
                 patch: { status: s },
               })
+              if (s === 'VALIDATED') toast.success(`Marked ${selectedIds.size} item(s) VALIDATED`)
               setSelectedIds(new Set())
               refetchAll()
             }}
