@@ -727,6 +727,51 @@ export default function ValidationPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {it.priority && it.priority !== 'medium' && (
+                          <span
+                            className="vv-tag"
+                            style={{
+                              background:
+                                it.priority === 'critical'
+                                  ? 'var(--pv-red-tint)'
+                                  : it.priority === 'high'
+                                  ? 'var(--pv-amber-tint)'
+                                  : 'var(--pv-gray-tint)',
+                              color:
+                                it.priority === 'critical'
+                                  ? 'var(--pv-red)'
+                                  : it.priority === 'high'
+                                  ? 'var(--pv-amber)'
+                                  : 'var(--pv-fg-3)',
+                              border: '1px solid transparent',
+                              flexShrink: 0,
+                              textTransform: 'uppercase',
+                              fontWeight: 600,
+                            }}
+                            title={`Priority: ${it.priority}`}
+                          >
+                            {it.priority}
+                          </span>
+                        )}
+                        {it.dueDate && (() => {
+                          const due = new Date(it.dueDate)
+                          const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
+                          return (
+                            <span
+                              className="vv-tag"
+                              style={{
+                                background: overdue ? 'var(--pv-red-tint)' : 'var(--pv-surface)',
+                                color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-3)',
+                                border: '1px solid transparent',
+                                flexShrink: 0,
+                              }}
+                              title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
+                            >
+                              {overdue ? 'overdue · ' : 'due '}
+                              {due.toLocaleDateString()}
+                            </span>
+                          )
+                        })()}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
                         {it.tags?.map((tag) => {
                           const color = tagColors.get(tag) ?? 'var(--pv-fg-3)'
