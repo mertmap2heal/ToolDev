@@ -7,6 +7,7 @@ import {
   validationService,
   type ValidationKeyPrefix,
   type ValidationTag,
+  type ValidationCriterionTemplate,
 } from '../../services/validation.service'
 
 const TAG_PALETTE = ['#1B4332', '#B8860B', '#8B0000', '#2D4A63', '#6B6660']
@@ -15,6 +16,7 @@ export default function ValidationSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [prefixes, setPrefixes] = useState<ValidationKeyPrefix[]>([])
   const [tags, setTags] = useState<ValidationTag[]>([])
+  const [criterionTemplates, setCriterionTemplates] = useState<ValidationCriterionTemplate[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [okFlash, setOkFlash] = useState(false)
@@ -34,6 +36,7 @@ export default function ValidationSettingsPage() {
     if (settings) {
       setPrefixes(settings.prefixes ?? [])
       setTags(settings.tags ?? [])
+      setCriterionTemplates(settings.criterionTemplates ?? [])
     }
   }, [settings])
 
@@ -42,7 +45,11 @@ export default function ValidationSettingsPage() {
   const save = async () => {
     setError(null)
     setSaving(true)
-    const res = await validationService.updateSettings(projectId, { prefixes, tags })
+    const res = await validationService.updateSettings(projectId, {
+      prefixes,
+      tags,
+      criterionTemplates,
+    })
     setSaving(false)
     if (res.success) {
       setOkFlash(true)
@@ -263,6 +270,116 @@ export default function ValidationSettingsPage() {
                   aria-label="Remove tag"
                 >
                   <Trash2 size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Criterion templates
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Reusable acceptance-criteria sets that everyone in the project can insert from the
+              drawer. Each template is a labelled list of criterion texts.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setCriterionTemplates([
+                ...criterionTemplates,
+                { label: 'New template', criteria: ['Criterion 1'] },
+              ])
+            }
+            className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          >
+            <Plus size={12} /> Add template
+          </button>
+        </div>
+        {criterionTemplates.length === 0 ? (
+          <p className="text-xs text-gray-500 italic">
+            No templates yet. Add one and it appears in the drawer's Templates dropdown for every
+            validation item in this project.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {criterionTemplates.map((t, i) => (
+              <li
+                key={i}
+                className="border border-gray-200 dark:border-gray-700 rounded-md p-2 bg-gray-50 dark:bg-gray-800/50"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={t.label}
+                    onChange={(e) => {
+                      const next = [...criterionTemplates]
+                      next[i] = { ...t, label: e.target.value }
+                      setCriterionTemplates(next)
+                    }}
+                    placeholder="Template label"
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCriterionTemplates(criterionTemplates.filter((_, k) => k !== i))
+                    }
+                    className="pv-icon-btn"
+                    style={{ width: 24, height: 24 }}
+                    aria-label="Remove template"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <ul className="space-y-1">
+                  {t.criteria.map((c, j) => (
+                    <li key={j} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={c}
+                        onChange={(e) => {
+                          const next = [...criterionTemplates]
+                          const nc = [...t.criteria]
+                          nc[j] = e.target.value
+                          next[i] = { ...t, criteria: nc }
+                          setCriterionTemplates(next)
+                        }}
+                        placeholder="Criterion text"
+                        className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...criterionTemplates]
+                          next[i] = { ...t, criteria: t.criteria.filter((_, k) => k !== j) }
+                          setCriterionTemplates(next)
+                        }}
+                        className="pv-icon-btn"
+                        style={{ width: 22, height: 22 }}
+                        aria-label="Remove criterion"
+                        disabled={t.criteria.length <= 1}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = [...criterionTemplates]
+                    next[i] = { ...t, criteria: [...t.criteria, ''] }
+                    setCriterionTemplates(next)
+                  }}
+                  className="text-xs flex items-center gap-1 mt-2 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                >
+                  <Plus size={11} /> Add criterion
                 </button>
               </li>
             ))}
