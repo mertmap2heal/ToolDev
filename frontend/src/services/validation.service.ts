@@ -66,7 +66,7 @@ export interface ValidationItemSummary {
 export const VALIDATION_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 export type ValidationPriority = (typeof VALIDATION_PRIORITIES)[number]
 
-export type ValidationSortBy = 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone'
+export type ValidationSortBy = 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone' | 'priority' | 'dueDate'
 
 export interface ValidationCoverage {
   total: number

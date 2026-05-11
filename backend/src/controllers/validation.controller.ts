@@ -21,7 +21,15 @@ export async function listItems(req: AuthRequest, res: Response) {
     const uid = req.userId ?? req.user?.userId
     const sortByRaw = req.query.sortBy as string | undefined
     const sortDirRaw = req.query.sortDir as string | undefined
-    const validSortBy = ['key', 'updatedAt', 'createdAt', 'status', 'milestone'] as const
+    const validSortBy = [
+      'key',
+      'updatedAt',
+      'createdAt',
+      'status',
+      'milestone',
+      'priority',
+      'dueDate',
+    ] as const
     type ValidSortBy = (typeof validSortBy)[number]
     const sortBy: ValidSortBy | undefined =
       sortByRaw && (validSortBy as readonly string[]).includes(sortByRaw)
