@@ -111,6 +111,15 @@ export default function ValidationPage() {
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
   const [dragItemId, setDragItemId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<ValidationStatus | null>(null)
+  // Domain columns hidden by default per design-system §6.2. Always-on: Key,
+  // Title, Status, Criteria, Owner, Updated. Togglable: Method, Milestone,
+  // Priority, Due, Sign-offs.
+  const TOGGLABLE_COLS = ['method', 'milestone', 'priority', 'due', 'signoffs'] as const
+  type ColKey = (typeof TOGGLABLE_COLS)[number]
+  const DEFAULT_VISIBLE_COLS: ColKey[] = ['milestone', 'signoffs']
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE_COLS))
+  const colVisible = (c: ColKey) => visibleCols.has(c)
+  const [colsMenuOpen, setColsMenuOpen] = useState(false)
 
   // Named filter views. Persisted per project alongside the active-filter
   // state but in their own LS key so clearing one does not affect the other.
@@ -169,6 +178,12 @@ export default function ValidationPage() {
         setCollapsedMilestones(new Set(v.collapsedMilestones as string[]))
       }
       if (v.viewMode === 'list' || v.viewMode === 'board') setViewMode(v.viewMode)
+      if (Array.isArray(v.visibleCols)) {
+        const ok = (v.visibleCols as string[]).filter((c): c is ColKey =>
+          (TOGGLABLE_COLS as readonly string[]).includes(c),
+        )
+        setVisibleCols(new Set(ok))
+      }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
@@ -323,10 +338,11 @@ export default function ValidationPage() {
           groupByMilestone,
           collapsedMilestones: Array.from(collapsedMilestones),
           viewMode,
+          visibleCols: Array.from(visibleCols),
         }),
       )
     } catch { /* ignore */ }
-  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter, groupByMilestone, collapsedMilestones, viewMode])
+  }, [lsKey, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, sortBy, sortDir, criterionFilter, groupByMilestone, collapsedMilestones, viewMode, visibleCols])
 
   const toggleSort = (col: ValidationSortBy) => {
     if (sortBy === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -381,7 +397,9 @@ export default function ValidationPage() {
 
   // Total number of columns in the table - kept in sync with <thead> so the
   // group-header colSpan stays correct as columns are added or removed.
-  const TABLE_COL_COUNT = 13
+  // 8 always-on columns (check, star, key, title, status, criteria, owner,
+  // updated) plus however many togglable ones are currently visible.
+  const TABLE_COL_COUNT = 8 + visibleCols.size
 
   const items = useMemo(() => {
     let arr = rawItems
@@ -676,18 +694,22 @@ export default function ValidationPage() {
             })}
           </div>
         </td>
-        <td
-          style={{ color: 'var(--pv-fg-2)' }}
-          title={METHOD_TOOLTIP[it.methodType]}
-        >
-          {METHOD_LABEL[it.methodType]}
-        </td>
-        <td
-          style={{ color: 'var(--pv-fg-2)', fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}
-          title={MILESTONE_TOOLTIP[it.targetMilestone]}
-        >
-          {it.targetMilestone}
-        </td>
+        {colVisible('method') && (
+          <td
+            style={{ color: 'var(--pv-fg-2)' }}
+            title={METHOD_TOOLTIP[it.methodType]}
+          >
+            {METHOD_LABEL[it.methodType]}
+          </td>
+        )}
+        {colVisible('milestone') && (
+          <td
+            style={{ color: 'var(--pv-fg-2)', fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}
+            title={MILESTONE_TOOLTIP[it.targetMilestone]}
+          >
+            {it.targetMilestone}
+          </td>
+        )}
         <td>
           <span
             className={`vv-status-pill ${
@@ -713,82 +735,88 @@ export default function ValidationPage() {
             </span>
           )}
         </td>
-        <td style={{ fontSize: 12 }}>
-          {it.priority ? (
-            <span
-              className="vv-tag"
-              style={{
-                background:
-                  it.priority === 'critical'
-                    ? 'var(--pv-red-tint)'
-                    : it.priority === 'high'
-                    ? 'var(--pv-amber-tint)'
-                    : it.priority === 'low'
-                    ? 'var(--pv-gray-tint)'
-                    : 'transparent',
-                color:
-                  it.priority === 'critical'
-                    ? 'var(--pv-red)'
-                    : it.priority === 'high'
-                    ? 'var(--pv-amber)'
-                    : 'var(--pv-fg-3)',
-                border: '1px solid transparent',
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                fontSize: 10,
-              }}
-              title={`Priority: ${it.priority}`}
-            >
-              {it.priority}
-            </span>
-          ) : (
-            <span style={{ color: 'var(--pv-fg-3)' }}>—</span>
-          )}
-        </td>
-        <td style={{ fontSize: 12 }}>
-          {it.dueDate
-            ? (() => {
-                const due = new Date(it.dueDate)
-                const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
-                return (
-                  <span
-                    style={{
-                      fontFamily: 'var(--pv-font-mono)',
-                      color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-2)',
-                      fontWeight: overdue ? 600 : 400,
-                    }}
-                    title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
-                  >
-                    {due.toISOString().slice(0, 10)}
-                  </span>
-                )
-              })()
-            : <span style={{ color: 'var(--pv-fg-3)' }}>—</span>}
-        </td>
+        {colVisible('priority') && (
+          <td style={{ fontSize: 12 }}>
+            {it.priority ? (
+              <span
+                className="vv-tag"
+                style={{
+                  background:
+                    it.priority === 'critical'
+                      ? 'var(--pv-red-tint)'
+                      : it.priority === 'high'
+                      ? 'var(--pv-amber-tint)'
+                      : it.priority === 'low'
+                      ? 'var(--pv-gray-tint)'
+                      : 'transparent',
+                  color:
+                    it.priority === 'critical'
+                      ? 'var(--pv-red)'
+                      : it.priority === 'high'
+                      ? 'var(--pv-amber)'
+                      : 'var(--pv-fg-3)',
+                  border: '1px solid transparent',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  fontSize: 10,
+                }}
+                title={`Priority: ${it.priority}`}
+              >
+                {it.priority}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--pv-fg-3)' }}>—</span>
+            )}
+          </td>
+        )}
+        {colVisible('due') && (
+          <td style={{ fontSize: 12 }}>
+            {it.dueDate
+              ? (() => {
+                  const due = new Date(it.dueDate)
+                  const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
+                  return (
+                    <span
+                      style={{
+                        fontFamily: 'var(--pv-font-mono)',
+                        color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-2)',
+                        fontWeight: overdue ? 600 : 400,
+                      }}
+                      title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
+                    >
+                      {due.toISOString().slice(0, 10)}
+                    </span>
+                  )
+                })()
+              : <span style={{ color: 'var(--pv-fg-3)' }}>—</span>}
+          </td>
+        )}
         <td
           style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}
           title={it.owner?.email ?? ''}
         >
           {it.owner?.name ?? '—'}
         </td>
-        <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
-          {it._count?.signOffs ?? 0}
-          {(it._count?.comments ?? 0) > 0 && (
-            <span
-              style={{
-                marginLeft: 6,
-                color: 'var(--pv-fg-3)',
-                fontSize: 11,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 2,
-              }}
-              title={`${it._count?.comments} comment${(it._count?.comments ?? 0) === 1 ? '' : 's'}`}
-            >
-              <MessageCircle size={11} /> {it._count?.comments}
-            </span>
-          )}
-        </td>
+        {colVisible('signoffs') && (
+          <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
+            {it._count?.signOffs ?? 0}
+            {(it._count?.comments ?? 0) > 0 && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  color: 'var(--pv-fg-3)',
+                  fontSize: 11,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 2,
+                }}
+                title={`${it._count?.comments} comment${(it._count?.comments ?? 0) === 1 ? '' : 's'}`}
+              >
+                <MessageCircle size={11} /> {it._count?.comments}
+              </span>
+            )}
+          </td>
+        )}
         <td
           className="cell-updated"
           title={new Date(it.updatedAt).toLocaleString()}
@@ -1216,6 +1244,80 @@ export default function ValidationPage() {
           >
             Group: Milestone
           </button>
+        )}
+        {viewMode === 'list' && (
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className={`pv-pill ${visibleCols.size > 0 ? 'active' : ''}`}
+              aria-haspopup="menu"
+              aria-expanded={colsMenuOpen}
+              onClick={() => setColsMenuOpen((v) => !v)}
+              title="Show / hide table columns"
+            >
+              Columns {visibleCols.size > 0 && <span className="pv-badge">{visibleCols.size}</span>}
+            </button>
+            {colsMenuOpen && (
+              <>
+                <div onClick={() => setColsMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    zIndex: 41,
+                    minWidth: 180,
+                    background: 'var(--pv-bg)',
+                    border: '1px solid var(--pv-line)',
+                    borderRadius: 4,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                    padding: 4,
+                    fontSize: 13,
+                  }}
+                >
+                  <div className="vv-menu-group-label">Optional columns</div>
+                  {TOGGLABLE_COLS.map((c) => {
+                    const label =
+                      c === 'method' ? 'Method'
+                      : c === 'milestone' ? 'Milestone'
+                      : c === 'priority' ? 'Priority'
+                      : c === 'due' ? 'Due date'
+                      : 'Sign-offs'
+                    return (
+                      <label key={c} className="vv-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={visibleCols.has(c)}
+                          onChange={(e) => {
+                            setVisibleCols((prev) => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(c)
+                              else next.delete(c)
+                              return next
+                            })
+                          }}
+                        />
+                        {label}
+                      </label>
+                    )
+                  })}
+                  <div className="vv-menu-sep" />
+                  <button
+                    type="button"
+                    className="vv-menu-item"
+                    style={{ color: 'var(--pv-fg-3)' }}
+                    onClick={() => {
+                      setVisibleCols(new Set(DEFAULT_VISIBLE_COLS))
+                      setColsMenuOpen(false)
+                    }}
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
         <label
           className={`pv-pill ${activeViewName ? 'active' : ''}`}
@@ -1880,14 +1982,16 @@ export default function ValidationPage() {
                   Key<SortArrow col="key" />
                 </th>
                 <th>Title</th>
-                <th style={{ width: 160 }}>Method</th>
-                <th
-                  className="sortable"
-                  style={{ width: 100 }}
-                  onClick={() => toggleSort('milestone')}
-                >
-                  Milestone<SortArrow col="milestone" />
-                </th>
+                {colVisible('method') && <th style={{ width: 160 }}>Method</th>}
+                {colVisible('milestone') && (
+                  <th
+                    className="sortable"
+                    style={{ width: 100 }}
+                    onClick={() => toggleSort('milestone')}
+                  >
+                    Milestone<SortArrow col="milestone" />
+                  </th>
+                )}
                 <th
                   className="sortable"
                   style={{ width: 120 }}
@@ -1896,24 +2000,28 @@ export default function ValidationPage() {
                   Status<SortArrow col="status" />
                 </th>
                 <th style={{ width: 84 }}>Criteria</th>
-                <th
-                  className="sortable"
-                  style={{ width: 80 }}
-                  onClick={() => toggleSort('priority')}
-                  title="Item priority — critical / high / medium / low"
-                >
-                  Priority<SortArrow col="priority" />
-                </th>
-                <th
-                  className="sortable"
-                  style={{ width: 100 }}
-                  onClick={() => toggleSort('dueDate')}
-                  title="When this validation is due"
-                >
-                  Due<SortArrow col="dueDate" />
-                </th>
+                {colVisible('priority') && (
+                  <th
+                    className="sortable"
+                    style={{ width: 80 }}
+                    onClick={() => toggleSort('priority')}
+                    title="Item priority — critical / high / medium / low"
+                  >
+                    Priority<SortArrow col="priority" />
+                  </th>
+                )}
+                {colVisible('due') && (
+                  <th
+                    className="sortable"
+                    style={{ width: 100 }}
+                    onClick={() => toggleSort('dueDate')}
+                    title="When this validation is due"
+                  >
+                    Due<SortArrow col="dueDate" />
+                  </th>
+                )}
                 <th style={{ width: 100 }}>Owner</th>
-                <th style={{ width: 80 }}>Sign-offs</th>
+                {colVisible('signoffs') && <th style={{ width: 80 }}>Sign-offs</th>}
                 <th
                   className="sortable"
                   style={{ width: 110 }}
