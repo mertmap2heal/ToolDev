@@ -98,6 +98,37 @@ interface EntityRefChipProps {
   projectId?: string
 }
 
+// Hover-preview resolver registry. Each entry resolves a key like "REQ-001"
+// to a small { title, status? } card by calling the owning module's search
+// endpoint and picking the row whose display id matches. Adding a new
+// resolvable prefix is one entry here — the chip component stays generic.
+type RefPreview = { title: string; status?: string } | null
+type RefResolver = (projectId: string, key: string) => Promise<RefPreview>
+
+const REF_RESOLVERS: Record<string, RefResolver> = {
+  VAL: async (projectId, key) => {
+    const res = await validationService.list(projectId, { search: key })
+    if (!res.success || !res.data) return null
+    const hit = res.data.find((i) => i.key === key)
+    return hit ? { title: hit.title, status: hit.status } : null
+  },
+  REQ: async (projectId, key) => {
+    const res = await requirementService.getRequirements(projectId, { search: key })
+    if (!res.success || !res.data) return null
+    const items = Array.isArray(res.data) ? res.data : res.data.items
+    type ReqLite = { requirementId?: string | null; title: string; status?: string }
+    const hit = (items as ReqLite[]).find((r) => r.requirementId === key)
+    return hit ? { title: hit.title, status: hit.status } : null
+  },
+  PRM: async (projectId, key) => {
+    const res = await parameterService.getParameters(projectId, { search: key })
+    if (!res.success || !res.data) return null
+    type PrmLite = { parameterId?: string | null; name: string; status?: string }
+    const hit = (res.data as PrmLite[]).find((p) => p.parameterId === key)
+    return hit ? { title: hit.name, status: hit.status } : null
+  },
+}
+
 export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: EntityRefChipProps) {
   const params = useParams<{ projectId: string }>()
   const projectId = projectIdOverride ?? params.projectId
@@ -107,40 +138,12 @@ export function EntityRefChip({ prefix, number, projectId: projectIdOverride }: 
   // the prefix resolves or not (cf. the drawer rules-of-hooks fix).
   const [hovering, setHovering] = useState(false)
   const upperPrefix = prefix.toUpperCase()
-
-  // Per-prefix resolvers. Each returns { title, status? } or null. Kept here
-  // as a small registry so the chip stays decoupled from any single module's
-  // service shape. Each resolver only fires when this chip is being hovered.
-  const resolvable = upperPrefix === 'VAL' || upperPrefix === 'REQ' || upperPrefix === 'PRM'
-  const { data: preview } = useQuery<{ title: string; status?: string } | null>({
+  const resolver = REF_RESOLVERS[upperPrefix]
+  const { data: preview } = useQuery<RefPreview>({
     queryKey: ['entity-ref-preview', upperPrefix, projectId, key],
-    enabled: !!projectId && resolvable && hovering,
+    enabled: !!projectId && !!resolver && hovering,
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      if (!projectId) return null
-      if (upperPrefix === 'VAL') {
-        const res = await validationService.list(projectId, { search: key })
-        if (!res.success || !res.data) return null
-        const hit = res.data.find((i) => i.key === key)
-        return hit ? { title: hit.title, status: hit.status } : null
-      }
-      if (upperPrefix === 'REQ') {
-        const res = await requirementService.getRequirements(projectId, { search: key })
-        if (!res.success || !res.data) return null
-        const items = Array.isArray(res.data) ? res.data : res.data.items
-        type ReqLite = { requirementId?: string | null; title: string; status?: string }
-        const hit = (items as ReqLite[]).find((r) => r.requirementId === key)
-        return hit ? { title: hit.title, status: hit.status } : null
-      }
-      if (upperPrefix === 'PRM') {
-        const res = await parameterService.getParameters(projectId, { search: key })
-        if (!res.success || !res.data) return null
-        type PrmLite = { parameterId?: string | null; name: string; status?: string }
-        const hit = (res.data as PrmLite[]).find((p) => p.parameterId === key)
-        return hit ? { title: hit.name, status: hit.status } : null
-      }
-      return null
-    },
+    queryFn: async () => (projectId && resolver ? resolver(projectId, key) : null),
   })
 
   if (!entity || !projectId) {
