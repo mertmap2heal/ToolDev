@@ -1289,11 +1289,12 @@ export default function ValidationItemDetailDrawer({
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2 leading-snug">
-              Anyone in the project except the item's author can sign off, once the item is
-              EXECUTED. Sign-offs are immutable; revocation creates a supersession row.
-              Stakeholders with the <span className="font-semibold">Validation Approver</span> role
-              are the intended signers.
+            <p
+              className="text-[11px] text-gray-500 dark:text-gray-400 mb-2 leading-snug"
+              title="Sign-offs are immutable; revoking one creates a supersession row rather than deleting it."
+            >
+              Any project member except the author can sign off once the item is EXECUTED;
+              <span className="font-medium"> Validation Approver</span> role-holders are the intended signers.
             </p>
             {signOffOpen && (
               <div style={{ border: '1px solid var(--pv-green)', borderRadius: 6, padding: 12, marginBottom: 12, background: 'var(--pv-green-tint)', display: 'flex', flexDirection: 'column', gap: 8 }}>

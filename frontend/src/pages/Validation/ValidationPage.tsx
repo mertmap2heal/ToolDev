@@ -1653,10 +1653,11 @@ export default function ValidationPage() {
                       justifyContent: 'center',
                       color: 'var(--pv-fg-3)',
                       fontSize: 11,
-                      fontStyle: 'italic',
+                      textAlign: 'center',
+                      padding: '12px 8px',
                     }}
                   >
-                    Empty
+                    No items in this state.
                   </div>
                 )}
                 {cards.map((it) => {

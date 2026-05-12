@@ -149,6 +149,13 @@ export default function ValidationSettingsPage() {
             <Plus size={12} /> Add prefix
           </button>
         </div>
+        <div className="grid grid-cols-12 gap-2 px-2 mb-1">
+          <span className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Prefix</span>
+          <span className="col-span-3 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Label</span>
+          <span className="col-span-5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</span>
+          <span className="col-span-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Default</span>
+          <span className="col-span-1" />
+        </div>
         <ul className="space-y-2">
           {prefixes.map((p, i) => (
             <li
@@ -164,6 +171,7 @@ export default function ValidationSettingsPage() {
                   setPrefixes(next)
                 }}
                 placeholder="VAL-"
+                aria-label="Key prefix"
                 className="col-span-2 px-2 py-1 text-sm font-mono border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
               />
               <input
@@ -175,6 +183,7 @@ export default function ValidationSettingsPage() {
                   setPrefixes(next)
                 }}
                 placeholder="Validation"
+                aria-label="Prefix label"
                 className="col-span-3 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
               />
               <input
@@ -185,7 +194,8 @@ export default function ValidationSettingsPage() {
                   next[i] = { ...p, description: e.target.value }
                   setPrefixes(next)
                 }}
-                placeholder="Description"
+                placeholder="When this prefix applies"
+                aria-label="Prefix description"
                 className="col-span-5 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
               />
               <label className="col-span-1 text-xs flex items-center gap-1 text-gray-600 dark:text-gray-400">
@@ -201,7 +211,7 @@ export default function ValidationSettingsPage() {
                 type="button"
                 onClick={() => removePrefix(i)}
                 className="col-span-1 text-gray-400 hover:text-red-600 flex justify-end"
-                aria-label="Remove"
+                aria-label="Remove prefix"
               >
                 <Trash2 size={14} />
               </button>

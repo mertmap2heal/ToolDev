@@ -339,6 +339,24 @@ html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
   padding: 0 20px 20px;
 }
 
+/* Avatars — the shared rule paints light-grey initials on a light gradient,
+   which vanishes in dark mode. Re-point to surface.inset fill with proper
+   ink text per design-system.md (initials, not empty circles). */
+.validation-v2 .pv-avatar,
+.validation-v2 .pv-dr-comment .pv-avatar {
+  background: var(--pv-surface-inset, var(--pv-surface)) !important;
+  border: 1px solid var(--pv-line);
+  color: var(--pv-fg-2) !important;
+  font-family: var(--pv-font-mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+html[data-theme='midnight'] .validation-v2 .pv-avatar,
+html[data-theme='midnight'] .validation-v2 .pv-dr-comment .pv-avatar {
+  background: var(--pv-surface-2, #1F262E) !important;
+  color: var(--pv-fg) !important;
+}
+
 /* Popover menu (the "More" button) */
 .validation-v2 .vv-menu-group-label {
   font-size: 10px;
