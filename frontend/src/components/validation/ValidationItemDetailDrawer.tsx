@@ -8,7 +8,7 @@ import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import { checkAmbiguity } from '../../utils/ambiguityCheck'
 import MarkdownEditor, {
   MarkdownPreview,
-  MD_ACTIONS_COMPACT,
+  MD_ACTIONS_NARRATIVE,
   MD_ACTIONS_INLINE,
 } from '../common/MarkdownEditor'
 import { suggestCriteriaFromRequirement, type CriterionSuggestion } from '../../utils/suggestCriteria'
@@ -422,7 +422,7 @@ export default function ValidationItemDetailDrawer({
         style={{ background: 'rgba(15,20,25,0.3)' }}
         onClick={close}
       />
-      <div className="pv-drawer-shell" style={{ width: 720, maxWidth: '100%', margin: 0, borderRadius: 0, background: 'var(--pv-bg)' }}>
+      <div className="pv-drawer-shell" style={{ width: 720, maxWidth: '100%', margin: 0, borderRadius: 0, background: 'var(--pv-surface)', borderLeft: '1px solid var(--pv-line-strong, var(--pv-line))' }}>
         {/* Drawer header — compact chrome with mono key + status pill +
             stacked dirty/deleted state pills. Action icons right-aligned. */}
         <div className="vv-dr-head">
@@ -631,7 +631,7 @@ export default function ValidationItemDetailDrawer({
               onChange={(next) => draft && setDraft({ ...draft, description: next })}
               rows={5}
               minHeight={140}
-              actions={MD_ACTIONS_COMPACT}
+              actions={MD_ACTIONS_NARRATIVE}
               // Default to Preview when the field already has content so saved
               // mentions / refs render as chips on open; Write tab is one click
               // away for edits.

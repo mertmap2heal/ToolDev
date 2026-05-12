@@ -13,6 +13,27 @@
   --val-validated-tint: var(--pv-green-tint);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   "Kill the blue" — design-system.md §3.1: the accent is deep forest, not
+   SaaS-blue. Within the validation surface, every primary action and the
+   info-banner accent are re-pointed at --pv-green / --pv-green-tint. The
+   shared --pv-blue token is left alone (other pages depend on it); these
+   overrides are scoped to .validation-v2.
+   ──────────────────────────────────────────────────────────────────────── */
+.validation-v2 .pv-btn.primary {
+  background: var(--pv-green);
+  border-color: var(--pv-green);
+  color: #fff;
+}
+.validation-v2 .pv-btn.primary:hover {
+  filter: brightness(1.08);
+}
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary {
+  color: #0D1117;
+}
+/* Inline "post / done" mini-buttons reuse pv-btn primary; the rule above
+   already covers .pv-btn.primary.compact. */
+
 /* Coverage strip */
 /* Coverage strip — was a verbose card with a row of tiles. Now an inline,
    compact strip: small uppercase caption, then the metric cluster in a flat

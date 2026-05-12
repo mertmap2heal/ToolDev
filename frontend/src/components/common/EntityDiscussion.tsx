@@ -4,7 +4,7 @@ import { MessageCircle, Send, Trash2, Edit2, X, Check } from 'lucide-react'
 import { parseEntityRefs, EntityRefChip } from '../../utils/entityRefs'
 import MarkdownEditor, {
   MarkdownPreview,
-  MD_ACTIONS_COMPACT,
+  MD_ACTIONS_NARRATIVE,
   MD_ACTIONS_INLINE,
 } from './MarkdownEditor'
 
@@ -334,7 +334,7 @@ export default function EntityDiscussion({
           members={members}
           rows={4}
           minHeight={120}
-          actions={MD_ACTIONS_COMPACT}
+          actions={MD_ACTIONS_NARRATIVE}
         />
         <div
           style={{

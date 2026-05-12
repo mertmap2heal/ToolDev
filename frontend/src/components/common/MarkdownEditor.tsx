@@ -102,6 +102,13 @@ export const MD_ACTIONS_INLINE: MdAction[] = [
   'bold', 'italic', 'code', 'link', 'mention',
 ]
 
+// Narrative set for a description / overview field — five actions only, per
+// the design review: the rich-text toolbar must not become the visual centre
+// of gravity of the drawer.
+export const MD_ACTIONS_NARRATIVE: MdAction[] = [
+  'bold', 'italic', 'list', 'link', 'mention',
+]
+
 interface Props {
   value: string
   onChange: (next: string) => void
@@ -578,8 +585,8 @@ export default function MarkdownEditor({
                       padding: '6px 8px',
                       border: 0,
                       borderRadius: 4,
-                      background: active ? 'var(--pv-blue-tint)' : 'transparent',
-                      color: active ? 'var(--pv-blue-ink)' : 'var(--pv-fg)',
+                      background: active ? 'var(--pv-green-tint)' : 'transparent',
+                      color: active ? 'var(--pv-green)' : 'var(--pv-fg)',
                       cursor: 'pointer',
                       textAlign: 'left',
                       fontFamily: 'inherit',
@@ -821,13 +828,15 @@ export function MarkdownPreview({ source, members }: PreviewProps) {
       // The chip itself is a clickable mailto link when an email is known; it
       // gives the user something to navigate to instead of a dead pill.
       const href = known?.email ? `mailto:${known.email}` : undefined
+      // Forest tint, not blue — the accent system is deep forest per the
+      // design system. 12% green tint bg + green text.
       const style: React.CSSProperties = {
         display: 'inline',
         padding: '0 4px',
         margin: '0 1px',
         borderRadius: 3,
-        background: 'var(--pv-blue-tint, rgba(43,108,176,0.12))',
-        color: 'var(--pv-blue-ink, #1e4778)',
+        background: 'var(--pv-green-tint, rgba(27,67,50,0.12))',
+        color: 'var(--pv-green, #1B4332)',
         fontWeight: 500,
         textDecoration: 'none',
       }
