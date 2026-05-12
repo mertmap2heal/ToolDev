@@ -236,6 +236,28 @@ export default function ValidationPage() {
     persistViews(savedViews.filter((v) => v.name !== name))
   }
 
+  // Name of the saved view whose snapshot matches the current filter state,
+  // or null. Used to surface "you are viewing <name>" next to the dropdown.
+  const activeViewName = useMemo(() => {
+    const cur = {
+      search,
+      statusFilter,
+      methodFilter,
+      milestoneFilter,
+      ownerFilter,
+      tagsAny: [...tagsAny].sort(),
+      starredOnly,
+      overdueOnly,
+      showSuspectOnly,
+      criterionFilter,
+    }
+    const match = savedViews.find((v) => {
+      const p = { ...v.payload, tagsAny: [...(v.payload.tagsAny ?? [])].sort() }
+      return JSON.stringify(p) === JSON.stringify(cur)
+    })
+    return match?.name ?? null
+  }, [savedViews, search, statusFilter, methodFilter, milestoneFilter, ownerFilter, tagsAny, starredOnly, overdueOnly, showSuspectOnly, criterionFilter])
+
   // Keep ?q= in the URL in sync with the search box. URL is authoritative on
   // mount (so deep-links from entity-ref chips land filtered); after that the
   // user's typing wins and we push back to the URL with replaceState so
@@ -1195,8 +1217,12 @@ export default function ValidationPage() {
             Group: Milestone
           </button>
         )}
-        <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Apply a saved view">
-          View
+        <label
+          className={`pv-pill ${activeViewName ? 'active' : ''}`}
+          style={{ cursor: 'pointer', paddingRight: 4 }}
+          title={activeViewName ? `Showing saved view: ${activeViewName}` : 'Apply a saved view'}
+        >
+          {activeViewName ? `View · ${activeViewName}` : 'View'}
           <select
             value=""
             onChange={(e) => {
