@@ -20,19 +20,19 @@
    shared --pv-blue token is left alone (other pages depend on it); these
    overrides are scoped to .validation-v2.
    ──────────────────────────────────────────────────────────────────────── */
-.validation-v2 .pv-btn.primary {
-  background: var(--pv-green);
-  border-color: var(--pv-green);
-  color: #fff;
+.validation-v2 .pv-btn.primary,
+.validation-v2 .pv-btn.primary.compact {
+  background: var(--pv-green) !important;
+  border-color: var(--pv-green) !important;
+  color: #fff !important;
 }
 .validation-v2 .pv-btn.primary:hover {
   filter: brightness(1.08);
 }
-html[data-theme='midnight'] .validation-v2 .pv-btn.primary {
-  color: #0D1117;
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary,
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary.compact {
+  color: #0D1117 !important;
 }
-/* Inline "post / done" mini-buttons reuse pv-btn primary; the rule above
-   already covers .pv-btn.primary.compact. */
 
 /* Coverage strip */
 /* Coverage strip — was a verbose card with a row of tiles. Now an inline,

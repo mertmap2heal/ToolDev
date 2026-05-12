@@ -1283,37 +1283,30 @@ export default function ValidationPage() {
           >
             {density === 'compact' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
           </button>
-          <button type="button" onClick={downloadCsv} className="pv-btn">
-            <Download size={14} /> Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await validationService.downloadMarkdown(projectId, filters)
-              } catch (e) {
-                toast.error((e as Error).message || 'Markdown export failed')
-              }
-            }}
-            className="pv-btn"
-            title="Download a Markdown validation report for the current view"
-          >
-            <Download size={14} /> Report (MD)
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await validationService.downloadPdf(projectId, filters)
-              } catch (e) {
-                toast.error((e as Error).message || 'PDF export failed')
-              }
-            }}
-            className="pv-btn"
-            title="Download a PDF validation report for the current view"
-          >
-            <Download size={14} /> Report (PDF)
-          </button>
+          <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Export the current view">
+            <Download size={14} /> Export
+            <select
+              value=""
+              onChange={async (e) => {
+                const fmt = e.target.value
+                e.currentTarget.value = ''
+                if (!fmt) return
+                try {
+                  if (fmt === 'csv') await validationService.downloadCsv(projectId, filters)
+                  else if (fmt === 'md') await validationService.downloadMarkdown(projectId, filters)
+                  else if (fmt === 'pdf') await validationService.downloadPdf(projectId, filters)
+                } catch (err) {
+                  toast.error((err as Error).message || 'Export failed')
+                }
+              }}
+              style={{ background: 'transparent', border: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', outline: 'none' }}
+            >
+              <option value="">Format…</option>
+              <option value="csv">Items as CSV</option>
+              <option value="md">Report — Markdown</option>
+              <option value="pdf">Report — PDF</option>
+            </select>
+          </label>
         </div>
       </div>
 
