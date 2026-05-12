@@ -318,6 +318,38 @@ html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
   padding: 0 20px 20px;
 }
 
+/* Popover menu (the "More" button) */
+.validation-v2 .vv-menu-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pv-fg-3);
+  padding: 6px 8px 2px;
+}
+.validation-v2 .vv-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--pv-fg);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.validation-v2 .vv-menu-item:hover {
+  background: var(--pv-surface);
+}
+.validation-v2 .vv-menu-sep {
+  height: 1px;
+  background: var(--pv-line-soft, var(--pv-line));
+  margin: 4px 0;
+}
+
 /* Comfortable density */
 .validation-v2.is-comfortable table.pv-params td { height: 40px; padding: 4px 12px; }
 .validation-v2.is-comfortable table.pv-params thead th { padding: 9px 12px; }

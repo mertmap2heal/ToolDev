@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
   AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
-  MessageCircle, Copy,
+  MessageCircle, Copy, ChevronDown,
 } from 'lucide-react'
 import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import ValidationShortcutsOverlay from '../../components/validation/ValidationShortcutsOverlay'
@@ -96,6 +96,7 @@ export default function ValidationPage() {
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [starredOnly, setStarredOnly] = useState(false)
   const [sortBy, setSortBy] = useState<ValidationSortBy>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -799,46 +800,79 @@ export default function ValidationPage() {
           </p>
         </div>
         <div className="pv-right">
-          <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Open Baselines, Activity, DER, or Settings">
-            More
-            <select
-              value=""
-              onChange={async (e) => {
-                const action = e.target.value
-                e.currentTarget.value = ''
-                if (!action) return
-                if (action === 'baseline') {
-                  const label = window.prompt(
-                    'Baseline label (e.g. "PDR snapshot 2026-05-15"):',
-                    `Baseline ${new Date().toISOString().slice(0, 10)}`,
-                  )?.trim()
-                  if (!label) return
-                  const res = await validationService.createBaseline(projectId, { label })
-                  if (res.success) toast.success(`Baselined ${res.data?.itemCount ?? 0} items as "${label}"`)
-                  else toast.error(res.error ?? 'Baseline failed')
-                  return
-                }
-                if (action === 'baselines') window.location.href = `/projects/${projectId}/validation/baselines`
-                else if (action === 'activity') window.location.href = `/projects/${projectId}/validation/activity`
-                else if (action === 'der') window.location.href = `/projects/${projectId}/validation/der`
-                else if (action === 'settings') window.location.href = `/projects/${projectId}/validation/settings`
-              }}
-              style={{ background: 'transparent', border: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', outline: 'none' }}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="pv-btn"
+              aria-haspopup="menu"
+              aria-expanded={moreMenuOpen}
+              onClick={() => setMoreMenuOpen((v) => !v)}
+              title="Baselines, Activity log, DER view, Settings"
             >
-              <option value="">Actions…</option>
-              <optgroup label="Snapshots">
-                <option value="baseline">Baseline this state…</option>
-                <option value="baselines">Open Baselines</option>
-              </optgroup>
-              <optgroup label="Read-only views">
-                <option value="der">DER view</option>
-                <option value="activity">Activity log</option>
-              </optgroup>
-              <optgroup label="Project">
-                <option value="settings">Settings</option>
-              </optgroup>
-            </select>
-          </label>
+              More <ChevronDown size={13} />
+            </button>
+            {moreMenuOpen && (
+              <>
+                {/* click-away catcher */}
+                <div
+                  onClick={() => setMoreMenuOpen(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+                />
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    right: 0,
+                    zIndex: 41,
+                    minWidth: 220,
+                    background: 'var(--pv-bg)',
+                    border: '1px solid var(--pv-line)',
+                    borderRadius: 4,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                    padding: 4,
+                    fontSize: 13,
+                  }}
+                >
+                  <div className="vv-menu-group-label">Snapshots</div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="vv-menu-item"
+                    onClick={async () => {
+                      setMoreMenuOpen(false)
+                      const label = window.prompt(
+                        'Baseline label (e.g. "PDR snapshot 2026-05-15"):',
+                        `Baseline ${new Date().toISOString().slice(0, 10)}`,
+                      )?.trim()
+                      if (!label) return
+                      const res = await validationService.createBaseline(projectId, { label })
+                      if (res.success) toast.success(`Baselined ${res.data?.itemCount ?? 0} items as "${label}"`)
+                      else toast.error(res.error ?? 'Baseline failed')
+                    }}
+                  >
+                    Baseline this state…
+                  </button>
+                  <Link to={`/projects/${projectId}/validation/baselines`} className="vv-menu-item" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    Open Baselines
+                  </Link>
+                  <div className="vv-menu-sep" />
+                  <div className="vv-menu-group-label">Read-only views</div>
+                  <Link to={`/projects/${projectId}/validation/der`} className="vv-menu-item" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    DER view
+                  </Link>
+                  <Link to={`/projects/${projectId}/validation/activity`} className="vv-menu-item" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    Activity log
+                  </Link>
+                  <div className="vv-menu-sep" />
+                  <div className="vv-menu-group-label">Project</div>
+                  <Link to={`/projects/${projectId}/validation/settings`} className="vv-menu-item" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    Settings
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setCreateFromReqOpen(true)}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, AlertTriangle } from 'lucide-react'
+import { X, AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import {
   validationService,
   VALIDATION_METHOD_TYPES,
@@ -24,7 +24,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
   const [description, setDescription] = useState('')
   const [methodType, setMethodType] = useState<ValidationMethodType>('DEMONSTRATION')
   const [targetMilestone, setTargetMilestone] = useState<ValidationMilestone>('OTHER')
-  const [criteriaText, setCriteriaText] = useState('')
+  const [criteria, setCriteria] = useState<string[]>([''])
   const [prefix, setPrefix] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +62,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
     setDescription('')
     setMethodType('DEMONSTRATION')
     setTargetMilestone('OTHER')
-    setCriteriaText('')
+    setCriteria([''])
     setError(null)
   }
 
@@ -75,9 +75,8 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
     setSubmitting(true)
     setError(null)
     try {
-      const criteria = criteriaText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
+      const criteriaPayload = criteria
+        .map((t) => t.trim())
         .filter(Boolean)
         .map((text) => ({ text }))
 
@@ -86,7 +85,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
         description: description.trim() || undefined,
         methodType,
         targetMilestone,
-        criteria,
+        criteria: criteriaPayload,
         prefix: prefix || undefined,
       })
       if (res.success) {
@@ -107,25 +106,26 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
     <div className="params-v2 validation-v2 fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,20,25,0.4)' }}>
       <div
         className="pv-drawer-shell"
-        style={{ width: '100%', maxWidth: 640, margin: 0, maxHeight: '90vh' }}
+        style={{ width: '100%', maxWidth: 720, margin: 0, maxHeight: '92vh' }}
       >
-        <div className="pv-dr-head">
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--pv-fg)' }}>
+        <div className="vv-dr-head">
+          <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--pv-fg)' }}>
             New validation item
           </span>
-          <div className="pv-dr-spacer" />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="pv-icon-btn"
-            style={{ width: 24, height: 24 }}
-          >
-            <X size={14} />
-          </button>
+          <div className="vv-dr-head-actions">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="pv-icon-btn"
+              style={{ width: 26, height: 26 }}
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="pv-dr-body" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={handleSubmit} className="pv-dr-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {settings && settings.prefixes.length > 1 && (
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
@@ -229,16 +229,77 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
-              Acceptance criteria (one per line)
-            </label>
-            <textarea
-              value={criteriaText}
-              onChange={(e) => setCriteriaText(e.target.value)}
-              rows={4}
-              placeholder={'Each line becomes a criterion you mark Met / Partial / Not Met later.\nDemo runs end-to-end without manual intervention.\nApproach completes in <120s.'}
-              style={{ width: '100%', padding: 8, fontSize: 12.5, fontFamily: 'var(--pv-font-mono)', border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)' }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)' }}>
+                Acceptance criteria
+              </label>
+              <button
+                type="button"
+                onClick={() => setCriteria((c) => [...c, ''])}
+                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              >
+                <Plus size={12} /> Add criterion
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--pv-fg-3)', margin: '0 0 6px' }}>
+              Each criterion is something you mark Met / Partial / Not&nbsp;Met later. Add as many as
+              you need; leave blank ones empty — they are dropped on save.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {criteria.map((c, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    style={{
+                      width: 18,
+                      textAlign: 'right',
+                      fontSize: 11,
+                      color: 'var(--pv-fg-3)',
+                      fontFamily: 'var(--pv-font-mono)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {i + 1}.
+                  </span>
+                  <input
+                    type="text"
+                    value={c}
+                    onChange={(e) => {
+                      const next = [...criteria]
+                      next[i] = e.target.value
+                      setCriteria(next)
+                    }}
+                    placeholder={
+                      i === 0
+                        ? 'e.g. Demo runs end-to-end without manual intervention'
+                        : 'Another criterion…'
+                    }
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      height: 28,
+                      padding: '0 8px',
+                      fontSize: 12.5,
+                      border: '1px solid var(--pv-line)',
+                      borderRadius: 4,
+                      background: 'var(--pv-bg)',
+                      color: 'var(--pv-fg)',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCriteria((cs) => (cs.length > 1 ? cs.filter((_, k) => k !== i) : ['']))
+                    }
+                    aria-label="Remove criterion"
+                    className="pv-icon-btn"
+                    style={{ width: 24, height: 24, flexShrink: 0 }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {error && (
