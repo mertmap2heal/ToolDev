@@ -408,6 +408,42 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   box-shadow: inset 2px 0 0 var(--pv-amber);
 }
 
+/* Priority badge — four tiers with distinct visual weight.
+   Replaces the inline switch in ValidationPage that left medium = low. */
+.validation-v2 .vv-prio {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--pv-font-mono);
+  border: 1px solid transparent;
+}
+.validation-v2 .vv-prio.is-critical {
+  background: var(--pv-red-tint);
+  color: var(--pv-red);
+}
+.validation-v2 .vv-prio.is-high {
+  background: var(--pv-amber-tint);
+  color: var(--pv-amber);
+}
+.validation-v2 .vv-prio.is-medium {
+  background: rgba(43, 108, 176, 0.10);
+  color: var(--pv-blue, #2D4A63);
+}
+html[data-theme='midnight'] .validation-v2 .vv-prio.is-medium {
+  background: rgba(47, 129, 247, 0.18);
+  color: #79B8FF;
+}
+.validation-v2 .vv-prio.is-low {
+  background: var(--pv-gray-tint, rgba(148, 163, 184, 0.10));
+  color: var(--pv-fg-3);
+}
+
 /* Active-sort column header — distinguish from the rest of the row */
 .validation-v2 table.pv-params thead th.sortable.is-sorted {
   color: var(--pv-fg);

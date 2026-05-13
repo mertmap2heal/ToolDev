@@ -805,27 +805,7 @@ export default function ValidationPage() {
           <td style={{ fontSize: 12 }}>
             {it.priority ? (
               <span
-                className="vv-tag"
-                style={{
-                  background:
-                    it.priority === 'critical'
-                      ? 'var(--pv-red-tint)'
-                      : it.priority === 'high'
-                      ? 'var(--pv-amber-tint)'
-                      : it.priority === 'low'
-                      ? 'var(--pv-gray-tint)'
-                      : 'transparent',
-                  color:
-                    it.priority === 'critical'
-                      ? 'var(--pv-red)'
-                      : it.priority === 'high'
-                      ? 'var(--pv-amber)'
-                      : 'var(--pv-fg-3)',
-                  border: '1px solid transparent',
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                  fontSize: 10,
-                }}
+                className={`vv-prio is-${it.priority}`}
                 title={`Priority: ${it.priority}`}
               >
                 {it.priority}
