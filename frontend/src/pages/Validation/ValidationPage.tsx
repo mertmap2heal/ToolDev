@@ -601,8 +601,8 @@ export default function ValidationPage() {
             </span>
           )}
         </td>
-        <td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <td style={{ maxWidth: 0, width: '40%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             {inlineEditId === it.id ? (
               <input
                 autoFocus
@@ -660,8 +660,15 @@ export default function ValidationPage() {
               />
             ) : (
               <span
-                style={{ overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'text' }}
-                title="Double-click to rename · single-click does not open the drawer here"
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                  minWidth: 0,
+                  cursor: 'text',
+                }}
+                title={`${it.title}\n\nDouble-click to rename`}
                 // Single click stops the row's onClick so the drawer does not
                 // open while the user is about to double-click for rename.
                 // Open the drawer by clicking any other cell on the row.
