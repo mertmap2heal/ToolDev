@@ -11,6 +11,16 @@
   --val-suspect-tint:   var(--pv-amber-tint);
   --val-validated:      var(--pv-green);
   --val-validated-tint: var(--pv-green-tint);
+  /* Burndown bar + legend palette — kept readable on both themes */
+  --val-bar-validated:  var(--pv-green);
+  --val-bar-executed:   var(--pv-blue);
+  --val-bar-planned:    #94A3B8;
+  --val-bar-blocked:    var(--pv-red);
+  --val-bar-obsolete:   #64748B;
+}
+html[data-theme='midnight'] .validation-v2 {
+  --val-bar-planned:    #CBD5E1;
+  --val-bar-obsolete:   #94A3B8;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

@@ -1074,11 +1074,11 @@ export default function ValidationPage() {
             >
               <span>Milestone readiness</span>
               <span style={{ display: 'inline-flex', gap: 8, marginLeft: 'auto', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>
-                <Legend color="var(--pv-green, #1B4332)" label="validated" />
-                <Legend color="var(--pv-blue, #2D4A63)" label="executed" />
-                <Legend color="var(--pv-fg-3)" label="planned" />
-                <Legend color="var(--pv-red, #8B0000)" label="blocked" />
-                <Legend color="var(--pv-fg-4, #aaa)" label="obsolete" />
+                <Legend color="var(--val-bar-validated)" label="validated" />
+                <Legend color="var(--val-bar-executed)" label="executed" />
+                <Legend color="var(--val-bar-planned)" label="planned" />
+                <Legend color="var(--val-bar-blocked)" label="blocked" />
+                <Legend color="var(--val-bar-obsolete)" label="obsolete" />
               </span>
             </div>
             {ms.map((m) => {
@@ -1113,31 +1113,31 @@ export default function ValidationPage() {
                   >
                     {r.v > 0 && (
                       <span
-                        style={{ width: `${pct(r.v)}%`, background: 'var(--pv-green, #1B4332)' }}
+                        style={{ width: `${pct(r.v)}%`, background: 'var(--val-bar-validated)' }}
                         title={`${r.v} validated`}
                       />
                     )}
                     {r.e > 0 && (
                       <span
-                        style={{ width: `${pct(r.e)}%`, background: 'var(--pv-blue, #2D4A63)' }}
+                        style={{ width: `${pct(r.e)}%`, background: 'var(--val-bar-executed)' }}
                         title={`${r.e} executed`}
                       />
                     )}
                     {r.p > 0 && (
                       <span
-                        style={{ width: `${pct(r.p)}%`, background: 'var(--pv-fg-3)' }}
+                        style={{ width: `${pct(r.p)}%`, background: 'var(--val-bar-planned)' }}
                         title={`${r.p} planned`}
                       />
                     )}
                     {r.b > 0 && (
                       <span
-                        style={{ width: `${pct(r.b)}%`, background: 'var(--pv-red, #8B0000)' }}
+                        style={{ width: `${pct(r.b)}%`, background: 'var(--val-bar-blocked)' }}
                         title={`${r.b} blocked`}
                       />
                     )}
                     {r.o > 0 && (
                       <span
-                        style={{ width: `${pct(r.o)}%`, background: 'var(--pv-fg-4, #aaa)' }}
+                        style={{ width: `${pct(r.o)}%`, background: 'var(--val-bar-obsolete)' }}
                         title={`${r.o} obsolete`}
                       />
                     )}
