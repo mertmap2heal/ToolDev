@@ -934,6 +934,9 @@ export default function ValidationPage() {
 
   return (
     <div className={`params-v2 validation-v2 space-y-4 ${density === 'comfortable' ? 'is-comfortable' : ''}`}>
+      <a href="#validation-table" className="vv-skip-link">
+        Skip to validation table
+      </a>
       {itemsFetching && (
         <div
           role="status"
@@ -2282,7 +2285,7 @@ export default function ValidationPage() {
           )
         })()
       ) : (
-        <div className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
+        <div id="validation-table" tabIndex={-1} className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
           <table className="pv-params">
             <thead>
               <tr>

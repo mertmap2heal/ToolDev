@@ -451,6 +451,31 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   }
 }
 
+/* Skip-to-content link — visually hidden, surfaces on focus.
+   Lets keyboard / SR users jump past the toolbar straight to the
+   data table. */
+.validation-v2 .vv-skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 6px 12px;
+  background: var(--pv-green);
+  color: #fff;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  transform: translateY(-200%);
+  transition: transform 100ms ease-out;
+}
+.validation-v2 .vv-skip-link:focus,
+.validation-v2 .vv-skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 /* Focus-visible — keyboard users get a 2px forest ring on every
    interactive control. :focus-visible (not :focus) so mouse clicks
    don't paint outlines on the buttons they just clicked. */
