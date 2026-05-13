@@ -443,6 +443,23 @@ html[data-theme='midnight'] .validation-v2 :focus-visible {
   50%  { transform: translateX(160%); }
   100% { transform: translateX(360%); }
 }
+@media (prefers-reduced-motion: reduce) {
+  .validation-v2 .vv-loading-bar,
+  .vv-loading-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+  /* Soft-disable other purely decorative transitions inside the
+     validation surface for users who opt out of motion. */
+  .validation-v2 *,
+  .validation-v2 *::before,
+  .validation-v2 *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 /* Page title — Fraunces serif per design doctrine for the Validation
    surface. Parameters scope uses Inter; override scoped to .validation-v2
