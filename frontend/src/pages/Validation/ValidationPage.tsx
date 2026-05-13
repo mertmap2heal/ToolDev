@@ -1863,6 +1863,9 @@ export default function ValidationPage() {
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
+                          wordBreak: 'normal',
+                          overflowWrap: 'break-word',
+                          hyphens: 'auto',
                         }}
                       >
                         {it.title}
