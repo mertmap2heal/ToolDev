@@ -2294,13 +2294,18 @@ export default function ValidationPage() {
                 <th className={`sortable ${sortBy === 'key' ? 'is-sorted' : ''}`} style={{ width: 110 }} onClick={() => toggleSort('key')}>
                   Key<SortArrow col="key" />
                 </th>
-                <th>Title</th>
-                {colVisible('method') && <th style={{ width: 160 }}>Method</th>}
+                <th title="Validation item title. Double-click a cell to rename.">Title</th>
+                {colVisible('method') && (
+                  <th style={{ width: 160 }} title="Validation method (test, analysis, inspection, demonstration, similarity).">
+                    Method
+                  </th>
+                )}
                 {colVisible('milestone') && (
                   <th
                     className={`sortable ${sortBy === 'milestone' ? 'is-sorted' : ''}`}
                     style={{ width: 100 }}
                     onClick={() => toggleSort('milestone')}
+                    title="Programme milestone the item is allocated to (e.g. PDR, CDR, QR)."
                   >
                     Milestone<SortArrow col="milestone" />
                   </th>
@@ -2309,10 +2314,13 @@ export default function ValidationPage() {
                   className={`sortable ${sortBy === 'status' ? 'is-sorted' : ''}`}
                   style={{ width: 120 }}
                   onClick={() => toggleSort('status')}
+                  title="Lifecycle state. Allowed transitions: PLANNED -> EXECUTED -> VALIDATED."
                 >
                   Status<SortArrow col="status" />
                 </th>
-                <th style={{ width: 84 }}>Criteria</th>
+                <th style={{ width: 84 }} title="Acceptance criteria met / total. Tinted green when all met.">
+                  Criteria
+                </th>
                 {colVisible('priority') && (
                   <th
                     className={`sortable ${sortBy === 'priority' ? 'is-sorted' : ''}`}
@@ -2333,8 +2341,14 @@ export default function ValidationPage() {
                     Due<SortArrow col="dueDate" />
                   </th>
                 )}
-                <th style={{ width: 100 }}>Owner</th>
-                {colVisible('signoffs') && <th style={{ width: 80 }}>Sign-offs</th>}
+                <th style={{ width: 100 }} title="Person responsible for executing this validation.">
+                  Owner
+                </th>
+                {colVisible('signoffs') && (
+                  <th style={{ width: 80 }} title="Number of sign-offs recorded on this item.">
+                    Sign-offs
+                  </th>
+                )}
                 <th
                   className={`sortable ${sortBy === 'updatedAt' ? 'is-sorted' : ''}`}
                   style={{ width: 110 }}
