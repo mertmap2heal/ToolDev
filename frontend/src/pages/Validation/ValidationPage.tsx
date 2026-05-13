@@ -2462,6 +2462,10 @@ export default function ValidationPage() {
                   return (
                     <Fragment key={ms}>
                       <tr
+                        role="rowheader"
+                        tabIndex={0}
+                        aria-expanded={!collapsed}
+                        aria-label={`${ms} group, ${rows.length} ${rows.length === 1 ? 'item' : 'items'}, ${collapsed ? 'collapsed' : 'expanded'}`}
                         onClick={() =>
                           setCollapsedMilestones((prev) => {
                             const next = new Set(prev)
@@ -2470,6 +2474,17 @@ export default function ValidationPage() {
                             return next
                           })
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setCollapsedMilestones((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(ms)) next.delete(ms)
+                              else next.add(ms)
+                              return next
+                            })
+                          }
+                        }}
                         style={{
                           cursor: 'pointer',
                           background: 'var(--pv-surface-soft)',
