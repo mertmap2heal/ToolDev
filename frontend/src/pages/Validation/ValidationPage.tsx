@@ -2119,14 +2119,14 @@ export default function ValidationPage() {
                   />
                 </th>
                 <th style={{ width: 32 }} aria-label="Star"></th>
-                <th className="sortable" style={{ width: 110 }} onClick={() => toggleSort('key')}>
+                <th className={`sortable ${sortBy === 'key' ? 'is-sorted' : ''}`} style={{ width: 110 }} onClick={() => toggleSort('key')}>
                   Key<SortArrow col="key" />
                 </th>
                 <th>Title</th>
                 {colVisible('method') && <th style={{ width: 160 }}>Method</th>}
                 {colVisible('milestone') && (
                   <th
-                    className="sortable"
+                    className={`sortable ${sortBy === 'milestone' ? 'is-sorted' : ''}`}
                     style={{ width: 100 }}
                     onClick={() => toggleSort('milestone')}
                   >
@@ -2134,7 +2134,7 @@ export default function ValidationPage() {
                   </th>
                 )}
                 <th
-                  className="sortable"
+                  className={`sortable ${sortBy === 'status' ? 'is-sorted' : ''}`}
                   style={{ width: 120 }}
                   onClick={() => toggleSort('status')}
                 >
@@ -2143,7 +2143,7 @@ export default function ValidationPage() {
                 <th style={{ width: 84 }}>Criteria</th>
                 {colVisible('priority') && (
                   <th
-                    className="sortable"
+                    className={`sortable ${sortBy === 'priority' ? 'is-sorted' : ''}`}
                     style={{ width: 80 }}
                     onClick={() => toggleSort('priority')}
                     title="Item priority — critical / high / medium / low"
@@ -2153,7 +2153,7 @@ export default function ValidationPage() {
                 )}
                 {colVisible('due') && (
                   <th
-                    className="sortable"
+                    className={`sortable ${sortBy === 'dueDate' ? 'is-sorted' : ''}`}
                     style={{ width: 100 }}
                     onClick={() => toggleSort('dueDate')}
                     title="When this validation is due"
@@ -2164,7 +2164,7 @@ export default function ValidationPage() {
                 <th style={{ width: 100 }}>Owner</th>
                 {colVisible('signoffs') && <th style={{ width: 80 }}>Sign-offs</th>}
                 <th
-                  className="sortable"
+                  className={`sortable ${sortBy === 'updatedAt' ? 'is-sorted' : ''}`}
                   style={{ width: 110 }}
                   onClick={() => toggleSort('updatedAt')}
                   title="When this item was last modified"

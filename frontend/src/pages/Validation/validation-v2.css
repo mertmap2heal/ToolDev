@@ -394,6 +394,24 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   color: #0D1117;
 }
 
+/* Active-sort column header — distinguish from the rest of the row */
+.validation-v2 table.pv-params thead th.sortable.is-sorted {
+  color: var(--pv-fg);
+  font-weight: 600;
+}
+.validation-v2 table.pv-params thead th.sortable.is-sorted::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  background: var(--pv-green);
+}
+.validation-v2 table.pv-params thead th.sortable {
+  position: relative;
+}
+
 /* Drawer header redesign */
 .validation-v2 .vv-dr-head {
   display: flex;
