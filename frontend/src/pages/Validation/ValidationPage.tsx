@@ -1088,10 +1088,12 @@ export default function ValidationPage() {
                   className={`vv-status-pill ${statusPillCls(s)}`}
                   style={{
                     cursor: 'pointer',
-                    outline: statusFilter === s ? '2px solid var(--pv-blue)' : 'none',
+                    outline: statusFilter === s ? '2px solid var(--pv-green)' : 'none',
                     outlineOffset: 1,
                   }}
                   title={`${coverage.byStatus[s]} ${STATUS_LABEL[s]} item(s) — click to filter`}
+                  aria-pressed={statusFilter === s}
+                  aria-label={`Filter by status ${STATUS_LABEL[s]}, ${coverage.byStatus[s]} items`}
                 >
                   <span style={{ fontFamily: 'var(--pv-font-mono)', marginRight: 4 }}>
                     {coverage.byStatus[s]}
