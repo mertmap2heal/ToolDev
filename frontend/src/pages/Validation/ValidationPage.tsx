@@ -2230,6 +2230,7 @@ export default function ValidationPage() {
                 patch: { targetMilestone: ms },
               })
               if (res.success) toast.success(`Set milestone on ${res.data?.count ?? 0} items`)
+              else toast.error(res.error ?? 'Milestone change failed')
               setSelectedIds(new Set())
               refetchAll()
             }}
@@ -2276,7 +2277,7 @@ export default function ValidationPage() {
                 }
                 return
               }
-              if (s === 'VALIDATED') toast.success(`Marked ${selectedIds.size} item(s) VALIDATED`)
+              toast.success(`Set status on ${res.data?.count ?? selectedIds.size} item(s) → ${s}`)
               setSelectedIds(new Set())
               refetchAll()
             }}
@@ -2296,10 +2297,20 @@ export default function ValidationPage() {
               const owner = e.target.value
               e.currentTarget.value = ''
               if (owner === '') return
-              await validationService.bulkUpdate(projectId, {
+              const count = selectedIds.size
+              const res = await validationService.bulkUpdate(projectId, {
                 ids: Array.from(selectedIds),
                 patch: { ownerUserId: owner === 'NULL' ? null : owner },
               })
+              if (res.success) {
+                const label =
+                  owner === 'NULL'
+                    ? 'Unassigned owner'
+                    : `Assigned ${projectMembers.find((m) => m.userId === owner)?.user?.name ?? 'owner'}`
+                toast.success(`${label} on ${res.data?.count ?? count} item(s)`)
+              } else {
+                toast.error(res.error ?? 'Owner change failed')
+              }
               setSelectedIds(new Set())
               refetchAll()
             }}
