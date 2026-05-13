@@ -2310,7 +2310,11 @@ export default function ValidationPage() {
         })()
       ) : (
         <div id="validation-table" tabIndex={-1} className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
-          <table className="pv-params">
+          <table
+            className="pv-params"
+            aria-label={`Validation items, ${items.length} ${items.length === 1 ? 'row' : 'rows'}, sorted by ${sortBy} ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
+            aria-rowcount={items.length}
+          >
             <thead>
               <tr>
                 <th className="col-check">
