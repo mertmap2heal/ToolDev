@@ -397,6 +397,10 @@ export default function ValidationPage() {
         !i.deletedAt,
     ).length
   }, [unfilteredItems])
+  const starredCount = useMemo(
+    () => unfilteredItems.filter((i) => i.starredByMe).length,
+    [unfilteredItems],
+  )
 
   const { data: coverage, refetch: refetchCoverage } = useQuery({
     queryKey: ['validation-coverage', projectId],
@@ -1267,6 +1271,7 @@ export default function ValidationPage() {
           className={`pv-pill ${starredOnly ? 'active' : ''}`}
         >
           <Star size={14} className={starredOnly ? 'vv-star-btn on' : ''} /> Starred
+          {starredCount > 0 && <span className="pv-badge">{starredCount}</span>}
         </button>
         <button
           type="button"
