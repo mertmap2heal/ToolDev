@@ -356,6 +356,21 @@ html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-unsaved {
   box-shadow: inset 0 -1px 0 var(--pv-line);
 }
 
+/* Row selection / active row — Parameters paints them blue.
+   Validation design doctrine is forest, so retint here. */
+.validation-v2 table.pv-params tbody tr.is-selected td,
+.validation-v2 table.pv-params tbody tr.is-selected td.col-check,
+.validation-v2 table.pv-params tbody tr.is-selected td.col-name {
+  background: var(--pv-green-tint);
+}
+.validation-v2 table.pv-params tbody tr.is-active td {
+  background: rgba(27, 67, 50, 0.08);
+  box-shadow: inset 2px 0 0 var(--pv-green);
+}
+html[data-theme='midnight'] .validation-v2 table.pv-params tbody tr.is-active td {
+  background: rgba(63, 185, 80, 0.10);
+}
+
 /* Drawer header redesign */
 .validation-v2 .vv-dr-head {
   display: flex;
