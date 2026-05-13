@@ -371,6 +371,18 @@ export default function ValidationPage() {
     },
   })
 
+  // Side query: items owned by the current user, regardless of the active
+  // filter set. Drives the count badge on the "Mine" pill so a glance shows
+  // how much is on the user's plate before they apply the filter.
+  const { data: mineCount = 0 } = useQuery({
+    queryKey: ['validation-mine-count', projectId, currentUserId],
+    enabled: !!projectId && !!currentUserId,
+    queryFn: async () => {
+      const res = await validationService.list(projectId!, { ownerId: currentUserId })
+      return res.success && res.data ? res.data.length : 0
+    },
+  })
+
   const { data: coverage, refetch: refetchCoverage } = useQuery({
     queryKey: ['validation-coverage', projectId],
     enabled: !!projectId,
@@ -1221,6 +1233,7 @@ export default function ValidationPage() {
             className={`pv-pill ${ownerFilter === currentUserId ? 'active' : ''}`}
           >
             Mine
+            {mineCount > 0 && <span className="pv-badge">{mineCount}</span>}
           </button>
         )}
         <button
