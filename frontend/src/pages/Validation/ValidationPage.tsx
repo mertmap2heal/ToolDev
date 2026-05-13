@@ -2310,7 +2310,12 @@ export default function ValidationPage() {
                   />
                 </th>
                 <th style={{ width: 32 }} aria-label="Star"></th>
-                <th className={`sortable ${sortBy === 'key' ? 'is-sorted' : ''}`} style={{ width: 110 }} onClick={() => toggleSort('key')}>
+                <th
+                  className={`sortable ${sortBy === 'key' ? 'is-sorted' : ''}`}
+                  style={{ width: 110 }}
+                  onClick={() => toggleSort('key')}
+                  aria-sort={sortBy === 'key' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                >
                   Key<SortArrow col="key" />
                 </th>
                 <th title="Validation item title. Double-click a cell to rename.">Title</th>
@@ -2325,6 +2330,7 @@ export default function ValidationPage() {
                     style={{ width: 100 }}
                     onClick={() => toggleSort('milestone')}
                     title="Programme milestone the item is allocated to (e.g. PDR, CDR, QR)."
+                    aria-sort={sortBy === 'milestone' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
                     Milestone<SortArrow col="milestone" />
                   </th>
@@ -2334,6 +2340,7 @@ export default function ValidationPage() {
                   style={{ width: 120 }}
                   onClick={() => toggleSort('status')}
                   title="Lifecycle state. Allowed transitions: PLANNED -> EXECUTED -> VALIDATED."
+                  aria-sort={sortBy === 'status' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   Status<SortArrow col="status" />
                 </th>
@@ -2346,6 +2353,7 @@ export default function ValidationPage() {
                     style={{ width: 80 }}
                     onClick={() => toggleSort('priority')}
                     title="Item priority — critical / high / medium / low"
+                    aria-sort={sortBy === 'priority' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
                     Priority<SortArrow col="priority" />
                   </th>
@@ -2356,6 +2364,7 @@ export default function ValidationPage() {
                     style={{ width: 100 }}
                     onClick={() => toggleSort('dueDate')}
                     title="When this validation is due"
+                    aria-sort={sortBy === 'dueDate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
                     Due<SortArrow col="dueDate" />
                   </th>
@@ -2373,6 +2382,7 @@ export default function ValidationPage() {
                   style={{ width: 110 }}
                   onClick={() => toggleSort('updatedAt')}
                   title="When this item was last modified"
+                  aria-sort={sortBy === 'updatedAt' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   Updated<SortArrow col="updatedAt" />
                 </th>
