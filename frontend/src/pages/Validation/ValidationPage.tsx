@@ -2106,6 +2106,7 @@ export default function ValidationPage() {
                       key={it.id}
                       type="button"
                       draggable
+                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. Open details.`}
                       onDragStart={(e) => {
                         setDragItemId(it.id)
                         e.dataTransfer.setData('text/plain', it.id)
