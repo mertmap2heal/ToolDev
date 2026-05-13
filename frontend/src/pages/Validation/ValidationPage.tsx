@@ -1232,26 +1232,41 @@ export default function ValidationPage() {
             placeholder="Search by title, description, or key…"
           />
           {search ? (
-            <button
-              type="button"
-              aria-label="Clear search"
-              title="Clear search (Esc)"
-              onClick={() => {
-                setSearch('')
-                document.getElementById('validation-search')?.focus()
-              }}
-              style={{
-                background: 'none',
-                border: 0,
-                padding: 2,
-                color: 'var(--pv-fg-3)',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
-            >
-              <X size={12} />
-            </button>
+            <>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'var(--pv-fg-3)',
+                  fontFamily: 'var(--pv-font-mono)',
+                  padding: '0 4px',
+                  whiteSpace: 'nowrap',
+                }}
+                aria-live="polite"
+                title={`${items.length} item${items.length === 1 ? '' : 's'} matched`}
+              >
+                {items.length} match{items.length === 1 ? '' : 'es'}
+              </span>
+              <button
+                type="button"
+                aria-label="Clear search"
+                title="Clear search (Esc)"
+                onClick={() => {
+                  setSearch('')
+                  document.getElementById('validation-search')?.focus()
+                }}
+                style={{
+                  background: 'none',
+                  border: 0,
+                  padding: 2,
+                  color: 'var(--pv-fg-3)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                <X size={12} />
+              </button>
+            </>
           ) : (
             <span className="pv-kbd">⌘F</span>
           )}
