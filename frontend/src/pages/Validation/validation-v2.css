@@ -371,6 +371,29 @@ html[data-theme='midnight'] .validation-v2 table.pv-params tbody tr.is-active td
   background: rgba(63, 185, 80, 0.10);
 }
 
+/* Active pill + badge — Parameters paints blue, Validation paints forest. */
+.validation-v2 .pv-pill.active {
+  background: var(--pv-green-tint);
+  color: var(--pv-green);
+  border-color: var(--pv-green);
+}
+.validation-v2 .pv-badge {
+  background: var(--pv-green);
+  color: #fff;
+}
+.validation-v2 .pv-pill.active .pv-badge {
+  background: var(--pv-green);
+  color: #fff;
+}
+html[data-theme='midnight'] .validation-v2 .pv-pill.active {
+  color: #86EFAC;
+  border-color: rgba(74, 222, 128, 0.40);
+}
+html[data-theme='midnight'] .validation-v2 .pv-badge {
+  background: #3FB950;
+  color: #0D1117;
+}
+
 /* Drawer header redesign */
 .validation-v2 .vv-dr-head {
   display: flex;
