@@ -2285,6 +2285,59 @@ export default function ValidationPage() {
               <Trash2 size={12} /> Delete
             </button>
           )}
+          <label className="b" style={{ cursor: 'pointer' }} title="Export the selected items">
+            <Download size={12} /> Export
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const fmt = e.target.value
+                e.currentTarget.value = ''
+                if (!fmt) return
+                const rows = items.filter((i) => selectedIds.has(i.id))
+                if (fmt === 'csv') {
+                  const head = ['Key', 'Title', 'Method', 'Milestone', 'Status', 'Priority', 'Owner', 'CriteriaMet', 'CriteriaTotal']
+                  const esc = (s: string) => `"${String(s).replace(/"/g, '""')}"`
+                  const lines = [head.map(esc).join(',')]
+                  for (const r of rows) {
+                    const total = r.criteria?.length ?? 0
+                    const met = r.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
+                    lines.push([r.key, r.title, r.methodType, r.targetMilestone, r.status, r.priority ?? '', r.owner?.name ?? '', String(met), String(total)].map(esc).join(','))
+                  }
+                  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `validation-selected-${rows.length}.csv`
+                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                  setTimeout(() => URL.revokeObjectURL(url), 1000)
+                } else if (fmt === 'md') {
+                  const out = [`# Validation — ${rows.length} selected items`, '', `Generated: ${new Date().toISOString()}`, '']
+                  for (const r of rows) {
+                    const total = r.criteria?.length ?? 0
+                    const met = r.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
+                    out.push(`## ${r.key} — ${r.title}`, '', `- Method: ${r.methodType} · Milestone: ${r.targetMilestone} · Status: ${r.status} · Priority: ${r.priority ?? '—'}`, `- Owner: ${r.owner?.name ?? '—'}`, `- Criteria: ${met}/${total} met`, '')
+                    for (const c of (r.criteria ?? [])) {
+                      const mark = c.outcome === 'MET' ? '[x]' : c.outcome === 'PARTIAL' ? '[~]' : c.outcome === 'NOT_MET' ? '[!]' : '[ ]'
+                      out.push(`  - ${mark} ${c.text}`)
+                    }
+                    out.push('', '---', '')
+                  }
+                  const blob = new Blob([out.join('\n')], { type: 'text/markdown' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `validation-selected-${rows.length}.md`
+                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                  setTimeout(() => URL.revokeObjectURL(url), 1000)
+                }
+              }}
+              style={{ background: 'transparent', border: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', outline: 'none' }}
+            >
+              <option value="">Format…</option>
+              <option value="csv">CSV</option>
+              <option value="md">Markdown</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setSelectedIds(new Set())}
