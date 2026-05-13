@@ -1107,6 +1107,8 @@ export default function ValidationPage() {
                   onClick={() => setShowSuspectOnly((v) => !v)}
                   title="Items whose linked requirement was updated after the validation — re-run recommended."
                   className={`vv-suspect-chip ${showSuspectOnly ? 'active' : ''}`}
+                  aria-pressed={showSuspectOnly}
+                  aria-label={`Filter by suspect items, ${coverage.suspectCount} flagged for review`}
                 >
                   <AlertTriangle size={11} /> {coverage.suspectCount} suspect
                 </button>
@@ -2314,7 +2316,13 @@ export default function ValidationPage() {
           )
         })()
       ) : (
-        <div id="validation-table" tabIndex={-1} className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
+        <div
+          id="validation-table"
+          tabIndex={-1}
+          className="pv-table-pane"
+          aria-busy={itemsFetching}
+          style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}
+        >
           <table
             className="pv-params"
             aria-label={`Validation items, ${items.length} ${items.length === 1 ? 'row' : 'rows'}, sorted by ${sortBy} ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
