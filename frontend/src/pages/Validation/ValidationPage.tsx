@@ -1021,15 +1021,19 @@ export default function ValidationPage() {
             type="button"
             onClick={() => setCreateFromReqOpen(true)}
             className="pv-btn"
+            title="Bulk-create items from requirements (Cmd+Shift+F)"
           >
             <ListPlus size={14} /> From requirements
+            <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⌘⇧F</span>
           </button>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
             className="pv-btn primary"
+            title="Create a new validation item (Cmd+N)"
           >
             <Plus size={14} /> New item
+            <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⌘N</span>
           </button>
         </div>
       </div>

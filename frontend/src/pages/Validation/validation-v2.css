@@ -473,6 +473,19 @@ html[data-theme='midnight'] .validation-v2 :focus-visible {
   outline-color: #86EFAC;
 }
 
+/* Hotkey hint inside a primary forest button — invert kbd colour so the
+   badge stays legible on the dark forest background. */
+.validation-v2 .pv-btn.primary .pv-kbd {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.20);
+}
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary .pv-kbd {
+  color: rgba(13, 17, 23, 0.85);
+  background: rgba(13, 17, 23, 0.12);
+  border-color: rgba(13, 17, 23, 0.25);
+}
+
 /* Top loading bar — animated forest stripe while items are fetching. */
 .validation-v2 .vv-loading-bar,
 .vv-loading-bar {
