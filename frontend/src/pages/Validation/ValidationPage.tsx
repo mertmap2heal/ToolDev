@@ -2381,13 +2381,32 @@ export default function ValidationPage() {
             <button
               type="button"
               onClick={async () => {
-                if (!window.confirm(`Soft-delete ${selectedIds.size} item(s)?`)) return
-                await validationService.bulkUpdate(projectId, {
-                  ids: Array.from(selectedIds),
+                const ids = Array.from(selectedIds)
+                if (ids.length === 0) return
+                const res = await validationService.bulkUpdate(projectId, {
+                  ids,
                   patch: { deletedAt: 'now' },
                 })
                 setSelectedIds(new Set())
                 refetchAll()
+                if (res.success) {
+                  toast.info(
+                    `Archived ${ids.length} item${ids.length === 1 ? '' : 's'}.`,
+                    {
+                      label: 'Undo',
+                      onClick: async () => {
+                        await validationService.bulkUpdate(projectId, {
+                          ids,
+                          patch: { deletedAt: 'null' },
+                        })
+                        refetchAll()
+                        toast.success('Restored.')
+                      },
+                    },
+                  )
+                } else {
+                  toast.error(res.error ?? 'Archive failed')
+                }
               }}
               className="b danger"
             >
@@ -2487,7 +2506,7 @@ export default function ValidationPage() {
         onOpenManual={() => setHelpOpen(true)}
       />
 
-      <ValidationToastRenderer toasts={toast.toasts} />
+      <ValidationToastRenderer toasts={toast.toasts} onDismiss={toast.dismiss} />
 
       <ValidationItemDetailDrawer
         projectId={projectId}
