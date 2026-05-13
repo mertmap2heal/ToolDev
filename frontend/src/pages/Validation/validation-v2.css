@@ -408,6 +408,28 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   box-shadow: inset 2px 0 0 var(--pv-amber);
 }
 
+/* Focus-visible — keyboard users get a 2px forest ring on every
+   interactive control. :focus-visible (not :focus) so mouse clicks
+   don't paint outlines on the buttons they just clicked. */
+.validation-v2 .pv-pill:focus-visible,
+.validation-v2 .pv-btn:focus-visible,
+.validation-v2 .pv-icon-btn:focus-visible,
+.validation-v2 .vv-menu-item:focus-visible,
+.validation-v2 .pv-check:focus-visible,
+.validation-v2 button:focus-visible,
+.validation-v2 a:focus-visible {
+  outline: 2px solid var(--pv-green);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.validation-v2 table.pv-params tbody tr:focus-visible {
+  outline: 2px solid var(--pv-green);
+  outline-offset: -2px;
+}
+html[data-theme='midnight'] .validation-v2 :focus-visible {
+  outline-color: #86EFAC;
+}
+
 /* Top loading bar — animated forest stripe while items are fetching. */
 .validation-v2 .vv-loading-bar,
 .vv-loading-bar {
