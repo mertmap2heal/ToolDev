@@ -106,7 +106,21 @@ export default function ValidationPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [tagsAny, setTagsAny] = useState<string[]>([])
   const [overdueOnly, setOverdueOnly] = useState(false)
-  const [density, setDensity] = useState<'compact' | 'comfortable'>('compact')
+  const [density, setDensity] = useState<'compact' | 'comfortable'>(() => {
+    try {
+      const v = localStorage.getItem('validation:density')
+      return v === 'comfortable' ? 'comfortable' : 'compact'
+    } catch {
+      return 'compact'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('validation:density', density)
+    } catch {
+      /* storage blocked - ignore */
+    }
+  }, [density])
   const [criterionFilter, setCriterionFilter] = useState<'' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria'>('')
   const [groupByMilestone, setGroupByMilestone] = useState(false)
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
