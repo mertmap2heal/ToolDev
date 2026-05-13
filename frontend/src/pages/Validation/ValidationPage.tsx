@@ -339,9 +339,18 @@ export default function ValidationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Debounce search so every keystroke doesn't trigger a refetch.
+  // 250ms is short enough to still feel live but spares the API on
+  // fast typing.
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
   const filters = useMemo(
     () => ({
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
       status: statusFilter || undefined,
       methodType: methodFilter || undefined,
       milestone: milestoneFilter || undefined,
@@ -352,7 +361,7 @@ export default function ValidationPage() {
       tagsAny: tagsAny.length > 0 ? tagsAny : undefined,
       ownerId: ownerFilter || undefined,
     }),
-    [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir, tagsAny, ownerFilter],
+    [debouncedSearch, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir, tagsAny, ownerFilter],
   )
 
   // Save filter state on every change.
