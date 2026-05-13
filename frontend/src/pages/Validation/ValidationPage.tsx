@@ -2451,8 +2451,13 @@ export default function ValidationPage() {
 
 
       {selectedIds.size > 0 && (
-        <div className="pv-bulk-dock">
-          <span className="ct">
+        <div className="pv-bulk-dock" role="region" aria-label="Bulk actions">
+          <span
+            className="ct"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             <span className="num">{selectedIds.size}</span> selected
           </span>
           <span className="sep" />
