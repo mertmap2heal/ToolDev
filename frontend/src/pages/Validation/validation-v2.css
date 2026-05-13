@@ -408,6 +408,13 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   box-shadow: inset 2px 0 0 var(--pv-amber);
 }
 
+/* Activity feed row hover — pairs with .is-clickable cursor:pointer in
+   ActivityPage. Subtle surface lift so the deep-link affordance is
+   obvious on hover, neutral when the row has no link target. */
+.validation-v2 li.is-clickable:hover {
+  background: var(--pv-surface-soft);
+}
+
 /* Priority badge — four tiers with distinct visual weight.
    Replaces the inline switch in ValidationPage that left medium = low. */
 .validation-v2 .vv-prio {
