@@ -394,6 +394,12 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   color: #0D1117;
 }
 
+/* Suspect row — left amber stripe so reviewers spot follow-ups at a glance
+   without having to find the inline chip in the title cell. */
+.validation-v2 table.pv-params tbody tr.is-suspect td.col-check {
+  box-shadow: inset 2px 0 0 var(--pv-amber);
+}
+
 /* Active-sort column header — distinguish from the rest of the row */
 .validation-v2 table.pv-params thead th.sortable.is-sorted {
   color: var(--pv-fg);
