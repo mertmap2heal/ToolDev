@@ -85,7 +85,20 @@ export default function ValidationPage() {
   const [methodFilter, setMethodFilter] = useState<ValidationMethodType | ''>('')
   const [milestoneFilter, setMilestoneFilter] = useState<ValidationMilestone | ''>('')
   const [ownerFilter, setOwnerFilter] = useState<string>('')
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(() => {
+    try {
+      return localStorage.getItem('validation:filtersOpen') === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('validation:filtersOpen', filtersOpen ? '1' : '0')
+    } catch {
+      /* storage blocked - ignore */
+    }
+  }, [filtersOpen])
   const [createOpen, setCreateOpen] = useState(false)
   const [createFromReqOpen, setCreateFromReqOpen] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
