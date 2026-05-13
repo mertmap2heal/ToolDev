@@ -1346,6 +1346,8 @@ export default function ValidationPage() {
           type="button"
           onClick={() => setFiltersOpen((v) => !v)}
           className={`pv-pill ${activeFilterCount > 0 ? 'active' : ''}`}
+          aria-expanded={filtersOpen}
+          aria-controls="validation-filters-panel"
         >
           <Filter size={14} /> Filters
           {activeFilterCount > 0 && <span className="pv-badge">{activeFilterCount}</span>}
@@ -1358,6 +1360,7 @@ export default function ValidationPage() {
             }
             title={ownerFilter === currentUserId ? 'Show items from all owners' : 'Show only items assigned to you'}
             className={`pv-pill ${ownerFilter === currentUserId ? 'active' : ''}`}
+            aria-pressed={ownerFilter === currentUserId}
           >
             Mine
             {mineCount > 0 && <span className="pv-badge">{mineCount}</span>}
@@ -1368,6 +1371,7 @@ export default function ValidationPage() {
           onClick={() => setOverdueOnly((v) => !v)}
           title={overdueOnly ? 'Show all items' : 'Show only items past their due date and not yet validated'}
           className={`pv-pill ${overdueOnly ? 'active' : ''}`}
+          aria-pressed={overdueOnly}
         >
           <AlertTriangle size={14} /> Overdue
           {overdueCount > 0 && <span className="pv-badge">{overdueCount}</span>}
@@ -1377,6 +1381,7 @@ export default function ValidationPage() {
           onClick={() => setStarredOnly((v) => !v)}
           title={starredOnly ? 'Show all items' : 'Show only items you starred'}
           className={`pv-pill ${starredOnly ? 'active' : ''}`}
+          aria-pressed={starredOnly}
         >
           <Star size={14} className={starredOnly ? 'vv-star-btn on' : ''} /> Starred
           {starredCount > 0 && <span className="pv-badge">{starredCount}</span>}
@@ -1390,6 +1395,7 @@ export default function ValidationPage() {
               : 'Show soft-deleted items so they can be restored'
           }
           className={`pv-pill ${showArchived ? 'active' : ''}`}
+          aria-pressed={showArchived}
         >
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
@@ -1835,6 +1841,7 @@ export default function ValidationPage() {
 
       {filtersOpen && (
         <div
+          id="validation-filters-panel"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
