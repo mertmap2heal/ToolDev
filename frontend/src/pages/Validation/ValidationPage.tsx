@@ -1915,6 +1915,40 @@ export default function ValidationPage() {
           })}
         </div>
       ) : items.length === 0 ? (
+        (() => {
+          const filtersActive = !!(search || statusFilter || methodFilter || milestoneFilter || ownerFilter)
+          if (filtersActive) {
+            return (
+              <div
+                style={{
+                  background: 'var(--pv-bg)',
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 6,
+                  padding: 32,
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 480, margin: '0 auto' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--pv-fg)' }}>
+                    No matches.
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--pv-fg-3)' }}>
+                    No validation items match the current filters. Try widening the criteria or clear the filters.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setSearch(''); clearFilters() }}
+                      className="pv-btn primary"
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+          return (
         <div
           style={{
             background: 'var(--pv-bg)',
@@ -1970,6 +2004,8 @@ export default function ValidationPage() {
             </p>
           </div>
         </div>
+          )
+        })()
       ) : (
         <div className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
           <table className="pv-params">
