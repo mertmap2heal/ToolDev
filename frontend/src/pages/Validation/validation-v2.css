@@ -399,6 +399,14 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
 .validation-v2 table.pv-params tbody tr.is-suspect td.col-check {
   box-shadow: inset 2px 0 0 var(--pv-amber);
 }
+/* Overdue row — left red stripe. Suspect amber wins if both are set
+   because suspect is the newer signal that something needs review. */
+.validation-v2 table.pv-params tbody tr.is-overdue td.col-check {
+  box-shadow: inset 2px 0 0 var(--pv-red);
+}
+.validation-v2 table.pv-params tbody tr.is-suspect.is-overdue td.col-check {
+  box-shadow: inset 2px 0 0 var(--pv-amber);
+}
 
 /* Active-sort column header — distinguish from the rest of the row */
 .validation-v2 table.pv-params thead th.sortable.is-sorted {

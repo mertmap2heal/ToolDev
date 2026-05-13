@@ -558,7 +558,14 @@ export default function ValidationPage() {
       <tr
         key={it.id}
         onClick={() => setSelectedItemId(it.id)}
-        className={`${it.deletedAt ? 'is-archived' : ''} ${selectedIds.has(it.id) ? 'is-selected' : ''} ${it.isSuspect ? 'is-suspect' : ''}`}
+        className={`${it.deletedAt ? 'is-archived' : ''} ${selectedIds.has(it.id) ? 'is-selected' : ''} ${it.isSuspect ? 'is-suspect' : ''} ${
+          it.dueDate &&
+          new Date(it.dueDate).getTime() < Date.now() &&
+          it.status !== 'VALIDATED' &&
+          it.status !== 'OBSOLETE'
+            ? 'is-overdue'
+            : ''
+        }`}
         style={{ cursor: 'pointer', opacity: it.deletedAt ? 0.6 : 1 }}
       >
         <td className="col-check" onClick={(e) => e.stopPropagation()}>
