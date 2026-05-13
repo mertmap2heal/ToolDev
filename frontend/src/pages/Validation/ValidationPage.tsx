@@ -1399,9 +1399,15 @@ export default function ValidationPage() {
         >
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
-        <div style={{ display: 'inline-flex', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--pv-line)' }}>
+        <div
+          role="radiogroup"
+          aria-label="View mode"
+          style={{ display: 'inline-flex', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--pv-line)' }}
+        >
           <button
             type="button"
+            role="radio"
+            aria-checked={viewMode === 'list'}
             onClick={() => setViewMode('list')}
             className={`pv-pill ${viewMode === 'list' ? 'active' : ''}`}
             title="Table view"
@@ -1411,6 +1417,8 @@ export default function ValidationPage() {
           </button>
           <button
             type="button"
+            role="radio"
+            aria-checked={viewMode === 'board'}
             onClick={() => setViewMode('board')}
             className={`pv-pill ${viewMode === 'board' ? 'active' : ''}`}
             title="Kanban view grouped by status"
@@ -1425,6 +1433,7 @@ export default function ValidationPage() {
             onClick={() => setGroupByMilestone((v) => !v)}
             title={groupByMilestone ? 'Switch back to a flat list' : 'Group rows under collapsible milestone headers'}
             className={`pv-pill ${groupByMilestone ? 'active' : ''}`}
+            aria-pressed={groupByMilestone}
           >
             Group: Milestone
           </button>
