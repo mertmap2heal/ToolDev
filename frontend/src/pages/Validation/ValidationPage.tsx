@@ -548,16 +548,23 @@ export default function ValidationPage() {
       if (inField) return
       if (e.key === 'j' || e.key === 'k') {
         if (items.length === 0) return
+        // When grouped, skip rows whose milestone group is currently
+        // collapsed - they aren't on-screen and would otherwise leave
+        // the cursor invisible. Flat list = no exclusion.
+        const visible = groupByMilestone
+          ? items.filter((i) => !collapsedMilestones.has(i.targetMilestone || 'OTHER'))
+          : items
+        if (visible.length === 0) return
         const idx = selectedItemId
-          ? items.findIndex((i) => i.id === selectedItemId)
+          ? visible.findIndex((i) => i.id === selectedItemId)
           : -1
         const next =
           e.key === 'j'
-            ? Math.min(items.length - 1, idx + 1)
+            ? Math.min(visible.length - 1, idx + 1)
             : Math.max(0, idx - 1)
-        if (next >= 0 && next < items.length) {
+        if (next >= 0 && next < visible.length) {
           e.preventDefault()
-          setSelectedItemId(items[next].id)
+          setSelectedItemId(visible[next].id)
         }
       } else if (e.key === 'Enter' && selectedItemId === null && items.length > 0) {
         e.preventDefault()
@@ -591,7 +598,7 @@ export default function ValidationPage() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen])
+  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones])
 
   if (!projectId) return null
 
