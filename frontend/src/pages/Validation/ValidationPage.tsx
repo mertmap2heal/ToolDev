@@ -2011,6 +2011,8 @@ export default function ValidationPage() {
             return (
               <div
                 key={s}
+                role="region"
+                aria-label={`${STATUS_LABEL[s]} column, ${cards.length} ${cards.length === 1 ? 'item' : 'items'}`}
                 onDragOver={(e) => {
                   if (!dragItemId) return
                   e.preventDefault()
