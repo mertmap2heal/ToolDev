@@ -1639,6 +1639,81 @@ export default function ValidationPage() {
         </div>
       )}
 
+      {!filtersOpen && activeFilterCount > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 6,
+            fontSize: 11,
+            color: 'var(--pv-fg-3)',
+            margin: 0,
+          }}
+        >
+          <span style={{ marginRight: 2 }}>Filters:</span>
+          {statusFilter && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter('')}
+              className="pv-pill compact active"
+              title="Remove status filter"
+            >
+              <span>Status: {STATUS_LABEL[statusFilter]}</span>
+              <X size={11} />
+            </button>
+          )}
+          {methodFilter && (
+            <button
+              type="button"
+              onClick={() => setMethodFilter('')}
+              className="pv-pill compact active"
+              title="Remove method filter"
+            >
+              <span>Method: {METHOD_LABEL[methodFilter]}</span>
+              <X size={11} />
+            </button>
+          )}
+          {milestoneFilter && (
+            <button
+              type="button"
+              onClick={() => setMilestoneFilter('')}
+              className="pv-pill compact active"
+              title="Remove milestone filter"
+            >
+              <span>Milestone: {milestoneFilter}</span>
+              <X size={11} />
+            </button>
+          )}
+          {ownerFilter && (
+            <button
+              type="button"
+              onClick={() => setOwnerFilter('')}
+              className="pv-pill compact active"
+              title="Remove owner filter"
+            >
+              <span>Owner: {projectMembers.find((m) => m.userId === ownerFilter)?.user?.name ?? 'set'}</span>
+              <X size={11} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{
+              background: 'none',
+              border: 0,
+              padding: '2px 4px',
+              fontSize: 11,
+              color: 'var(--pv-fg-3)',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {filtersOpen && (
         <div
           style={{
