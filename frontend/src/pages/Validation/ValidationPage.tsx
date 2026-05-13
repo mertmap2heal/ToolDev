@@ -1291,7 +1291,9 @@ export default function ValidationPage() {
           <Search size={14} />
           <input
             id="validation-search"
-            type="text"
+            type="search"
+            role="searchbox"
+            aria-label="Search validation items by title, description, or key"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
