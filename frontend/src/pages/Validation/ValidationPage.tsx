@@ -2078,7 +2078,18 @@ export default function ValidationPage() {
                   <input
                     type="checkbox"
                     className="pv-check"
-                    aria-label="Select all"
+                    aria-label={
+                      selectedIds.size === 0
+                        ? 'Select all rows'
+                        : selectedIds.size === items.length
+                        ? 'Deselect all rows'
+                        : `Partial selection (${selectedIds.size} of ${items.length}) - click to clear`
+                    }
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate = selectedIds.size > 0 && selectedIds.size < items.length
+                      }
+                    }}
                     checked={items.length > 0 && selectedIds.size === items.length}
                     onChange={(e) => {
                       if (e.target.checked) setSelectedIds(new Set(items.map((i) => i.id)))
