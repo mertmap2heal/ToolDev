@@ -553,11 +553,30 @@ export default function ValidationPage() {
       } else if (e.key === 'Enter' && selectedItemId === null && items.length > 0) {
         e.preventDefault()
         setSelectedItemId(items[0].id)
+      } else if (e.key === 'Escape') {
+        // Cascade: drawer -> bulk selection -> filters. First non-empty
+        // level handled wins; later levels stay for the next ESC press.
+        if (selectedItemId !== null) {
+          e.preventDefault()
+          setSelectedItemId(null)
+          return
+        }
+        if (selectedIds.size > 0) {
+          e.preventDefault()
+          setSelectedIds(new Set())
+          return
+        }
+        if (activeFilterCount > 0 || search) {
+          e.preventDefault()
+          setSearch('')
+          clearFilters()
+          return
+        }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [items, selectedItemId])
+  }, [items, selectedItemId, selectedIds, activeFilterCount, search])
 
   if (!projectId) return null
 
