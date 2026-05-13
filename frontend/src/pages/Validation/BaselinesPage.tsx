@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -38,6 +38,17 @@ export default function BaselinesPage() {
       return res.success && res.data ? res.data : []
     },
   })
+
+  // Esc closes the open baseline drawer to match the keyboard-first UX
+  // already used by the main validation page.
+  useEffect(() => {
+    if (!openId) return
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenId(null)
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [openId])
 
   const { data: openBaseline } = useQuery<ValidationBaseline | null>({
     queryKey: ['validation-baseline', projectId, openId],
@@ -231,7 +242,17 @@ export default function BaselinesPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{openBaseline.label}</h2>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: 18,
+                    fontWeight: 500,
+                    fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif",
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  {openBaseline.label}
+                </h2>
                 <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--pv-fg-3)' }}>
                   {openBaseline.itemCount} items · taken {relativeTime(openBaseline.createdAt)} by{' '}
                   {openBaseline.createdBy?.name ?? 'Unknown'}
