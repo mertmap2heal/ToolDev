@@ -371,17 +371,32 @@ export default function ValidationPage() {
     },
   })
 
-  // Side query: items owned by the current user, regardless of the active
-  // filter set. Drives the count badge on the "Mine" pill so a glance shows
-  // how much is on the user's plate before they apply the filter.
-  const { data: mineCount = 0 } = useQuery({
-    queryKey: ['validation-mine-count', projectId, currentUserId],
-    enabled: !!projectId && !!currentUserId,
+  // Side query: full unfiltered item list, used to derive the count badges
+  // on the "Mine" and "Overdue" toolbar pills. Independent of `filters` so
+  // the badges reflect the project as a whole, not the current view.
+  const { data: unfilteredItems = [] } = useQuery({
+    queryKey: ['validation-items-unfiltered', projectId],
+    enabled: !!projectId,
     queryFn: async () => {
-      const res = await validationService.list(projectId!, { ownerId: currentUserId })
-      return res.success && res.data ? res.data.length : 0
+      const res = await validationService.list(projectId!, {})
+      return res.success && res.data ? res.data : []
     },
   })
+  const mineCount = useMemo(
+    () => (currentUserId ? unfilteredItems.filter((i) => i.owner?.id === currentUserId).length : 0),
+    [unfilteredItems, currentUserId],
+  )
+  const overdueCount = useMemo(() => {
+    const now = Date.now()
+    return unfilteredItems.filter(
+      (i) =>
+        i.dueDate &&
+        new Date(i.dueDate).getTime() < now &&
+        i.status !== 'VALIDATED' &&
+        i.status !== 'OBSOLETE' &&
+        !i.deletedAt,
+    ).length
+  }, [unfilteredItems])
 
   const { data: coverage, refetch: refetchCoverage } = useQuery({
     queryKey: ['validation-coverage', projectId],
@@ -1243,6 +1258,7 @@ export default function ValidationPage() {
           className={`pv-pill ${overdueOnly ? 'active' : ''}`}
         >
           <AlertTriangle size={14} /> Overdue
+          {overdueCount > 0 && <span className="pv-badge">{overdueCount}</span>}
         </button>
         <button
           type="button"
