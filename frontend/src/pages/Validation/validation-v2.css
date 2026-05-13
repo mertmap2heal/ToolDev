@@ -394,6 +394,21 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   color: #0D1117;
 }
 
+/* Grouped-list milestone header row — interactive, keyboard-focusable. */
+.validation-v2 table.pv-params tbody tr.vv-group-header {
+  cursor: pointer;
+  background: var(--pv-surface-soft);
+  border-top: 1px solid var(--pv-line);
+  border-bottom: 1px solid var(--pv-line);
+}
+.validation-v2 table.pv-params tbody tr.vv-group-header:hover {
+  background: var(--pv-surface);
+}
+.validation-v2 table.pv-params tbody tr.vv-group-header:focus-visible {
+  outline: 2px solid var(--pv-green);
+  outline-offset: -2px;
+}
+
 /* Suspect row — left amber stripe so reviewers spot follow-ups at a glance
    without having to find the inline chip in the title cell. */
 .validation-v2 table.pv-params tbody tr.is-suspect td.col-check {

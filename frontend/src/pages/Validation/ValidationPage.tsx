@@ -2485,12 +2485,7 @@ export default function ValidationPage() {
                             })
                           }
                         }}
-                        style={{
-                          cursor: 'pointer',
-                          background: 'var(--pv-surface-soft)',
-                          borderTop: '1px solid var(--pv-line)',
-                          borderBottom: '1px solid var(--pv-line)',
-                        }}
+                        className="vv-group-header"
                         title={collapsed ? `Expand ${ms}` : `Collapse ${ms}`}
                       >
                         <td
