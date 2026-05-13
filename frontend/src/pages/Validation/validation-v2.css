@@ -345,6 +345,17 @@ html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-unsaved {
   color: #FCD34D;
 }
 
+/* Sticky table header. Parameters scope sets the pane to overflow:hidden
+   which blocks the inherited sticky thead from positioning against the
+   document scroll. Validation uses window-level scroll, so loosen the
+   clip here and let thead pin itself to top:0 of the viewport. */
+.validation-v2 .pv-table-pane {
+  overflow: visible;
+}
+.validation-v2 table.pv-params thead th {
+  box-shadow: inset 0 -1px 0 var(--pv-line);
+}
+
 /* Drawer header redesign */
 .validation-v2 .vv-dr-head {
   display: flex;
