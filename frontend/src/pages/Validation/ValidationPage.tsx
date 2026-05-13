@@ -641,6 +641,34 @@ export default function ValidationPage() {
     }
   }
 
+  // Wrap occurrences of the active search query in <mark> so users see
+  // where the match landed in the title. Plain text otherwise. Escape
+  // regex metacharacters so a query like "a.b" doesn't blow up.
+  const renderHighlighted = (text: string) => {
+    const q = debouncedSearch.trim()
+    if (!q) return text
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`(${esc})`, 'gi')
+    const parts = text.split(re)
+    return parts.map((p, i) =>
+      i % 2 === 1 ? (
+        <mark
+          key={i}
+          style={{
+            background: 'var(--pv-amber-tint)',
+            color: 'inherit',
+            padding: 0,
+            borderRadius: 2,
+          }}
+        >
+          {p}
+        </mark>
+      ) : (
+        <Fragment key={i}>{p}</Fragment>
+      ),
+    )
+  }
+
   // Shared row renderer. Extracted from the inline items.map so the same
   // markup serves both flat-list and grouped-by-milestone views.
   const renderRow = (it: ValidationItemSummary) => {
@@ -832,7 +860,7 @@ export default function ValidationPage() {
                   setInlineEditValue(it.title)
                 }}
               >
-                {it.title}
+                {renderHighlighted(it.title)}
               </span>
             )}
             {it.tags?.map((tag) => {
