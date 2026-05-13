@@ -103,12 +103,28 @@ html[data-theme='midnight'] .validation-v2 .pv-btn.primary.compact {
 }
 .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
   color: #5C4400;
+  font-weight: 700;
 }
 html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
   color: #EAC54F;
 }
-.validation-v2 .vv-tile.vv-tile-validated .vv-tile-value {
+.validation-v2 .vv-tile.vv-tile-bad {
+  background: var(--pv-red-tint, rgba(220, 38, 38, 0.10));
+  border-color: var(--pv-red-line, rgba(220, 38, 38, 0.30));
+}
+.validation-v2 .vv-tile.vv-tile-bad .vv-tile-value {
+  color: var(--pv-red, #B91C1C);
+  font-weight: 700;
+}
+html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-bad .vv-tile-value {
+  color: #F87171;
+}
+.validation-v2 .vv-tile.vv-tile-validated.is-nonzero .vv-tile-value {
   color: var(--pv-green);
+  font-weight: 700;
+}
+.validation-v2 .vv-tile.vv-tile-validated .vv-tile-value {
+  color: var(--pv-fg);
 }
 
 /* Suspect chip */

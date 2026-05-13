@@ -158,7 +158,7 @@ export default function DERView() {
               <div className="vv-tile-label">Items</div>
               <div className="vv-tile-value">{coverage.total}</div>
             </div>
-            <div className="vv-tile vv-tile-validated">
+            <div className={`vv-tile vv-tile-validated ${validatedCount > 0 ? 'is-nonzero' : ''}`}>
               <div className="vv-tile-label">Validated</div>
               <div className="vv-tile-value">{validatedCount}</div>
             </div>
@@ -168,7 +168,7 @@ export default function DERView() {
                 {coverage.totals.requirementsWithValidation} / {coverage.totals.requirements}
               </div>
             </div>
-            <div className={`vv-tile ${blockedCount > 0 ? 'vv-tile-gap' : ''}`}>
+            <div className={`vv-tile ${blockedCount > 0 ? 'vv-tile-bad' : ''}`}>
               <div className="vv-tile-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <AlertCircle size={11} /> Blocked
               </div>
