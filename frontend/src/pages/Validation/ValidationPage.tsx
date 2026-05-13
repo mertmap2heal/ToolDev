@@ -492,7 +492,8 @@ export default function ValidationPage() {
     (statusFilter ? 1 : 0) +
     (methodFilter ? 1 : 0) +
     (milestoneFilter ? 1 : 0) +
-    (ownerFilter ? 1 : 0)
+    (ownerFilter ? 1 : 0) +
+    tagsAny.length
 
   // ⌘F focuses the search box; j/k navigate rows; Enter opens drawer
   useEffect(() => {
@@ -553,6 +554,7 @@ export default function ValidationPage() {
     setMethodFilter('')
     setMilestoneFilter('')
     setOwnerFilter('')
+    setTagsAny([])
   }
 
   const downloadCsv = async () => {
@@ -1742,6 +1744,18 @@ export default function ValidationPage() {
               <X size={11} />
             </button>
           )}
+          {tagsAny.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setTagsAny((prev) => prev.filter((t) => t !== tag))}
+              className="pv-pill compact active"
+              title={`Remove tag filter: ${tag}`}
+            >
+              <span>Tag: {tag}</span>
+              <X size={11} />
+            </button>
+          ))}
           <button
             type="button"
             onClick={clearFilters}
@@ -2121,7 +2135,7 @@ export default function ValidationPage() {
         </div>
       ) : items.length === 0 ? (
         (() => {
-          const filtersActive = !!(search || statusFilter || methodFilter || milestoneFilter || ownerFilter)
+          const filtersActive = !!(search || statusFilter || methodFilter || milestoneFilter || ownerFilter || tagsAny.length > 0)
           if (filtersActive) {
             return (
               <div
