@@ -380,7 +380,7 @@ export default function ValidationPage() {
       <ArrowUpDown size={11} className="inline ml-0.5 opacity-30" />
     )
 
-  const { data: rawItems = [], refetch } = useQuery({
+  const { data: rawItems = [], refetch, isFetching: itemsFetching } = useQuery({
     queryKey: ['validation-items', projectId, filters],
     enabled: !!projectId,
     queryFn: async () => {
@@ -900,6 +900,25 @@ export default function ValidationPage() {
 
   return (
     <div className={`params-v2 validation-v2 space-y-4 ${density === 'comfortable' ? 'is-comfortable' : ''}`}>
+      {itemsFetching && (
+        <div
+          role="status"
+          aria-label="Loading validation items"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 2,
+            background: 'transparent',
+            overflow: 'hidden',
+            zIndex: 70,
+            pointerEvents: 'none',
+          }}
+        >
+          <div className="vv-loading-bar" />
+        </div>
+      )}
       <div className="pv-title-row">
         <div>
           <div className="flex items-center gap-2">
