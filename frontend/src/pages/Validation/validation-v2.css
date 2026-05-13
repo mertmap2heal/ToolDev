@@ -451,6 +451,21 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   }
 }
 
+/* Suppress native search-clear UI — cycle 155 swapped the search input
+   to type="search", which paints a Chrome/Edge X plus an IE/Edge legacy
+   X. We already render our own clear button (cycle 117). Hide both
+   built-ins so the user sees one clear control, not three. */
+.validation-v2 input[type='search']::-webkit-search-cancel-button,
+.validation-v2 input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.validation-v2 input[type='search']::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Skip-to-content link — visually hidden, surfaces on focus.
    Lets keyboard / SR users jump past the toolbar straight to the
    data table. */
