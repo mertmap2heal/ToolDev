@@ -808,7 +808,18 @@ export default function ValidationPage() {
           </span>
         </td>
         <td className="cell-used" style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
-          <span className="num">{met}</span>/{total}
+          <span
+            className="num"
+            style={
+              total > 0 && met === total
+                ? { color: 'var(--pv-green)', fontWeight: 600 }
+                : undefined
+            }
+            title={total > 0 && met === total ? 'All criteria met' : undefined}
+          >
+            {met}
+          </span>
+          /{total}
           {total > 0 && (
             <span className="bar" style={{ marginLeft: 6 }} title={`${Math.round((met / total) * 100)}% met`}>
               <i style={{ width: `${(met / total) * 100}%` }} />
