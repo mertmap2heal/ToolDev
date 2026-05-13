@@ -132,6 +132,15 @@ export default function ValidationPage() {
       document.title = prev
     }
   }, [])
+
+  // Scroll the active row into view after keyboard j/k navigation so the
+  // user always sees what they just landed on. nearest = don't yank the
+  // viewport for rows that are already on-screen.
+  useEffect(() => {
+    if (!selectedItemId) return
+    const el = document.getElementById(`vrow-${selectedItemId}`)
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selectedItemId])
   const [criterionFilter, setCriterionFilter] = useState<'' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria'>('')
   const [groupByMilestone, setGroupByMilestone] = useState(false)
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
@@ -611,6 +620,7 @@ export default function ValidationPage() {
     return (
       <tr
         key={it.id}
+        id={`vrow-${it.id}`}
         onClick={() => setSelectedItemId(it.id)}
         className={`${it.deletedAt ? 'is-archived' : ''} ${selectedIds.has(it.id) ? 'is-selected' : ''} ${it.isSuspect ? 'is-suspect' : ''} ${
           it.dueDate &&
