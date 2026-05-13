@@ -408,6 +408,49 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   box-shadow: inset 2px 0 0 var(--pv-amber);
 }
 
+/* Print stylesheet — hide all chrome (subbar, dock, drawers, menus)
+   and render the table + KPIs as static black-on-white. Used when a
+   reviewer prints a validation snapshot for a stakeholder meeting. */
+@media print {
+  .validation-v2 .pv-subbar,
+  .validation-v2 .pv-bulk-dock,
+  .validation-v2 .vv-coverage,
+  .validation-v2 [role="dialog"],
+  .validation-v2 .vv-loading-bar,
+  .validation-v2 .vv-board-card-drag,
+  .validation-v2 .pv-pill,
+  .validation-v2 .pv-btn,
+  .validation-v2 .pv-icon-btn,
+  .validation-v2 button {
+    display: none !important;
+  }
+  .validation-v2 .pv-title-row h1 {
+    font-size: 18px;
+  }
+  .validation-v2 table.pv-params {
+    page-break-inside: auto;
+  }
+  .validation-v2 table.pv-params tr {
+    page-break-inside: avoid;
+  }
+  .validation-v2 table.pv-params thead {
+    display: table-header-group;
+  }
+  /* Force black ink on white background so the print is legible. */
+  .validation-v2,
+  .validation-v2 td,
+  .validation-v2 th,
+  .validation-v2 .vv-tile-value,
+  .validation-v2 .vv-status-pill {
+    color: #000 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  .validation-v2 .vv-status-pill {
+    border: 1px solid #000 !important;
+  }
+}
+
 /* Focus-visible — keyboard users get a 2px forest ring on every
    interactive control. :focus-visible (not :focus) so mouse clicks
    don't paint outlines on the buttons they just clicked. */
