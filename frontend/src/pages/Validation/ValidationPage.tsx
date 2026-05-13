@@ -554,11 +554,17 @@ export default function ValidationPage() {
         e.preventDefault()
         setSelectedItemId(items[0].id)
       } else if (e.key === 'Escape') {
-        // Cascade: drawer -> bulk selection -> filters. First non-empty
-        // level handled wins; later levels stay for the next ESC press.
+        // Cascade: drawer -> filters panel -> bulk selection -> filter set.
+        // First non-empty level handled wins; later levels stay for the
+        // next ESC press.
         if (selectedItemId !== null) {
           e.preventDefault()
           setSelectedItemId(null)
+          return
+        }
+        if (filtersOpen) {
+          e.preventDefault()
+          setFiltersOpen(false)
           return
         }
         if (selectedIds.size > 0) {
@@ -576,7 +582,7 @@ export default function ValidationPage() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [items, selectedItemId, selectedIds, activeFilterCount, search])
+  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen])
 
   if (!projectId) return null
 
