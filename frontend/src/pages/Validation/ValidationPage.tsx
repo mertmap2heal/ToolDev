@@ -1602,7 +1602,12 @@ export default function ValidationPage() {
             title={density === 'compact' ? 'Switch to comfortable density' : 'Switch to compact density'}
             className="pv-icon-btn"
             style={{ width: 30, height: 30 }}
-            aria-label="Toggle density"
+            aria-label={
+              density === 'compact'
+                ? 'Row density: compact. Switch to comfortable.'
+                : 'Row density: comfortable. Switch to compact.'
+            }
+            aria-pressed={density === 'comfortable'}
           >
             {density === 'compact' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
           </button>
