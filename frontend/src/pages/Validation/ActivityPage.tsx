@@ -44,11 +44,14 @@ function actionLabel(action: string): string {
 }
 
 function actionColor(action: string): string {
-  if (action.includes('sign-off')) return 'var(--pv-green, #1B4332)'
-  if (action.includes('delete')) return 'var(--pv-red, #8B0000)'
-  if (action.includes('baseline')) return 'var(--pv-blue, #2D4A63)'
-  if (action.includes('upload')) return 'var(--pv-blue, #2D4A63)'
-  if (action.includes('suspect')) return 'var(--pv-amber, #B8860B)'
+  // Uses the shared --val-bar-* tokens scoped to .validation-v2 (cycle 115)
+  // so action chips lift correctly on dark theme instead of inheriting the
+  // dim light-theme fallback hexes.
+  if (action.includes('sign-off')) return 'var(--val-bar-validated)'
+  if (action.includes('delete')) return 'var(--val-bar-blocked)'
+  if (action.includes('baseline')) return 'var(--val-bar-executed)'
+  if (action.includes('upload')) return 'var(--val-bar-executed)'
+  if (action.includes('suspect')) return 'var(--pv-amber)'
   return 'var(--pv-fg-3)'
 }
 
