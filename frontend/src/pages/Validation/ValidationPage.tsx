@@ -652,7 +652,8 @@ export default function ValidationPage() {
         <td onClick={(e) => e.stopPropagation()} style={{ paddingLeft: 6 }}>
           <button
             type="button"
-            aria-label={it.starredByMe ? 'Unstar' : 'Star'}
+            aria-label={it.starredByMe ? `Unstar ${it.key}` : `Star ${it.key}`}
+            aria-pressed={!!it.starredByMe}
             title={it.starredByMe ? 'Unstar' : 'Star this item'}
             onClick={async () => {
               if (it.starredByMe) {
