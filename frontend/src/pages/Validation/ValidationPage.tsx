@@ -1170,9 +1170,38 @@ export default function ValidationPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && search) {
+                e.preventDefault()
+                setSearch('')
+              }
+            }}
             placeholder="Search by title, description, or key…"
           />
-          <span className="pv-kbd">⌘F</span>
+          {search ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              title="Clear search (Esc)"
+              onClick={() => {
+                setSearch('')
+                document.getElementById('validation-search')?.focus()
+              }}
+              style={{
+                background: 'none',
+                border: 0,
+                padding: 2,
+                color: 'var(--pv-fg-3)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <X size={12} />
+            </button>
+          ) : (
+            <span className="pv-kbd">⌘F</span>
+          )}
         </div>
         <button
           type="button"
