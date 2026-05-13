@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import './validation-v2.css'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -92,6 +92,10 @@ export default function ValidationPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [showSuspectOnly, setShowSuspectOnly] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Anchor for shift-click range selection. Set when the user clicks any
+  // row checkbox without shift; consumed when a subsequent shift-click
+  // expands the selection between the anchor and the clicked row.
+  const lastCheckedIdRef = useRef<string | null>(null)
   const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -563,13 +567,30 @@ export default function ValidationPage() {
             className="pv-check"
             aria-label={`Select ${it.key}`}
             checked={selectedIds.has(it.id)}
-            onChange={(e) => {
+            onChange={() => { /* state changes via onClick below */ }}
+            onClick={(e) => {
+              const target = e.currentTarget as HTMLInputElement
+              const nowChecked = target.checked
+              const anchor = lastCheckedIdRef.current
               setSelectedIds((prev) => {
                 const next = new Set(prev)
-                if (e.target.checked) next.add(it.id)
+                if (e.shiftKey && anchor && anchor !== it.id) {
+                  const aIdx = items.findIndex((x) => x.id === anchor)
+                  const bIdx = items.findIndex((x) => x.id === it.id)
+                  if (aIdx >= 0 && bIdx >= 0) {
+                    const [lo, hi] = aIdx < bIdx ? [aIdx, bIdx] : [bIdx, aIdx]
+                    for (let i = lo; i <= hi; i++) {
+                      if (nowChecked) next.add(items[i].id)
+                      else next.delete(items[i].id)
+                    }
+                    return next
+                  }
+                }
+                if (nowChecked) next.add(it.id)
                 else next.delete(it.id)
                 return next
               })
+              lastCheckedIdRef.current = it.id
             }}
           />
         </td>
