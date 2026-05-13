@@ -408,6 +408,16 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   box-shadow: inset 2px 0 0 var(--pv-amber);
 }
 
+/* Page title — Fraunces serif per design doctrine for the Validation
+   surface. Parameters scope uses Inter; override scoped to .validation-v2
+   so DER / Baselines / Activity sub-pages stay consistent. */
+.validation-v2 .pv-title-row h1 {
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: -0.015em;
+}
+
 /* Activity feed row hover — pairs with .is-clickable cursor:pointer in
    ActivityPage. Subtle surface lift so the deep-link affordance is
    obvious on hover, neutral when the row has no link target. */
