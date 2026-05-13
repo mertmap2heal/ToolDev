@@ -39,6 +39,15 @@ export default function BaselinesPage() {
     },
   })
 
+  // Browser tab title.
+  useEffect(() => {
+    const prev = document.title
+    document.title = 'Validation · Baselines · Tool'
+    return () => {
+      document.title = prev
+    }
+  }, [])
+
   // Esc closes the open baseline drawer to match the keyboard-first UX
   // already used by the main validation page.
   useEffect(() => {

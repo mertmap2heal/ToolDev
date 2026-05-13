@@ -121,6 +121,17 @@ export default function ValidationPage() {
       /* storage blocked - ignore */
     }
   }, [density])
+
+  // Browser-tab title so multiple project tabs disambiguate. Restore the
+  // previous title on unmount so navigation away does not leave a stale
+  // "Validation" stuck in the tab.
+  useEffect(() => {
+    const prev = document.title
+    document.title = 'Validation · Tool'
+    return () => {
+      document.title = prev
+    }
+  }, [])
   const [criterionFilter, setCriterionFilter] = useState<'' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria'>('')
   const [groupByMilestone, setGroupByMilestone] = useState(false)
   const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -21,6 +21,14 @@ import {
 
 export default function DERView() {
   const { projectId } = useParams<{ projectId: string }>()
+
+  useEffect(() => {
+    const prev = document.title
+    document.title = 'Validation · DER · Tool'
+    return () => {
+      document.title = prev
+    }
+  }, [])
 
   const { data: items = [] } = useQuery({
     queryKey: ['validation-items', projectId, 'der'],

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import './validation-v2.css'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -60,6 +60,14 @@ export default function ActivityPage() {
   const navigate = useNavigate()
   const [actionFilter, setActionFilter] = useState<string>('')
   const [userFilter, setUserFilter] = useState<string>('')
+
+  useEffect(() => {
+    const prev = document.title
+    document.title = 'Validation · Activity · Tool'
+    return () => {
+      document.title = prev
+    }
+  }, [])
 
   const { data: rows = [] } = useQuery({
     queryKey: ['validation-project-activity', projectId],
