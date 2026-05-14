@@ -573,6 +573,18 @@ export default function ValidationPage() {
     },
   })
 
+  // V-Q6: hide the bulk sign-off button for users who do not hold the
+  // Validation Approver role. Server still enforces the rule on every POST.
+  const { data: approvers = [] } = useQuery({
+    queryKey: ['validation-approvers', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const res = await validationService.listApprovers(projectId!)
+      return res.success && res.data ? res.data : []
+    },
+  })
+  const isApprover = approvers.some((a) => a.id === currentUserId)
+
   const activeFilterCount =
     (statusFilter ? 1 : 0) +
     (methodFilter ? 1 : 0) +
@@ -2905,9 +2917,11 @@ export default function ValidationPage() {
               ))}
             </select>
           )}
-          {!showArchived && (() => {
+          {!showArchived && isApprover && (() => {
             // Eligible sign-off targets: EXECUTED status + not authored by the
             // current user (signer != author rule, enforced server-side too).
+            // The Validation Approver role check (V-Q6) gates the button at
+            // the bulk-dock level via the surrounding && isApprover guard.
             const eligible = items.filter(
               (i) =>
                 selectedIds.has(i.id) &&
@@ -2951,6 +2965,54 @@ export default function ValidationPage() {
                 className="b"
               >
                 <CheckCircle2 size={12} /> Sign off ({eligible.length})
+              </button>
+            )
+          })()}
+          {!showArchived && isApprover && (() => {
+            // Bulk-revoke: any selected VALIDATED item with at least one
+            // active sign-off. Server validates the role gate again on the
+            // POST, so an out-of-date client cannot bypass it.
+            const revokable = items.filter(
+              (i) => selectedIds.has(i.id) && i.status === 'VALIDATED',
+            )
+            if (revokable.length === 0) return null
+            return (
+              <button
+                type="button"
+                title={`Revoke sign-offs on ${revokable.length} VALIDATED item${revokable.length === 1 ? '' : 's'} (demotes back to EXECUTED)`}
+                onClick={async () => {
+                  const reason = await promptDialog({
+                    title: `Revoke sign-offs on ${revokable.length} item${revokable.length === 1 ? '' : 's'}?`,
+                    message: `All active sign-offs on the selected VALIDATED item${revokable.length === 1 ? '' : 's'} will be superseded by a Revocation record. Items demote back to EXECUTED. The action is captured in the audit log; the original sign-off rows remain visible as superseded.`,
+                    inputLabel: 'Reason (optional)',
+                    placeholder: 'e.g. new evidence invalidated previous sign-off',
+                    confirmText: `Revoke ${revokable.length}`,
+                    allowEmpty: true,
+                  })
+                  if (reason === null) return
+                  const res = await validationService.bulkRevokeSignOffs(
+                    projectId,
+                    revokable.map((r) => r.id),
+                    reason || null,
+                  )
+                  setSelectedIds(new Set())
+                  refetchAll()
+                  if (res.success && res.data) {
+                    const { revoked, demoted, skipped } = res.data
+                    if (revoked === 0 && skipped > 0) {
+                      toast.info(`Nothing to revoke (${skipped} item${skipped === 1 ? '' : 's'} had no active sign-offs)`)
+                    } else {
+                      toast.success(
+                        `Revoked ${revoked} sign-off${revoked === 1 ? '' : 's'}, demoted ${demoted} item${demoted === 1 ? '' : 's'} to EXECUTED${skipped ? `, skipped ${skipped}` : ''}`,
+                      )
+                    }
+                  } else {
+                    toast.error(res.error ?? 'Bulk-revoke failed')
+                  }
+                }}
+                className="b"
+              >
+                <RotateCcw size={12} /> Revoke sign-offs ({revokable.length})
               </button>
             )
           })()}

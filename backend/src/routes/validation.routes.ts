@@ -18,6 +18,7 @@ import {
   createFromRequirements,
   signOffItem,
   revokeSignOff,
+  bulkRevokeSignOffs,
   listSignOffs,
   listEvidence,
   attachEvidence,
@@ -32,6 +33,7 @@ import {
   listSavedViews,
   createSavedView,
   deleteSavedView,
+  listValidationApprovers,
   listUncoveredRequirements,
   star,
   unstar,
@@ -47,6 +49,7 @@ import {
   getBaseline,
   createBaseline,
   deleteBaseline,
+  restoreBaseline,
   acknowledgeSuspect,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
@@ -83,16 +86,24 @@ router.put(
 // Coverage rollup + gap finder
 router.get('/projects/:projectId/coverage', getCoverage)
 router.get('/projects/:projectId/trend', getTrend)
+router.get('/projects/:projectId/approvers', listValidationApprovers)
 router.get('/projects/:projectId/saved-views', listSavedViews)
 router.post('/projects/:projectId/saved-views', createSavedView)
 router.delete('/projects/:projectId/saved-views/:viewId', deleteSavedView)
 router.get('/projects/:projectId/uncovered-requirements', listUncoveredRequirements)
 
-// Baselines (point-in-time snapshots)
+// Baselines (point-in-time snapshots).
+// Archive + restore are admin/owner-only because they shift the certification
+// anchor; create + list + get remain available to any project member.
 router.get('/projects/:projectId/baselines', listBaselines)
 router.post('/projects/:projectId/baselines', createBaseline)
 router.get('/projects/:projectId/baselines/:id', getBaseline)
-router.delete('/projects/:projectId/baselines/:id', deleteBaseline)
+router.delete('/projects/:projectId/baselines/:id', requireProjectOwnerOrAdmin, deleteBaseline)
+router.post(
+  '/projects/:projectId/baselines/:id/restore',
+  requireProjectOwnerOrAdmin,
+  restoreBaseline,
+)
 
 // Items
 router.get('/projects/:projectId/items', listItems)
@@ -133,6 +144,7 @@ router.delete(
 router.get('/projects/:projectId/items/:id/sign-offs', listSignOffs)
 router.post('/projects/:projectId/items/:id/sign-off', signOffItem)
 router.post('/projects/:projectId/items/:id/sign-off/:signOffId/revoke', revokeSignOff)
+router.post('/projects/:projectId/sign-offs/bulk-revoke', bulkRevokeSignOffs)
 
 // Evidence (reuses VerEvidence + VerEvidenceLink with linkedEntityType='ValidationItem')
 router.get('/projects/:projectId/items/:id/evidence', listEvidence)

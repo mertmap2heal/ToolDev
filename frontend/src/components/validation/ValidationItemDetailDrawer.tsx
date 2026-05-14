@@ -161,7 +161,24 @@ export default function ValidationItemDetailDrawer({
     },
   })
 
+  // V-Q6: hide the Sign-off affordance for users who do not hold the
+  // Validation Approver engineering role on this project. The server still
+  // enforces the rule on POST (admins bypass for stuck workflows) — this
+  // is purely a UX hint to avoid an inevitable 403.
+  const { data: approvers = [] } = useQuery({
+    queryKey: ['validation-approvers', projectId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await validationService.listApprovers(projectId)
+      return res.success && res.data ? res.data : []
+    },
+  })
+
   const isAuthor = useMemo(() => draft?.createdById === currentUserId, [draft, currentUserId])
+  const isApprover = useMemo(
+    () => approvers.some((a) => a.id === currentUserId),
+    [approvers, currentUserId],
+  )
 
   const isDirty = useMemo(() => {
     if (!draft || !item) return false
@@ -174,7 +191,10 @@ export default function ValidationItemDetailDrawer({
     const baseline = m ? { ...item, description: m[1] } : item
     return JSON.stringify(draft) !== JSON.stringify(baseline)
   }, [draft, item])
-  const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
+  const canSignOff = useMemo(
+    () => !!draft && draft.status === 'EXECUTED' && !isAuthor && isApprover,
+    [draft, isAuthor, isApprover],
+  )
 
   const close = async () => {
     if (isDirty) {
@@ -1368,6 +1388,12 @@ export default function ValidationItemDetailDrawer({
             {item?.status === 'EXECUTED' && isAuthor && !signOffOpen && (
               <p style={{ fontSize: 11, color: 'var(--pv-amber)', fontStyle: 'italic', margin: 0 }}>
                 You created this item — another project member must sign it off.
+              </p>
+            )}
+            {item?.status === 'EXECUTED' && !isAuthor && !isApprover && !signOffOpen && (
+              <p style={{ fontSize: 11, color: 'var(--pv-amber)', fontStyle: 'italic', margin: 0 }}>
+                You do not hold the Validation Approver role on this project. Ask the project
+                owner to assign it in Stakeholders → Roles &amp; assignments before signing off.
               </p>
             )}
             {/* Sign-off list comes from item.signOffs in get response. */}

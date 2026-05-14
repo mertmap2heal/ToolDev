@@ -279,6 +279,17 @@ export const validationService = {
     )
   },
 
+  async bulkRevokeSignOffs(
+    projectId: string,
+    ids: string[],
+    reason?: string | null,
+  ): Promise<ApiResponse<{ revoked: number; demoted: number; skipped: number }>> {
+    return apiClient.post(
+      `/validation/projects/${projectId}/sign-offs/bulk-revoke`,
+      { ids, reason: reason ?? null },
+    )
+  },
+
   async listEvidence(
     projectId: string,
     id: string,
@@ -464,9 +475,13 @@ export const validationService = {
   async listProjectActivity(
     projectId: string,
     limit = 200,
+    opts: { from?: string; to?: string } = {},
   ): Promise<ApiResponse<ValidationActivityRow[]>> {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (opts.from) params.set('from', opts.from)
+    if (opts.to) params.set('to', opts.to)
     return apiClient.get(
-      `/validation/projects/${projectId}/activity?limit=${limit}`,
+      `/validation/projects/${projectId}/activity?${params.toString()}`,
     )
   },
 
@@ -510,8 +525,12 @@ export const validationService = {
     )
   },
 
-  async listBaselines(projectId: string): Promise<ApiResponse<ValidationBaseline[]>> {
-    return apiClient.get(`/validation/projects/${projectId}/baselines`)
+  async listBaselines(
+    projectId: string,
+    opts: { includeArchived?: boolean } = {},
+  ): Promise<ApiResponse<ValidationBaseline[]>> {
+    const qs = opts.includeArchived ? '?includeArchived=true' : ''
+    return apiClient.get(`/validation/projects/${projectId}/baselines${qs}`)
   },
 
   async getBaseline(projectId: string, id: string): Promise<ApiResponse<ValidationBaseline>> {
@@ -528,8 +547,25 @@ export const validationService = {
   async deleteBaseline(
     projectId: string,
     id: string,
+    reason?: string | null,
   ): Promise<ApiResponse<{ deleted: boolean }>> {
-    return apiClient.delete(`/validation/projects/${projectId}/baselines/${id}`)
+    return apiClient.delete(
+      `/validation/projects/${projectId}/baselines/${id}`,
+      { reason: reason ?? null },
+    )
+  },
+
+  async restoreBaseline(
+    projectId: string,
+    id: string,
+  ): Promise<ApiResponse<ValidationBaseline>> {
+    return apiClient.post(`/validation/projects/${projectId}/baselines/${id}/restore`)
+  },
+
+  async listApprovers(
+    projectId: string,
+  ): Promise<ApiResponse<Array<{ id: string; name: string; email: string }>>> {
+    return apiClient.get(`/validation/projects/${projectId}/approvers`)
   },
 
   async getSettings(projectId: string): Promise<ApiResponse<ValidationSettings>> {
@@ -590,6 +626,10 @@ export interface ValidationBaseline {
   createdById: string
   createdAt: string
   createdBy?: { id: string; name: string; email: string }
+  deletedAt?: string | null
+  deletedById?: string | null
+  deleteReason?: string | null
+  deletedBy?: { id: string; name: string; email: string } | null
 }
 
 export interface ValidationSettings {

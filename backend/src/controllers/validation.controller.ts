@@ -25,6 +25,10 @@ function err(res: Response, e: unknown) {
       allowedNext: e.allowedNext,
     })
   }
+  const status = (e as Error & { statusCode?: number }).statusCode
+  if (typeof status === 'number' && status >= 400 && status < 600) {
+    return res.status(status).json({ success: false, error: (e as Error).message })
+  }
   return res.status(500).json({ success: false, error: (e as Error).message })
 }
 
@@ -244,6 +248,18 @@ export async function revokeSignOff(req: AuthRequest, res: Response) {
   }
 }
 
+export async function bulkRevokeSignOffs(req: AuthRequest, res: Response) {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x: unknown): x is string => typeof x === 'string') : []
+    if (ids.length === 0) return fail(res, 400, '`ids` must be a non-empty array')
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+    const data = await svc.bulkRevokeSignOffs(req.params.projectId, ids, userId(req), reason)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function listSignOffs(req: AuthRequest, res: Response) {
   try {
     const data = await svc.listSignOffs(req.params.projectId, req.params.id)
@@ -280,7 +296,8 @@ export async function acknowledgeSuspect(req: AuthRequest, res: Response) {
 
 export async function listBaselines(req: AuthRequest, res: Response) {
   try {
-    const data = await svc.listBaselines(req.params.projectId)
+    const includeArchived = req.query.includeArchived === 'true' || req.query.includeArchived === '1'
+    const data = await svc.listBaselines(req.params.projectId, { includeArchived })
     res.json({ success: true, data })
   } catch (e) {
     err(res, e)
@@ -308,7 +325,18 @@ export async function createBaseline(req: AuthRequest, res: Response) {
 
 export async function deleteBaseline(req: AuthRequest, res: Response) {
   try {
-    const data = await svc.deleteBaseline(req.params.projectId, req.params.id, userId(req))
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+    const data = await svc.deleteBaseline(req.params.projectId, req.params.id, userId(req), reason)
+    if (!data) return fail(res, 404, 'Baseline not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function restoreBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.restoreBaseline(req.params.projectId, req.params.id, userId(req))
     if (!data) return fail(res, 404, 'Baseline not found')
     res.json({ success: true, data })
   } catch (e) {
@@ -438,6 +466,15 @@ export async function getTrend(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listValidationApprovers(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listValidationApprovers(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function listSavedViews(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.userId
@@ -514,7 +551,14 @@ export async function updateSettings(req: AuthRequest, res: Response) {
 export async function listProjectActivity(req: AuthRequest, res: Response) {
   try {
     const limit = Number(req.query.limit) || 100
-    const data = await svc.listProjectActivity(req.params.projectId, limit)
+    const fromRaw = typeof req.query.from === 'string' ? req.query.from : ''
+    const toRaw = typeof req.query.to === 'string' ? req.query.to : ''
+    const from = fromRaw ? new Date(fromRaw) : undefined
+    const to = toRaw ? new Date(toRaw) : undefined
+    // Reject bad date params at the boundary so Prisma never sees an Invalid Date.
+    if (from && Number.isNaN(from.getTime())) return fail(res, 400, 'Invalid `from` date')
+    if (to && Number.isNaN(to.getTime())) return fail(res, 400, 'Invalid `to` date')
+    const data = await svc.listProjectActivity(req.params.projectId, limit, { from, to })
     res.json({ success: true, data })
   } catch (e) {
     err(res, e)

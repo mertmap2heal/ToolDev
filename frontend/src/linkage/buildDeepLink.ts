@@ -14,6 +14,7 @@ import { complianceAdapter } from './adapters/complianceAdapter'
 import { certificationAdapter } from './adapters/certificationAdapter'
 import { archiveAdapter } from './adapters/archiveAdapter'
 import { functionAdapter } from './adapters/functionAdapter'
+import { validationAdapter } from './adapters/validationAdapter'
 
 const ADAPTER_MAP: Record<string, { buildDeepLink: (projectId: string, ref: EntityRef) => string }> = {
   function: functionAdapter,
@@ -40,6 +41,7 @@ const ADAPTER_MAP: Record<string, { buildDeepLink: (projectId: string, ref: Enti
   cert_moc: certificationAdapter,
   cert_evidence_index_item: certificationAdapter,
   stakeholder: stakeholderAdapter,
+  validation_item: validationAdapter,
   requirement: {
     buildDeepLink: (projectId, ref) =>
       `/projects/${projectId}/requirements?focusType=requirement&focusId=${ref.id}`,

@@ -51,6 +51,7 @@ model User {
   validationItemStars                 ValidationItemStar[]
   validationComments                  ValidationComment[]
   validationBaselinesCreated          ValidationBaseline[]              @relation("ValidationBaselineCreatedBy")
+  validationBaselinesDeleted          ValidationBaseline[]              @relation("ValidationBaselineDeletedBy")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -4054,12 +4055,19 @@ model ValidationBaseline {
   itemCount    Int
   createdById  String
   createdAt    DateTime @default(now())
+  // Soft delete (V-N9). Hard deletion of a certification anchor is wrong;
+  // archived baselines remain queryable for audit and can be restored.
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
 
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User    @relation("ValidationBaselineCreatedBy", fields: [createdById], references: [id])
+  deletedBy User?   @relation("ValidationBaselineDeletedBy", fields: [deletedById], references: [id])
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model ValidationComment {

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Trash2, X } from 'lucide-react'
+import { ArrowLeft, X, RotateCcw, Archive } from 'lucide-react'
 import {
   validationService,
   type ValidationBaseline,
@@ -11,7 +11,9 @@ import { STATUS_LABEL, METHOD_LABEL, MILESTONE_LABEL } from '../../components/va
 import {
   ValidationDialogHost,
   confirmDialog,
+  promptDialog,
 } from '../../components/validation/useValidationDialog'
+import { useAuthStore } from '../../store/authStore'
 
 // Per design-system.md §8.3 baselines are frozen point-in-time snapshots.
 // This page lists every baseline a project has taken and lets the user open
@@ -33,12 +35,26 @@ export default function BaselinesPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const queryClient = useQueryClient()
   const [openId, setOpenId] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const user = useAuthStore((s) => s.user)
+  // V-Q1: only project owners / admins can archive or restore baselines.
+  // Project-membership alone is not enough for moving a certification anchor.
+  // Server enforces via requireProjectOwnerOrAdmin (SUPERIOR_ADMIN, COMPANY_ADMIN,
+  // ADMIN_EMAILS, or Project.userId / ProjectMember.role='owner'); this UI hint
+  // mirrors the platform-admin path. Project owners hit the button, the API
+  // returns 200, and the cache invalidates — a 403 simply hides the row again.
+  const canArchive =
+    user?.role === 'SUPERIOR_ADMIN' ||
+    user?.role === 'COMPANY_ADMIN' ||
+    !!user?.isAdmin
 
   const { data: baselines = [] } = useQuery({
-    queryKey: ['validation-baselines', projectId],
+    queryKey: ['validation-baselines', projectId, showArchived],
     enabled: !!projectId,
     queryFn: async () => {
-      const res = await validationService.listBaselines(projectId!)
+      const res = await validationService.listBaselines(projectId!, {
+        includeArchived: showArchived,
+      })
       return res.success && res.data ? res.data : []
     },
   })
@@ -145,16 +161,37 @@ export default function BaselinesPage() {
 
   const remove = async (id: string, label: string) => {
     const ok = await confirmDialog({
-      title: `Delete baseline "${label}"?`,
-      message: 'Frozen snapshots cannot be recovered. Items themselves stay - only this comparison anchor is removed.',
-      confirmText: 'Delete baseline',
+      title: `Archive baseline "${label}"?`,
+      message:
+        'The baseline is hidden from the default list but stays queryable for audit. Admins can restore it later.',
+      confirmText: 'Archive baseline',
       variant: 'danger',
     })
     if (!ok) return
-    const res = await validationService.deleteBaseline(projectId, id)
+    const reason = await promptDialog({
+      title: 'Reason (optional)',
+      message: 'Why is this baseline being archived? Captured in the audit log.',
+      placeholder: 'e.g. taken in error, superseded by a corrected snapshot',
+      confirmText: 'Archive',
+    })
+    if (reason === null) return
+    const res = await validationService.deleteBaseline(projectId, id, reason || null)
     if (res.success) {
       queryClient.invalidateQueries({ queryKey: ['validation-baselines', projectId] })
       if (openId === id) setOpenId(null)
+    }
+  }
+
+  const restore = async (id: string, label: string) => {
+    const ok = await confirmDialog({
+      title: `Restore baseline "${label}"?`,
+      message: 'The baseline returns to the default list.',
+      confirmText: 'Restore',
+    })
+    if (!ok) return
+    const res = await validationService.restoreBaseline(projectId, id)
+    if (res.success) {
+      queryClient.invalidateQueries({ queryKey: ['validation-baselines', projectId] })
     }
   }
 
@@ -169,7 +206,25 @@ export default function BaselinesPage() {
             certification-review anchor or to compare current state against an earlier milestone.
           </p>
         </div>
-        <div className="pv-right">
+        <div className="pv-right" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              color: 'var(--pv-fg-2)',
+              cursor: 'pointer',
+            }}
+            title="Show archived baselines too"
+          >
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            Show archived
+          </label>
           <Link to={`/projects/${projectId}/validation`} className="pv-btn">
             <ArrowLeft size={14} /> Back to Validation
           </Link>
@@ -203,35 +258,76 @@ export default function BaselinesPage() {
               </tr>
             </thead>
             <tbody>
-              {baselines.map((b) => (
-                <tr
-                  key={b.id}
-                  onClick={() => setOpenId(b.id)}
-                  style={{ cursor: 'pointer' }}
-                  className={openId === b.id ? 'is-selected' : ''}
-                >
-                  <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>{b.label}</td>
-                  <td style={{ color: 'var(--pv-fg-2)' }}>{b.description ?? '—'}</td>
-                  <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>{b.itemCount}</td>
-                  <td style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}>
-                    {b.createdBy?.name ?? '—'}
-                  </td>
-                  <td style={{ fontSize: 12, color: 'var(--pv-fg-3)' }} title={new Date(b.createdAt).toLocaleString()}>
-                    {relativeTime(b.createdAt)}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="pv-icon-btn"
-                      style={{ width: 22, height: 22 }}
-                      aria-label="Delete baseline"
-                      onClick={() => remove(b.id, b.label)}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {baselines.map((b) => {
+                const archived = !!b.deletedAt
+                return (
+                  <tr
+                    key={b.id}
+                    onClick={() => setOpenId(b.id)}
+                    style={{ cursor: 'pointer', opacity: archived ? 0.55 : 1 }}
+                    className={openId === b.id ? 'is-selected' : ''}
+                  >
+                    <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
+                      {b.label}
+                      {archived && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: 'var(--pv-fg-3)',
+                            border: '1px solid var(--pv-line)',
+                            padding: '1px 4px',
+                            borderRadius: 3,
+                          }}
+                          title={
+                            b.deleteReason
+                              ? `Archived: ${b.deleteReason}`
+                              : 'Archived baseline (audit-visible only)'
+                          }
+                        >
+                          archived
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ color: 'var(--pv-fg-2)' }}>{b.description ?? '—'}</td>
+                    <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>{b.itemCount}</td>
+                    <td style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}>
+                      {b.createdBy?.name ?? '—'}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--pv-fg-3)' }} title={new Date(b.createdAt).toLocaleString()}>
+                      {relativeTime(b.createdAt)}
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {canArchive && !archived && (
+                        <button
+                          type="button"
+                          className="pv-icon-btn"
+                          style={{ width: 22, height: 22 }}
+                          aria-label="Archive baseline"
+                          title="Archive baseline (admin only)"
+                          onClick={() => remove(b.id, b.label)}
+                        >
+                          <Archive size={12} />
+                        </button>
+                      )}
+                      {canArchive && archived && (
+                        <button
+                          type="button"
+                          className="pv-icon-btn"
+                          style={{ width: 22, height: 22 }}
+                          aria-label="Restore baseline"
+                          title="Restore baseline (admin only)"
+                          onClick={() => restore(b.id, b.label)}
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -382,7 +478,13 @@ export default function BaselinesPage() {
                       <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>{it.key}</td>
                       <td>{it.title}</td>
                       <td style={{ color: 'var(--pv-fg-2)' }}>{METHOD_LABEL[it.methodType as keyof typeof METHOD_LABEL] ?? it.methodType}</td>
-                      <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>{it.targetMilestone}</td>
+                      <td
+                        style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}
+                        title={it.targetMilestone}
+                      >
+                        {MILESTONE_LABEL[it.targetMilestone as keyof typeof MILESTONE_LABEL] ??
+                          it.targetMilestone}
+                      </td>
                       <td>
                         <span className="pv-status">{STATUS_LABEL[it.status as keyof typeof STATUS_LABEL] ?? it.status}</span>
                       </td>
@@ -397,8 +499,6 @@ export default function BaselinesPage() {
                 })}
               </tbody>
             </table>
-            {/* MILESTONE_LABEL referenced in tests of the column above (kept here to avoid unused import noise) */}
-            <span style={{ display: 'none' }}>{Object.keys(MILESTONE_LABEL).length}</span>
           </div>
         </div>
       )}

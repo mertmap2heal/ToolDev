@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { randomUUID, createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
+import { isAdminUser } from '../lib/adminAuth'
 
 // Method types and statuses (string-typed for DB compatibility, validated at controller boundary)
 export const METHOD_TYPES = [
@@ -375,9 +376,20 @@ function defaultPrefix(prefixes: unknown): string {
 
 // ---- Comments / discussions ----
 
-export async function listProjectActivity(projectId: string, limit = 100) {
+export async function listProjectActivity(
+  projectId: string,
+  limit = 100,
+  opts: { from?: Date; to?: Date } = {},
+) {
+  const createdAt: { gte?: Date; lte?: Date } = {}
+  if (opts.from) createdAt.gte = opts.from
+  if (opts.to) createdAt.lte = opts.to
   return prisma.auditLog.findMany({
-    where: { projectId, action: { startsWith: 'validation:' } },
+    where: {
+      projectId,
+      action: { startsWith: 'validation:' },
+      ...(opts.from || opts.to ? { createdAt } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     take: Math.min(500, Math.max(1, limit)),
     include: { user: { select: { id: true, name: true, email: true } } },
@@ -1112,18 +1124,25 @@ export async function bulkUpdate(
 
 // ---- Baselines (point-in-time snapshots) ----
 
-export async function listBaselines(projectId: string) {
+export async function listBaselines(projectId: string, opts: { includeArchived?: boolean } = {}) {
   return prisma.validationBaseline.findMany({
-    where: { projectId },
+    where: opts.includeArchived ? { projectId } : { projectId, deletedAt: null },
     orderBy: { createdAt: 'desc' },
-    include: { createdBy: { select: { id: true, name: true, email: true } } },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      deletedBy: { select: { id: true, name: true, email: true } },
+    },
   })
 }
 
 export async function getBaseline(projectId: string, id: string) {
+  // Archived baselines remain queryable so users can review audit context.
   return prisma.validationBaseline.findFirst({
     where: { id, projectId },
-    include: { createdBy: { select: { id: true, name: true, email: true } } },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      deletedBy: { select: { id: true, name: true, email: true } },
+    },
   })
 }
 
@@ -1178,15 +1197,50 @@ export async function createBaseline(
   return baseline
 }
 
-export async function deleteBaseline(projectId: string, id: string, userId: string) {
+// V-N9: archive instead of hard-delete. Certification anchors must remain
+// queryable for audit; row stays in place with deletedAt set.
+export async function deleteBaseline(
+  projectId: string,
+  id: string,
+  userId: string,
+  reason?: string | null,
+) {
   const bl = await prisma.validationBaseline.findFirst({ where: { id, projectId } })
   if (!bl) return null
-  await prisma.validationBaseline.delete({ where: { id } })
-  await writeAudit(projectId, userId, 'validation:baseline-delete', {
+  if (bl.deletedAt) return { deleted: true, alreadyArchived: true }
+  await prisma.validationBaseline.update({
+    where: { id },
+    data: {
+      deletedAt: new Date(),
+      deletedById: userId,
+      deleteReason: reason ?? null,
+    },
+  })
+  await writeAudit(projectId, userId, 'validation:baseline-archive', {
+    baselineId: id,
+    label: bl.label,
+    reason: reason ?? null,
+  })
+  return { deleted: true }
+}
+
+export async function restoreBaseline(projectId: string, id: string, userId: string) {
+  const bl = await prisma.validationBaseline.findFirst({ where: { id, projectId } })
+  if (!bl) return null
+  if (!bl.deletedAt) return bl
+  const restored = await prisma.validationBaseline.update({
+    where: { id },
+    data: { deletedAt: null, deletedById: null, deleteReason: null },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      deletedBy: { select: { id: true, name: true, email: true } },
+    },
+  })
+  await writeAudit(projectId, userId, 'validation:baseline-restore', {
     baselineId: id,
     label: bl.label,
   })
-  return { deleted: true }
+  return restored
 }
 
 // ---- Sign-off ----
@@ -1194,6 +1248,37 @@ export async function deleteBaseline(projectId: string, id: string, userId: stri
 interface SignOffPayload {
   signerRoleLabel: string
   comment?: string
+}
+
+// V-Q6: a signer must hold the project's "Validation Approver" engineering role
+// unless they are a platform admin. Verifies that the role exists (boot-time
+// upsert is async, so handle the race), then checks ProjectUserEngineeringRole.
+export async function isValidationApprover(projectId: string, userId: string): Promise<boolean> {
+  const role = await prisma.engineeringRole.findUnique({
+    where: { name: 'Validation Approver' },
+    select: { id: true },
+  })
+  if (!role) return false
+  const assignment = await prisma.projectUserEngineeringRole.findFirst({
+    where: { projectId, userId, roleId: role.id },
+    select: { id: true },
+  })
+  return !!assignment
+}
+
+export async function listValidationApprovers(projectId: string) {
+  const role = await prisma.engineeringRole.findUnique({
+    where: { name: 'Validation Approver' },
+    select: { id: true },
+  })
+  if (!role) return []
+  const assignments = await prisma.projectUserEngineeringRole.findMany({
+    where: { projectId, roleId: role.id },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  return assignments
+    .map((a) => a.user)
+    .filter((u): u is { id: string; name: string; email: string } => !!u)
 }
 
 export async function signOff(
@@ -1210,6 +1295,21 @@ export async function signOff(
     throw new Error('signer cannot be the creator of the item')
   if (item.status === 'PLANNED')
     throw new Error('item must be EXECUTED before sign-off')
+  // V-Q6: signer must hold the Validation Approver engineering role on this
+  // project unless they are a platform admin (admins keep their global override
+  // so a stuck workflow can be unblocked).
+  const adminBypass = await isAdminUser(signerUserId)
+  if (!adminBypass) {
+    const allowed = await isValidationApprover(projectId, signerUserId)
+    if (!allowed) {
+      const e = new Error(
+        'Sign-off requires the Validation Approver engineering role on this project. ' +
+          'Assign the role in Stakeholders → Roles & assignments.',
+      )
+      ;(e as Error & { statusCode?: number }).statusCode = 403
+      throw e
+    }
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const signOff = await tx.validationSignOff.create({
@@ -1277,6 +1377,86 @@ export async function revokeSignOff(
     revocationId: result.id,
   })
   return result
+}
+
+// Bulk-revoke: for each item id, revoke every active sign-off. Used by the
+// bulk dock on the main Validation page. Skips items the caller authored (the
+// signer != author rule does not apply to revocation, but admin/approver gate
+// still does — server enforces).
+export async function bulkRevokeSignOffs(
+  projectId: string,
+  itemIds: string[],
+  userId: string,
+  reason: string | null,
+) {
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    return { revoked: 0, demoted: 0, skipped: 0 }
+  }
+  const adminBypass = await isAdminUser(userId)
+  if (!adminBypass) {
+    const allowed = await isValidationApprover(projectId, userId)
+    if (!allowed) {
+      const e = new Error(
+        'Revoking a sign-off requires the Validation Approver engineering role on this project.',
+      )
+      ;(e as Error & { statusCode?: number }).statusCode = 403
+      throw e
+    }
+  }
+  // Lock to items in this project so we never leak across boundaries.
+  const items = await prisma.validationItem.findMany({
+    where: { id: { in: itemIds }, projectId },
+    select: { id: true },
+  })
+  let revoked = 0
+  let demoted = 0
+  let skipped = 0
+  for (const it of items) {
+    const active = await prisma.validationSignOff.findMany({
+      where: { validationItemId: it.id, supersededById: null },
+      select: { id: true },
+    })
+    if (active.length === 0) {
+      skipped += 1
+      continue
+    }
+    await prisma.$transaction(async (tx) => {
+      for (const a of active) {
+        const revocation = await tx.validationSignOff.create({
+          data: {
+            validationItemId: it.id,
+            signerUserId: userId,
+            signerRoleLabel: 'Revocation',
+            comment: reason ?? 'Sign-off revoked (bulk)',
+          },
+        })
+        await tx.validationSignOff.update({
+          where: { id: a.id },
+          data: { supersededById: revocation.id },
+        })
+        revoked += 1
+        await writeAudit(projectId, userId, 'validation:sign-off-revoke', {
+          validationItemId: it.id,
+          revokedSignOffId: a.id,
+          revocationId: revocation.id,
+          reason: reason ?? null,
+          bulk: true,
+        })
+      }
+      // Demote to EXECUTED if no active sign-offs remain.
+      const remaining = await tx.validationSignOff.count({
+        where: { validationItemId: it.id, supersededById: null },
+      })
+      if (remaining === 0) {
+        await tx.validationItem.update({
+          where: { id: it.id },
+          data: { status: 'EXECUTED' },
+        })
+        demoted += 1
+      }
+    })
+  }
+  return { revoked, demoted, skipped }
 }
 
 export async function listSignOffs(projectId: string, itemId: string) {

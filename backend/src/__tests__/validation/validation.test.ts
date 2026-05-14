@@ -76,6 +76,22 @@ describe('Validation module integration', () => {
       ],
     })
 
+    // V-Q6: sign-off requires the Validation Approver engineering role.
+    // The role is upserted at module import, but tests must explicitly
+    // assign the approver user to it for this project.
+    const approverRole = await prisma.engineeringRole.upsert({
+      where: { name: 'Validation Approver' },
+      update: {},
+      create: {
+        name: 'Validation Approver',
+        description: 'Authorised to sign off Validation items.',
+        isSystem: true,
+      },
+    })
+    await prisma.projectUserEngineeringRole.create({
+      data: { projectId, userId: approverId, roleId: approverRole.id },
+    })
+
     const req = await prisma.requirement.create({
       data: {
         projectId,
@@ -115,6 +131,9 @@ describe('Validation module integration', () => {
       where: { projectId: { in: [projectId, otherProjectId] } },
     })
     await prisma.auditLog.deleteMany({
+      where: { projectId: { in: [projectId, otherProjectId] } },
+    })
+    await prisma.projectUserEngineeringRole.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId] } },
     })
     await prisma.projectMember.deleteMany({

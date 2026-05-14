@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Plus, Trash2, Save, AlertCircle, Tag } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Save, AlertCircle, Tag, Users } from 'lucide-react'
 import {
   validationService,
   type ValidationKeyPrefix,
@@ -10,7 +10,41 @@ import {
   type ValidationCriterionTemplate,
 } from '../../services/validation.service'
 
+// V-Q2: settings page now matches the rest of the Validation module — pv- CSS
+// variables (forest accent), no Tailwind dark-mode tokens, no blue. Blue is
+// reserved for the rare status.info slot per design-system.md §3.1.
+
 const TAG_PALETTE = ['#1B4332', '#B8860B', '#8B0000', '#2D4A63', '#6B6660']
+
+const PANEL_STYLE: React.CSSProperties = {
+  border: '1px solid var(--pv-line)',
+  borderRadius: 6,
+  padding: 16,
+  background: 'var(--pv-bg)',
+}
+
+const ADD_LINK_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  background: 'transparent',
+  border: 0,
+  color: 'var(--pv-green, #1B4332)',
+  cursor: 'pointer',
+  padding: 0,
+  fontFamily: 'inherit',
+}
+
+const INPUT_STYLE: React.CSSProperties = {
+  height: 28,
+  padding: '0 8px',
+  fontSize: 12,
+  border: '1px solid var(--pv-line)',
+  borderRadius: 4,
+  background: 'var(--pv-bg)',
+  color: 'var(--pv-fg)',
+}
 
 export default function ValidationSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -29,6 +63,18 @@ export default function ValidationSettingsPage() {
       const res = await validationService.getSettings(projectId!)
       if (!res.success) return null
       return res.data ?? null
+    },
+  })
+
+  // V-Q6: surface who currently holds the Validation Approver engineering role
+  // on this project. Editing is centralised in Stakeholders → Roles & assignments;
+  // this is a read-only list with a deep link.
+  const { data: approvers = [] } = useQuery({
+    queryKey: ['validation-approvers', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const res = await validationService.listApprovers(projectId!)
+      return res.success && res.data ? res.data : []
     },
   })
 
@@ -85,18 +131,36 @@ export default function ValidationSettingsPage() {
 
   if (forbidden) {
     return (
-      <div className="space-y-4">
+      <div className="params-v2 validation-v2 space-y-4" style={{ padding: '16px 24px' }}>
         <Link
           to={`/projects/${projectId}/validation`}
-          className="inline-flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300 hover:underline"
+          className="pv-btn"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          <ChevronLeft size={14} /> Back to Validation
+          <ArrowLeft size={14} /> Back to Validation
         </Link>
-        <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 p-4">
-          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+        <div
+          style={{
+            border: '1px solid var(--pv-amber)',
+            borderRadius: 6,
+            padding: 12,
+            background: 'var(--pv-surface-soft)',
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--pv-amber)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              margin: 0,
+            }}
+          >
             <AlertCircle size={14} /> Read-only
           </p>
-          <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--pv-fg-2)' }}>
             Editing Validation settings requires Project Owner or admin privileges. Ask the
             project owner to make changes here.
           </p>
@@ -107,79 +171,101 @@ export default function ValidationSettingsPage() {
   }
 
   return (
-    <div className="params-v2 validation-v2 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="params-v2 validation-v2 space-y-4" style={{ padding: '16px 24px' }}>
+      <div className="pv-title-row">
         <div>
-          <Link
-            to={`/projects/${projectId}/validation`}
-            className="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 hover:underline"
-          >
-            <ChevronLeft size={12} /> Back to Validation
-          </Link>
-          <h1
-            className="text-gray-900 dark:text-white mt-1"
-            style={{
-              fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif",
-              fontWeight: 500,
-              fontSize: 22,
-              letterSpacing: '-0.015em',
-              margin: 0,
-            }}
-          >
-            Validation settings
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Configure key prefixes and tag library for this project. Project Owner / admin only.
+          <h1>Validation — Settings</h1>
+          <p className="pv-title-meta">
+            Configure key prefixes, tag library, and criterion templates for this project.
+            Project Owner / admin only.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="pv-btn primary"
-          aria-keyshortcuts="Control+S Meta+S"
-          title="Save settings (Cmd+S)"
-        >
-          <Save size={14} /> {saving ? 'Saving…' : okFlash ? 'Saved' : 'Save'}
-        </button>
+        <div className="pv-right" style={{ display: 'flex', gap: 8 }}>
+          <Link to={`/projects/${projectId}/validation`} className="pv-btn">
+            <ArrowLeft size={14} /> Back to Validation
+          </Link>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="pv-btn primary"
+            aria-keyshortcuts="Control+S Meta+S"
+            title="Save settings (Cmd+S)"
+          >
+            <Save size={14} /> {saving ? 'Saving…' : okFlash ? 'Saved' : 'Save'}
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+        <div
+          style={{
+            border: '1px solid var(--pv-red, #8B0000)',
+            borderRadius: 4,
+            padding: '6px 10px',
+            fontSize: 12,
+            color: 'var(--pv-red, #8B0000)',
+            background: 'var(--pv-surface-soft)',
+          }}
+        >
           {error}
         </div>
       )}
 
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-        <div className="flex items-center justify-between mb-3">
+      <section style={PANEL_STYLE}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
           <div>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Key prefixes</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              Prefixes are appended to the auto-incremented number (e.g. <code className="font-mono">VAL-001</code>,{' '}
-              <code className="font-mono">VAL-SYS-001</code>). Use uppercase letters/digits/dashes ending in a dash.
-              Mark one as the default.
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
+              Key prefixes
+            </h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--pv-fg-3)' }}>
+              Prefixes are appended to the auto-incremented number (e.g.{' '}
+              <code style={{ fontFamily: 'var(--pv-font-mono)' }}>VAL-001</code>,{' '}
+              <code style={{ fontFamily: 'var(--pv-font-mono)' }}>VAL-SYS-001</code>). Use
+              uppercase letters/digits/dashes ending in a dash. Mark one as the default.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={addPrefix}
-            className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700"
-          >
+          <button type="button" onClick={addPrefix} style={ADD_LINK_STYLE}>
             <Plus size={12} /> Add prefix
           </button>
         </div>
-        <div className="grid grid-cols-12 gap-2 px-2 mb-1">
-          <span className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Prefix</span>
-          <span className="col-span-3 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Label</span>
-          <span className="col-span-5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Description</span>
-          <span className="col-span-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Default</span>
-          <span className="col-span-1" />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr 2fr 80px 24px',
+            gap: 8,
+            padding: '0 6px',
+            marginBottom: 4,
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--pv-fg-3)' }}>
+            Prefix
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--pv-fg-3)' }}>
+            Label
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--pv-fg-3)' }}>
+            Description
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--pv-fg-3)' }}>
+            Default
+          </span>
+          <span />
         </div>
-        <ul className="space-y-2">
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {prefixes.map((p, i) => (
             <li
               key={i}
-              className="grid grid-cols-12 gap-2 items-center border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50 p-2"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '120px 1fr 2fr 80px 24px',
+                gap: 8,
+                padding: 6,
+                alignItems: 'center',
+                border: '1px solid var(--pv-line)',
+                borderRadius: 4,
+                background: 'var(--pv-surface-soft)',
+              }}
             >
               <input
                 type="text"
@@ -191,7 +277,7 @@ export default function ValidationSettingsPage() {
                 }}
                 placeholder="VAL-"
                 aria-label="Key prefix"
-                className="col-span-2 px-2 py-1 text-sm font-mono border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
+                style={{ ...INPUT_STYLE, fontFamily: 'var(--pv-font-mono)' }}
               />
               <input
                 type="text"
@@ -203,7 +289,7 @@ export default function ValidationSettingsPage() {
                 }}
                 placeholder="Validation"
                 aria-label="Prefix label"
-                className="col-span-3 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
+                style={INPUT_STYLE}
               />
               <input
                 type="text"
@@ -215,9 +301,17 @@ export default function ValidationSettingsPage() {
                 }}
                 placeholder="When this prefix applies"
                 aria-label="Prefix description"
-                className="col-span-5 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
+                style={INPUT_STYLE}
               />
-              <label className="col-span-1 text-xs flex items-center gap-1 text-gray-600 dark:text-gray-400">
+              <label
+                style={{
+                  fontSize: 11,
+                  color: 'var(--pv-fg-2)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
                 <input
                   type="radio"
                   name="default-prefix"
@@ -229,41 +323,59 @@ export default function ValidationSettingsPage() {
               <button
                 type="button"
                 onClick={() => removePrefix(i)}
-                className="col-span-1 text-gray-400 hover:text-red-600 flex justify-end"
+                className="pv-icon-btn"
+                style={{ width: 22, height: 22 }}
                 aria-label="Remove prefix"
               >
-                <Trash2 size={14} />
+                <Trash2 size={12} />
               </button>
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-        <div className="flex items-center justify-between mb-3">
+      <section style={PANEL_STYLE}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
           <div>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Tag library</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400">
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
+              Tag library
+            </h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--pv-fg-3)' }}>
               Tags items can carry. Items can only use tags listed here — keeps the set
               navigable. Pick a colour from the regulated-industry palette.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={addTag}
-            className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700"
-          >
+          <button type="button" onClick={addTag} style={ADD_LINK_STYLE}>
             <Plus size={12} /> Add tag
           </button>
         </div>
         {tags.length === 0 ? (
-          <p className="text-xs text-gray-500 italic">No tags yet. Add one to get started.</p>
+          <p style={{ fontSize: 12, color: 'var(--pv-fg-3)', fontStyle: 'italic', margin: 0 }}>
+            No tags yet. Add one to get started.
+          </p>
         ) : (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <ul
+            style={{
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 8,
+            }}
+          >
             {tags.map((t, i) => (
               <li
                 key={i}
-                className="flex items-center gap-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50 p-2"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: 6,
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 4,
+                  background: 'var(--pv-surface-soft)',
+                }}
               >
                 <input
                   type="color"
@@ -273,7 +385,7 @@ export default function ValidationSettingsPage() {
                     next[i] = { ...t, color: e.target.value }
                     setTags(next)
                   }}
-                  className="h-7 w-7 border border-gray-300 dark:border-gray-700 rounded"
+                  style={{ height: 26, width: 30, border: '1px solid var(--pv-line)', borderRadius: 4, padding: 0 }}
                   title="Tag colour"
                 />
                 <input
@@ -284,21 +396,30 @@ export default function ValidationSettingsPage() {
                     next[i] = { ...t, label: e.target.value.toLowerCase().replace(/\s+/g, '-') }
                     setTags(next)
                   }}
-                  className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
+                  style={{ ...INPUT_STYLE, flex: 1 }}
                 />
                 <span
-                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: `${t.color}22`, color: t.color }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 11,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    backgroundColor: `${t.color}22`,
+                    color: t.color,
+                  }}
                 >
                   <Tag size={10} /> {t.label}
                 </span>
                 <button
                   type="button"
                   onClick={() => removeTag(i)}
-                  className="text-gray-400 hover:text-red-600"
+                  className="pv-icon-btn"
+                  style={{ width: 22, height: 22 }}
                   aria-label="Remove tag"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={12} />
                 </button>
               </li>
             ))}
@@ -306,13 +427,13 @@ export default function ValidationSettingsPage() {
         )}
       </section>
 
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-        <div className="flex items-center justify-between mb-2">
+      <section style={PANEL_STYLE}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
           <div>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
               Criterion templates
             </h2>
-            <p className="text-xs text-gray-500 mt-1">
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--pv-fg-3)' }}>
               Reusable acceptance-criteria sets that everyone in the project can insert from the
               drawer. Each template is a labelled list of criterion texts.
             </p>
@@ -325,24 +446,29 @@ export default function ValidationSettingsPage() {
                 { label: 'New template', criteria: ['Criterion 1'] },
               ])
             }
-            className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+            style={ADD_LINK_STYLE}
           >
             <Plus size={12} /> Add template
           </button>
         </div>
         {criterionTemplates.length === 0 ? (
-          <p className="text-xs text-gray-500 italic">
+          <p style={{ fontSize: 12, color: 'var(--pv-fg-3)', fontStyle: 'italic', margin: 0 }}>
             No templates yet. Add one and it appears in the drawer's Templates dropdown for every
             validation item in this project.
           </p>
         ) : (
-          <ul className="space-y-3">
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {criterionTemplates.map((t, i) => (
               <li
                 key={i}
-                className="border border-gray-200 dark:border-gray-700 rounded-md p-2 bg-gray-50 dark:bg-gray-800/50"
+                style={{
+                  padding: 8,
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 4,
+                  background: 'var(--pv-surface-soft)',
+                }}
               >
-                <div className="flex items-center gap-2 mb-2">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <input
                     type="text"
                     value={t.label}
@@ -352,7 +478,7 @@ export default function ValidationSettingsPage() {
                       setCriterionTemplates(next)
                     }}
                     placeholder="Template label"
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 font-medium"
+                    style={{ ...INPUT_STYLE, flex: 1, fontWeight: 500 }}
                   />
                   <button
                     type="button"
@@ -366,9 +492,9 @@ export default function ValidationSettingsPage() {
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <ul className="space-y-1">
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {t.criteria.map((c, j) => (
-                    <li key={j} className="flex items-center gap-2">
+                    <li key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input
                         type="text"
                         value={c}
@@ -380,7 +506,7 @@ export default function ValidationSettingsPage() {
                           setCriterionTemplates(next)
                         }}
                         placeholder="Criterion text"
-                        className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
+                        style={{ ...INPUT_STYLE, flex: 1 }}
                       />
                       <button
                         type="button"
@@ -406,10 +532,71 @@ export default function ValidationSettingsPage() {
                     next[i] = { ...t, criteria: [...t.criteria, ''] }
                     setCriterionTemplates(next)
                   }}
-                  className="text-xs flex items-center gap-1 mt-2 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  style={{ ...ADD_LINK_STYLE, marginTop: 8 }}
                 >
                   <Plus size={11} /> Add criterion
                 </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={PANEL_STYLE}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
+              Validation Approver members
+            </h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--pv-fg-3)' }}>
+              Project members who hold the system-defined{' '}
+              <span style={{ fontWeight: 500, color: 'var(--pv-fg-2)' }}>Validation Approver</span>{' '}
+              engineering role. Only approvers (or platform admins) can sign off validation items.
+              Assignment lives in the Stakeholders module.
+            </p>
+          </div>
+          <Link
+            to={`/projects/${projectId}/stakeholders/roles`}
+            className="pv-btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Users size={14} /> Manage assignments
+          </Link>
+        </div>
+        {approvers.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--pv-fg-3)', fontStyle: 'italic', margin: 0 }}>
+            No approvers assigned yet. Sign-offs will be rejected until at least one project
+            member holds the role.
+          </p>
+        ) : (
+          <ul
+            style={{
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+            }}
+          >
+            {approvers.map((a) => (
+              <li
+                key={a.id}
+                title={a.email}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 8px',
+                  border: '1px solid var(--pv-line)',
+                  borderRadius: 12,
+                  fontSize: 12,
+                  background: 'var(--pv-surface-soft)',
+                  color: 'var(--pv-fg-2)',
+                }}
+              >
+                <Users size={11} style={{ color: 'var(--pv-green, #1B4332)' }} />
+                {a.name || a.email}
               </li>
             ))}
           </ul>
@@ -428,28 +615,46 @@ function ReadOnlyView({
 }) {
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Key prefixes</h2>
-        <ul className="space-y-1">
+      <section style={PANEL_STYLE}>
+        <h2 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
+          Key prefixes
+        </h2>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {prefixes.map((p, i) => (
-            <li key={i} className="text-sm text-gray-700 dark:text-gray-300">
-              <code className="font-mono">{p.prefix}</code> — {p.label}
-              {p.isDefault && <span className="ml-2 text-xs text-gray-500">(default)</span>}
+            <li key={i} style={{ fontSize: 13, color: 'var(--pv-fg-2)', padding: '2px 0' }}>
+              <code style={{ fontFamily: 'var(--pv-font-mono)' }}>{p.prefix}</code> — {p.label}
+              {p.isDefault && (
+                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--pv-fg-3)' }}>
+                  (default)
+                </span>
+              )}
             </li>
           ))}
         </ul>
       </section>
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Tag library</h2>
+      <section style={PANEL_STYLE}>
+        <h2 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
+          Tag library
+        </h2>
         {tags.length === 0 ? (
-          <p className="text-xs text-gray-500 italic">No tags.</p>
+          <p style={{ fontSize: 12, color: 'var(--pv-fg-3)', fontStyle: 'italic', margin: 0 }}>
+            No tags.
+          </p>
         ) : (
-          <ul className="flex flex-wrap gap-1">
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {tags.map((t, i) => (
               <li
                 key={i}
-                className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: `${t.color}22`, color: t.color }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 11,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  backgroundColor: `${t.color}22`,
+                  color: t.color,
+                }}
               >
                 <Tag size={10} /> {t.label}
               </li>

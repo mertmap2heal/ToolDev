@@ -2,8 +2,9 @@ import { useMemo, useState, useEffect } from 'react'
 import './validation-v2.css'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Filter, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Filter, ExternalLink, Calendar } from 'lucide-react'
 import { validationService } from '../../services/validation.service'
+import { summariseActivity } from '../../components/validation/activityLabels'
 
 // Parse the audit details JSON safely; we only need a couple of fields.
 function parseDetails(raw: string | null): { validationItemId?: string; baselineId?: string } {
@@ -55,11 +56,43 @@ function actionColor(action: string): string {
   return 'var(--pv-fg-3)'
 }
 
+type DateRange = 'all' | 'today' | '7d' | '30d' | 'custom'
+
+function rangeBounds(range: DateRange, fromStr: string, toStr: string): { from?: string; to?: string } {
+  const now = new Date()
+  const startOfDay = (d: Date) => {
+    const x = new Date(d)
+    x.setHours(0, 0, 0, 0)
+    return x
+  }
+  if (range === 'today') return { from: startOfDay(now).toISOString() }
+  if (range === '7d') {
+    const x = startOfDay(now)
+    x.setDate(x.getDate() - 6)
+    return { from: x.toISOString() }
+  }
+  if (range === '30d') {
+    const x = startOfDay(now)
+    x.setDate(x.getDate() - 29)
+    return { from: x.toISOString() }
+  }
+  if (range === 'custom') {
+    return {
+      from: fromStr ? new Date(fromStr).toISOString() : undefined,
+      to: toStr ? new Date(toStr + 'T23:59:59.999').toISOString() : undefined,
+    }
+  }
+  return {}
+}
+
 export default function ActivityPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [actionFilter, setActionFilter] = useState<string>('')
   const [userFilter, setUserFilter] = useState<string>('')
+  const [dateRange, setDateRange] = useState<DateRange>('all')
+  const [customFrom, setCustomFrom] = useState<string>('')
+  const [customTo, setCustomTo] = useState<string>('')
 
   useEffect(() => {
     const prev = document.title
@@ -69,11 +102,17 @@ export default function ActivityPage() {
     }
   }, [])
 
+  // V-Q4: server-side date filter so long-running projects don't have to
+  // ship the entire log to the client before slicing.
+  const bounds = rangeBounds(dateRange, customFrom, customTo)
   const { data: rows = [] } = useQuery({
-    queryKey: ['validation-project-activity', projectId],
+    queryKey: ['validation-project-activity', projectId, dateRange, customFrom, customTo],
     enabled: !!projectId,
     queryFn: async () => {
-      const res = await validationService.listProjectActivity(projectId!, 300)
+      const res = await validationService.listProjectActivity(projectId!, 300, {
+        from: bounds.from,
+        to: bounds.to,
+      })
       return res.success && res.data ? res.data : []
     },
   })
@@ -143,6 +182,40 @@ export default function ActivityPage() {
             </option>
           ))}
         </select>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--pv-fg-3)' }}>
+          <Calendar size={12} />
+        </span>
+        <select
+          value={dateRange}
+          onChange={(e) => setDateRange(e.target.value as DateRange)}
+          style={{ height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)' }}
+          aria-label="Date range"
+        >
+          <option value="all">All time</option>
+          <option value="today">Today</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="custom">Custom range…</option>
+        </select>
+        {dateRange === 'custom' && (
+          <>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              style={{ height: 26, padding: '0 6px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)' }}
+              aria-label="From date"
+            />
+            <span style={{ color: 'var(--pv-fg-3)', fontSize: 11 }}>→</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              style={{ height: 26, padding: '0 6px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)' }}
+              aria-label="To date"
+            />
+          </>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--pv-fg-3)' }}>
           {visible.length} of {rows.length} events
         </span>
@@ -177,6 +250,11 @@ export default function ActivityPage() {
                 : det.baselineId
                 ? `/projects/${projectId}/validation/baselines`
                 : null
+              const summary = summariseActivity({
+                action: r.action,
+                details: r.details,
+                actorName: r.user?.name ?? r.user?.email ?? null,
+              })
               return (
                 <li
                   key={r.id}
@@ -192,7 +270,13 @@ export default function ActivityPage() {
                     cursor: target ? 'pointer' : 'default',
                   }}
                   className={target ? 'is-clickable' : ''}
-                  title={target ? 'Open in drawer' : 'No deep-link for this event type'}
+                  title={
+                    r.details
+                      ? `${target ? 'Open in drawer — ' : ''}${r.details}`
+                      : target
+                      ? 'Open in drawer'
+                      : 'No deep-link for this event type'
+                  }
                 >
                   <span
                     style={{
@@ -210,8 +294,15 @@ export default function ActivityPage() {
                   <span style={{ color: 'var(--pv-fg-2)' }}>
                     {r.user?.name ?? r.user?.email ?? '—'}
                   </span>
-                  <span style={{ color: 'var(--pv-fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {r.details ?? ''}
+                  <span
+                    style={{
+                      color: 'var(--pv-fg-2)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {summary}
                   </span>
                   <span style={{ color: 'var(--pv-fg-3)', fontFamily: 'var(--pv-font-mono)', fontSize: 11, textAlign: 'right' }} title={new Date(r.createdAt).toLocaleString()}>
                     {relativeTime(r.createdAt)}
