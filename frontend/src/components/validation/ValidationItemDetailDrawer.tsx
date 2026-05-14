@@ -107,6 +107,9 @@ export default function ValidationItemDetailDrawer({
       const isMod = e.metaKey || e.ctrlKey
       if (e.key === 'Escape' && !inField) {
         e.preventDefault()
+        // Stop the page-level ESC cascade (ValidationPage cycle 149/164/182)
+        // from also reacting to the same key event — drawer owns this ESC.
+        e.stopPropagation()
         onClose()
       } else if (isMod && (e.key === 's' || e.key === 'Enter')) {
         // Cmd/Ctrl + S or Cmd/Ctrl + Enter → save
