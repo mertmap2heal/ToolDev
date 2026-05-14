@@ -1,13 +1,12 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import './validation-v2.css'
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
   AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
   MessageCircle, Copy, ChevronDown,
 } from 'lucide-react'
-import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import ValidationShortcutsOverlay from '../../components/validation/ValidationShortcutsOverlay'
 import {
   validationService,
@@ -84,6 +83,7 @@ export default function ValidationPage() {
   const user = useAuthStore((s) => s.user)
   const currentUserId = user?.id ?? ''
   const [urlParams, setUrlParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const [search, setSearch] = useState(() => urlParams.get('q') ?? '')
   const [statusFilter, setStatusFilter] = useState<ValidationStatus | ''>('')
@@ -116,7 +116,6 @@ export default function ValidationPage() {
   const lastCheckedIdRef = useRef<string | null>(null)
   const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [starredOnly, setStarredOnly] = useState(false)
@@ -618,7 +617,7 @@ export default function ValidationPage() {
         // Yield to any open modal / drawer / overlay - they install their
         // own capture-phase ESC handler and should close themselves before
         // the page-level cascade kicks in.
-        if (createOpen || createFromReqOpen || helpOpen || shortcutsOpen || uncoveredOpen) {
+        if (createOpen || createFromReqOpen || shortcutsOpen || uncoveredOpen) {
           return
         }
         // Cascade: open menus -> drawer -> filters panel -> bulk
@@ -659,7 +658,7 @@ export default function ValidationPage() {
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones, moreMenuOpen, colsMenuOpen, createOpen, createFromReqOpen, helpOpen, shortcutsOpen, uncoveredOpen])
+  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones, moreMenuOpen, colsMenuOpen, createOpen, createFromReqOpen, shortcutsOpen, uncoveredOpen])
 
   if (!projectId) return null
 
@@ -1074,17 +1073,15 @@ export default function ValidationPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1>Validation</h1>
-            <button
-              type="button"
-              onClick={() => setHelpOpen(true)}
-              aria-label="Open Validation help (press ? for keyboard shortcuts)"
-              aria-keyshortcuts="?"
-              title="What is this page? Who signs off? How does it work? Click for the user manual. (Press ? for keyboard shortcuts.)"
+            <Link
+              to="/help/validation"
+              aria-label="Open Validation user guide"
+              title="Open the full Validation user guide"
               className="pv-icon-btn"
-              style={{ width: 22, height: 22 }}
+              style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <HelpCircle size={14} />
-            </button>
+            </Link>
           </div>
           <p className="pv-title-meta">
             Confirm the system meets stakeholder needs through demonstrations, operational tests,
@@ -1170,15 +1167,15 @@ export default function ValidationPage() {
               </>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setHelpOpen(true)}
+          <Link
+            to="/help/validation"
             className="pv-btn"
             title="Open the Validation user guide"
             aria-label="Open Validation help"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
             <HelpCircle size={14} /> Help
-          </button>
+          </Link>
           <button
             type="button"
             onClick={() => setCreateFromReqOpen(true)}
@@ -2957,12 +2954,10 @@ export default function ValidationPage() {
         onCreated={() => refetchAll()}
       />
 
-      <ValidationHelpDrawer isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
-
       <ValidationShortcutsOverlay
         isOpen={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
-        onOpenManual={() => setHelpOpen(true)}
+        onOpenManual={() => navigate('/help/validation')}
       />
 
       <ValidationToastRenderer toasts={toast.toasts} onDismiss={toast.dismiss} />
