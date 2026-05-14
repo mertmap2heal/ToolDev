@@ -1384,6 +1384,7 @@ export default function ValidationPage() {
             type="search"
             role="searchbox"
             aria-label="Search validation items by title, description, or key"
+            aria-keyshortcuts="/ Control+F Meta+F"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
