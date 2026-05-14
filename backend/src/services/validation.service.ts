@@ -1048,7 +1048,10 @@ export async function bulkUpdate(
     }
   }
 
-  const data: Prisma.ValidationItemUpdateManyMutationInput = {}
+  // UncheckedUpdateManyInput exposes the raw FK columns (ownerUserId,
+  // deletedById, etc.) that the relation-style UpdateManyMutationInput
+  // hides behind `owner: { connect }`. Bulk update writes FKs directly.
+  const data: Prisma.ValidationItemUncheckedUpdateManyInput = {}
   if (payload.patch.targetMilestone) data.targetMilestone = payload.patch.targetMilestone
   if (payload.patch.status) data.status = payload.patch.status
   if (

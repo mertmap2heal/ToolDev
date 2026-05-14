@@ -1,0 +1,64 @@
+# Pre-push gate - mirrors the CI lint job locally so bad code never
+# reaches the remote. Runs the same checks the GitHub Actions lint job
+# runs, in the same order, against the working tree.
+#
+# To skip in a genuine emergency: HUSKY=0 git push  (not --no-verify,
+# because we want hook errors visible).
+
+set -e
+
+# Always run from the repo root, regardless of where git invoked the hook.
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "[pre-push] frontend lint"
+( cd frontend && npm run lint ) || exit 1
+
+echo "[pre-push] frontend tsc"
+( cd frontend && npx tsc --noEmit ) || exit 1
+
+echo "[pre-push] frontend unit tests"
+( cd frontend && npm run test:unit ) || exit 1
+
+echo "[pre-push] backend build"
+( cd backend && npm run build ) || exit 1
+
+# Repo-policy grep guards copied verbatim from .github/workflows/ci.yml.
+# Kept inline so the hook is self-contained.
+
+echo "[pre-push] guard: no body.signerId / body.userId in certification controllers (#163)"
+if grep -RnE "(req\.)?body\.(signerId|userId)" backend/src/controllers/certification/ ; then
+  echo "ERROR: body.signerId / body.userId found in certification controllers."
+  echo "Signer identity must come from req.user only (issue #163)."
+  exit 1
+fi
+
+echo "[pre-push] guard: no req.body spread in project controller (#154)"
+if grep -nE "\\.\\.\\.req\\.body" backend/src/controllers/project.controller.ts ; then
+  echo "ERROR: do not spread req.body in project.controller (see #154)"
+  exit 1
+fi
+
+echo "[pre-push] guard: inventory + task dual-storage auth (#299)"
+inv=frontend/src/services/inventory.service.ts
+task=frontend/src/services/task.service.ts
+fail=0
+if ! grep -q "sessionStorage.getItem('token')" "$inv"; then
+  echo "::error file=$inv::must read token from sessionStorage (see issue #299)"
+  fail=1
+fi
+if ! grep -q "token-expired" "$inv"; then
+  echo "::error file=$inv::must dispatch token-expired on 401/403 (see issue #299)"
+  fail=1
+fi
+if grep -qE "fetch\(.*csv/export" "$task"; then
+  echo "::error file=$task::exportTasks must use apiClient.postBlob (see issue #299)"
+  fail=1
+fi
+if grep -qE "Authorization:.*localStorage\.getItem\('token'\)" "$task"; then
+  echo "::error file=$task::must not build raw Authorization header from localStorage only (see issue #299)"
+  fail=1
+fi
+[ $fail -eq 0 ] || exit 1
+
+echo "[pre-push] all checks passed"
