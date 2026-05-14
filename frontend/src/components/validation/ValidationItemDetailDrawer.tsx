@@ -1241,7 +1241,7 @@ export default function ValidationItemDetailDrawer({
                       <a
                         href={link.evidence.storageRef}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="ref-title"
                         style={{ color: 'var(--pv-blue)' }}
                         title={`Open ${link.evidence.title}`}
@@ -1725,7 +1725,7 @@ function CriterionEvidence({
                 <a
                   href={link.evidence.storageRef}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="ref-title"
                   style={{ color: 'var(--pv-blue)' }}
                   title={`Open ${link.evidence.title}`}

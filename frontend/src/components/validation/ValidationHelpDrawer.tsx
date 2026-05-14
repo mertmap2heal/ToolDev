@@ -160,7 +160,7 @@ export default function ValidationHelpDrawer({ isOpen, onClose }: Props) {
                 href="/docs/user-manual/12-validation.md"
                 className="text-blue-600 hover:underline"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 docs/user-manual/12-validation.md
               </a>
