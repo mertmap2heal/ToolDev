@@ -1,0 +1,663 @@
+import { Response } from 'express'
+import { AuthRequest } from '../middleware/auth.middleware'
+import * as svc from '../services/validation.service'
+
+function userId(req: AuthRequest): string {
+  const uid = req.userId ?? req.user?.userId
+  if (!uid) throw new Error('Unauthenticated')
+  return uid
+}
+
+function fail(res: Response, status: number, error: string) {
+  return res.status(status).json({ success: false, error })
+}
+
+function err(res: Response, e: unknown) {
+  // Map domain-typed errors to specific HTTP statuses so the UI can show a
+  // helpful message instead of a generic 500.
+  if (e instanceof svc.IllegalStatusTransition) {
+    return res.status(409).json({
+      success: false,
+      error: e.message,
+      code: 'ILLEGAL_STATUS_TRANSITION',
+      from: e.from,
+      to: e.to,
+      allowedNext: e.allowedNext,
+    })
+  }
+  const status = (e as Error & { statusCode?: number }).statusCode
+  if (typeof status === 'number' && status >= 400 && status < 600) {
+    return res.status(status).json({ success: false, error: (e as Error).message })
+  }
+  return res.status(500).json({ success: false, error: (e as Error).message })
+}
+
+export async function listItems(req: AuthRequest, res: Response) {
+  try {
+    const uid = req.userId ?? req.user?.userId
+    const sortByRaw = req.query.sortBy as string | undefined
+    const sortDirRaw = req.query.sortDir as string | undefined
+    const validSortBy = [
+      'key',
+      'updatedAt',
+      'createdAt',
+      'status',
+      'milestone',
+      'priority',
+      'dueDate',
+    ] as const
+    type ValidSortBy = (typeof validSortBy)[number]
+    const sortBy: ValidSortBy | undefined =
+      sortByRaw && (validSortBy as readonly string[]).includes(sortByRaw)
+        ? (sortByRaw as ValidSortBy)
+        : undefined
+    const sortDir: 'asc' | 'desc' | undefined =
+      sortDirRaw === 'asc' || sortDirRaw === 'desc' ? sortDirRaw : undefined
+    const data = await svc.listItems(req.params.projectId, {
+      status: req.query.status as string | undefined,
+      methodType: req.query.methodType as string | undefined,
+      milestone: req.query.milestone as string | undefined,
+      ownerId: req.query.ownerId as string | undefined,
+      search: req.query.search as string | undefined,
+      includeDeleted: req.query.includeDeleted === 'true',
+      starredOnly: req.query.starredOnly === 'true',
+      starredByUserId: uid,
+      tagsAny:
+        typeof req.query.tagsAny === 'string'
+          ? req.query.tagsAny.split(',').filter(Boolean)
+          : undefined,
+      sortBy,
+      sortDir,
+    })
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function exportItemsMarkdown(req: AuthRequest, res: Response) {
+  try {
+    const md = await svc.exportItemsMarkdown(req.params.projectId, {
+      status: req.query.status as string | undefined,
+      methodType: req.query.methodType as string | undefined,
+      milestone: req.query.milestone as string | undefined,
+      ownerId: req.query.ownerId as string | undefined,
+      search: req.query.search as string | undefined,
+    })
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="validation-report.md"',
+    )
+    res.send(md)
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function exportItemsPdf(req: AuthRequest, res: Response) {
+  try {
+    const pdf = await svc.exportItemsPdf(req.params.projectId, {
+      status: req.query.status as string | undefined,
+      methodType: req.query.methodType as string | undefined,
+      milestone: req.query.milestone as string | undefined,
+      ownerId: req.query.ownerId as string | undefined,
+      search: req.query.search as string | undefined,
+    })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'attachment; filename="validation-report.pdf"')
+    res.send(pdf)
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function exportItemsCsv(req: AuthRequest, res: Response) {
+  try {
+    const csv = await svc.exportItemsCsv(req.params.projectId, {
+      status: req.query.status as string | undefined,
+      methodType: req.query.methodType as string | undefined,
+      milestone: req.query.milestone as string | undefined,
+      ownerId: req.query.ownerId as string | undefined,
+      search: req.query.search as string | undefined,
+    })
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="validation-items.csv"')
+    res.send(csv)
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function getItem(req: AuthRequest, res: Response) {
+  try {
+    const item = await svc.getItem(req.params.projectId, req.params.id)
+    if (!item) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data: item })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createItem(req: AuthRequest, res: Response) {
+  try {
+    const item = await svc.createItem(req.params.projectId, userId(req), req.body)
+    res.status(201).json({ success: true, data: item })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function updateItem(req: AuthRequest, res: Response) {
+  try {
+    const item = await svc.updateItem(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      req.body,
+    )
+    if (!item) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data: item })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function deleteItem(req: AuthRequest, res: Response) {
+  try {
+    const item = await svc.softDeleteItem(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      req.body?.reason,
+    )
+    if (!item) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data: item })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function duplicateItem(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.duplicateItem(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function restoreItem(req: AuthRequest, res: Response) {
+  try {
+    const item = await svc.restoreItem(req.params.projectId, req.params.id, userId(req))
+    if (!item) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data: item })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createFromRequirements(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.createFromRequirements(
+      req.params.projectId,
+      userId(req),
+      req.body ?? {},
+    )
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function signOffItem(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.signOff(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      req.body ?? {},
+    )
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    const msg = (e as Error).message
+    if (
+      msg.includes('signer cannot be the creator') ||
+      msg.includes('item must be EXECUTED')
+    ) {
+      return fail(res, 403, msg)
+    }
+    return fail(res, 400, msg)
+  }
+}
+
+export async function revokeSignOff(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.revokeSignOff(
+      req.params.projectId,
+      req.params.id,
+      req.params.signOffId,
+      userId(req),
+    )
+    if (!data) return fail(res, 404, 'Sign-off not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function bulkRevokeSignOffs(req: AuthRequest, res: Response) {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x: unknown): x is string => typeof x === 'string') : []
+    if (ids.length === 0) return fail(res, 400, '`ids` must be a non-empty array')
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+    const data = await svc.bulkRevokeSignOffs(req.params.projectId, ids, userId(req), reason)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listSignOffs(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listSignOffs(req.params.projectId, req.params.id)
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listEvidence(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listEvidence(req.params.projectId, req.params.id)
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function acknowledgeSuspect(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.acknowledgeSuspect(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+    )
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listBaselines(req: AuthRequest, res: Response) {
+  try {
+    const includeArchived = req.query.includeArchived === 'true' || req.query.includeArchived === '1'
+    const data = await svc.listBaselines(req.params.projectId, { includeArchived })
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function getBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.getBaseline(req.params.projectId, req.params.id)
+    if (!data) return fail(res, 404, 'Baseline not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.createBaseline(req.params.projectId, userId(req), req.body ?? {})
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function deleteBaseline(req: AuthRequest, res: Response) {
+  try {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+    const data = await svc.deleteBaseline(req.params.projectId, req.params.id, userId(req), reason)
+    if (!data) return fail(res, 404, 'Baseline not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function restoreBaseline(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.restoreBaseline(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Baseline not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function uploadEvidenceFile(req: AuthRequest, res: Response) {
+  try {
+    // multer attaches the parsed file at req.file
+    const file = (req as AuthRequest & { file?: { originalname: string; mimetype: string; buffer: Buffer; size: number } }).file
+    if (!file) return fail(res, 400, 'file is required')
+    // multer drops extra multipart fields into req.body; pick out criterionId.
+    const criterionId = typeof req.body?.criterionId === 'string' && req.body.criterionId
+      ? String(req.body.criterionId)
+      : undefined
+    const link = await svc.uploadEvidenceFile(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      file,
+      criterionId,
+    )
+    if (!link) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data: link })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function attachEvidence(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.attachEvidence(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      req.body ?? {},
+    )
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function detachEvidence(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.detachEvidence(
+      req.params.projectId,
+      req.params.id,
+      req.params.linkId,
+      userId(req),
+    )
+    if (!data) return fail(res, 404, 'Evidence link not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listLinkedRequirements(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listLinkedRequirements(req.params.projectId, req.params.id)
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function linkRequirement(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.linkRequirement(
+      req.params.projectId,
+      req.params.id,
+      req.body?.requirementId,
+      userId(req),
+      req.body?.rationale,
+    )
+    if (!data) return fail(res, 404, 'Validation item or requirement not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function unlinkRequirement(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.unlinkRequirement(
+      req.params.projectId,
+      req.params.id,
+      req.params.traceLinkId,
+      userId(req),
+    )
+    if (!data) return fail(res, 404, 'Trace link not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function bulkUpdate(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.bulkUpdate(req.params.projectId, userId(req), req.body ?? {})
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function getCoverage(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.coverage(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function getTrend(req: AuthRequest, res: Response) {
+  try {
+    const days = Number.parseInt((req.query.days as string) ?? '30', 10) || 30
+    const data = await svc.trend(req.params.projectId, days)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listValidationApprovers(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listValidationApprovers(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listSavedViews(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    const data = await svc.listSavedViews(req.params.projectId, userId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createSavedView(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    const body = req.body as { name?: string; scope?: 'personal' | 'project'; payload?: Record<string, unknown> }
+    if (!body?.name) {
+      res.status(400).json({ success: false, error: 'name is required' })
+      return
+    }
+    const data = await svc.createSavedView(req.params.projectId, userId, {
+      name: body.name,
+      scope: body.scope ?? 'personal',
+      payload: body.payload ?? {},
+    })
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function deleteSavedView(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    const result = await svc.deleteSavedView(req.params.projectId, userId, req.params.viewId)
+    if (!result) {
+      res.status(404).json({ success: false, error: 'View not found or not owned by you' })
+      return
+    }
+    res.json({ success: true, data: null })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function getSettings(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.getSettings(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function updateSettings(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.updateSettings(req.params.projectId, userId(req), req.body ?? {})
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function listProjectActivity(req: AuthRequest, res: Response) {
+  try {
+    const limit = Number(req.query.limit) || 100
+    const fromRaw = typeof req.query.from === 'string' ? req.query.from : ''
+    const toRaw = typeof req.query.to === 'string' ? req.query.to : ''
+    const from = fromRaw ? new Date(fromRaw) : undefined
+    const to = toRaw ? new Date(toRaw) : undefined
+    // Reject bad date params at the boundary so Prisma never sees an Invalid Date.
+    if (from && Number.isNaN(from.getTime())) return fail(res, 400, 'Invalid `from` date')
+    if (to && Number.isNaN(to.getTime())) return fail(res, 400, 'Invalid `to` date')
+    const data = await svc.listProjectActivity(req.params.projectId, limit, { from, to })
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listActivity(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listActivity(req.params.projectId, req.params.id)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listComments(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listComments(req.params.projectId, req.params.id)
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createComment(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.createComment(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      req.body ?? {},
+    )
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function updateComment(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.updateComment(
+      req.params.projectId,
+      req.params.id,
+      req.params.commentId,
+      userId(req),
+      req.body ?? {},
+    )
+    if (data == null) return fail(res, 404, 'Comment not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function deleteComment(req: AuthRequest, res: Response) {
+  try {
+    // For now, "admin" privilege is the project owner. Stricter role gating
+    // will land in the Settings slice.
+    const data = await svc.softDeleteComment(
+      req.params.projectId,
+      req.params.id,
+      req.params.commentId,
+      userId(req),
+      false,
+    )
+    if (data == null) return fail(res, 404, 'Comment not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function star(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.star(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function unstar(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.unstar(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listUncoveredRequirements(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.uncoveredRequirements(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}

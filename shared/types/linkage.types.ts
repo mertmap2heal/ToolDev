@@ -18,6 +18,7 @@ export type EntityType =
   | 'validation_plan'
   | 'validation_case'
   | 'validation_result'
+  | 'validation_item'
   | 'hazard'
   | 'safety_requirement'
   | 'safety_analysis'

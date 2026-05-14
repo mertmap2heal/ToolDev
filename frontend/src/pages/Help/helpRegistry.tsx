@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Bot,
   ShieldAlert,
+  ClipboardCheck,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 
@@ -18,6 +19,7 @@ import AiAndMcpSection from './sections/AiAndMcpSection'
 import AdminSection from './sections/AdminSection'
 import RequirementsSection from './sections/RequirementsSection'
 import VerificationSection from './sections/VerificationSection'
+import ValidationSection from './sections/ValidationSection'
 import InterfacesSection from './sections/InterfacesSection'
 import CmSection from './sections/CmSection'
 import SecuritySection from './sections/SecuritySection'
@@ -120,6 +122,16 @@ export const HELP_PAGES: HelpPage[] = [
     blurb:
       'Test cases, plans, runs, results, and methods of compliance per ARP4754A.',
     Component: VerificationSection,
+  },
+  {
+    slug: 'validation',
+    label: 'Validation',
+    icon: ClipboardCheck,
+    group: 'Modules',
+    title: 'Validation',
+    blurb:
+      'Confirm the delivered system meets stakeholder needs through demonstrations, operational tests, simulations, analyses, and stakeholder sign-offs.',
+    Component: ValidationSection,
   },
   {
     slug: 'interfaces',

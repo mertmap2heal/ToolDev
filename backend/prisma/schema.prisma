@@ -45,6 +45,13 @@ model User {
   aiInvocations                       AiInvocation[]
   submittedBulkJobs                   ParameterBulkJob[]
   aiCredentials                       UserAiCredential[]
+  validationItemsCreated              ValidationItem[]                  @relation("ValidationItemCreator")
+  validationItemsOwned                ValidationItem[]                  @relation("ValidationItemOwner")
+  validationSignOffs                  ValidationSignOff[]
+  validationItemStars                 ValidationItemStar[]
+  validationComments                  ValidationComment[]
+  validationBaselinesCreated          ValidationBaseline[]              @relation("ValidationBaselineCreatedBy")
+  validationBaselinesDeleted          ValidationBaseline[]              @relation("ValidationBaselineDeletedBy")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -264,6 +271,9 @@ model Project {
   commBuses                   CommBus[]
   projectUserEngineeringRoles ProjectUserEngineeringRole[]
   parameterFolders            ParameterFolder[]
+  validationItems             ValidationItem[]
+  validationSettings          ValidationSettings?
+  validationBaselines         ValidationBaseline[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -3938,4 +3948,171 @@ model ParameterScenarioOverride {
 
   @@unique([scenarioId, parameterId])
   @@index([scenarioId])
+}
+
+// =====================================================================
+// Validation module — confirms the system meets stakeholder needs
+// (distinct from Verification, which confirms it meets requirements).
+// See .claude/proposals/01-validation.md for design.
+// =====================================================================
+
+model ValidationItem {
+  id              String  @id @default(uuid())
+  projectId       String
+  key             String // VAL-001, atomic per project
+  title           String
+  description     String? @db.Text
+  // DEMONSTRATION | OPERATIONAL_TEST | SIMULATION | ANALYSIS | STAKEHOLDER_ACCEPTANCE
+  methodType      String  @default("DEMONSTRATION")
+  // PDR | CDR | FAT | SAT | EIS | OTHER
+  targetMilestone String  @default("OTHER")
+  // PLANNED | EXECUTED | VALIDATED | BLOCKED | OBSOLETE
+  status          String  @default("PLANNED")
+  ownerUserId     String?
+  // Inline criteria array: [{ id, text, outcome (MET|PARTIAL|NOT_MET|PENDING), notes, orderIndex }]
+  criteria        Json    @default("[]")
+  // Tags chosen from the project's ValidationSettings.tags library. Storing
+  // labels (not ids) keeps each row self-describing.
+  tags            String[] @default([])
+  // Free-text priority bucket (low | medium | high | critical). String not
+  // enum to match the Requirement.priority pattern.
+  priority        String   @default("medium")
+  // Optional target completion date.
+  dueDate         DateTime?
+
+  // Soft-delete (mirrors Requirement)
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+  restoredAt   DateTime?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User                @relation("ValidationItemCreator", fields: [createdById], references: [id])
+  owner     User?               @relation("ValidationItemOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  signOffs  ValidationSignOff[]
+  stars     ValidationItemStar[]
+  comments  ValidationComment[]
+
+  @@unique([projectId, key])
+  @@index([projectId, status])
+  @@index([projectId, deletedAt])
+  @@index([projectId, targetMilestone])
+}
+
+model ValidationItemStar {
+  id               String   @id @default(uuid())
+  userId           String
+  validationItemId String
+  createdAt        DateTime @default(now())
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validationItem ValidationItem @relation(fields: [validationItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, validationItemId])
+  @@index([validationItemId])
+  @@index([userId])
+}
+
+model ValidationSettings {
+  id        String   @id @default(uuid())
+  projectId String   @unique
+  // Custom key prefixes. JSON array of { prefix, label, description?, isDefault }.
+  // The first or `isDefault:true` entry is what new items use unless the
+  // creator picks a different one.
+  prefixes  Json     @default("[{\"prefix\":\"VAL-\",\"label\":\"Validation\",\"description\":\"Default validation activities\",\"isDefault\":true}]")
+  // Tag library. JSON array of { label, color }. Items pick tags from this
+  // library; arbitrary free-text tags are not allowed so the set stays
+  // navigable.
+  tags      Json     @default("[]")
+  // Project-shared criterion templates. JSON array of { label, criteria: string[] }.
+  // Replaces the per-browser localStorage v1 so templates are visible to every
+  // team member working in the same project.
+  criterionTemplates Json @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+/// Point-in-time snapshot of all live Validation items for a project. Created
+/// by the design-system §8.3 "Baseline this state" action. The snapshot is
+/// frozen Json so subsequent edits to the live items do not retroactively
+/// change the baseline content. Compared / restored later via separate APIs.
+model ValidationBaseline {
+  id           String   @id @default(uuid())
+  projectId    String
+  label        String
+  description  String?
+  // Frozen array of item summaries. Shape: [{
+  //   id, key, title, description, methodType, targetMilestone, status,
+  //   priority, criteria, tags, ownerUserId, signOffCount, isSuspect
+  // }]
+  snapshot     Json
+  itemCount    Int
+  createdById  String
+  createdAt    DateTime @default(now())
+  // Soft delete (V-N9). Hard deletion of a certification anchor is wrong;
+  // archived baselines remain queryable for audit and can be restored.
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("ValidationBaselineCreatedBy", fields: [createdById], references: [id])
+  deletedBy User?   @relation("ValidationBaselineDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([projectId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model ValidationComment {
+  id               String   @id @default(uuid())
+  validationItemId String
+  authorUserId     String
+  body             String   @db.Text
+  // Null = top-level comment; otherwise a threaded reply to another comment
+  // on the SAME validation item.
+  parentId         String?
+  // Author-side edit is allowed; we keep history via updatedAt + audit log.
+  // Hard delete is forbidden — set deletedAt instead so the thread stays
+  // navigable and removed posts render as tombstones.
+  deletedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  validationItem ValidationItem      @relation(fields: [validationItemId], references: [id], onDelete: Cascade)
+  author         User                @relation(fields: [authorUserId], references: [id])
+  parent         ValidationComment?  @relation("ValidationCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        ValidationComment[] @relation("ValidationCommentReplies")
+
+  @@index([validationItemId, createdAt])
+  @@index([authorUserId])
+}
+
+model ValidationSignOff {
+  id               String  @id @default(uuid())
+  validationItemId String
+  signerUserId     String
+  signerRoleLabel  String // free-text role e.g. "Customer Operations Lead"
+  comment          String? @db.Text
+
+  // Immutability: revocation creates a new row whose supersededById points
+  // to the prior approval, marking it superseded. No row is ever updated.
+  supersededById String?            @unique
+  supersededBy   ValidationSignOff? @relation("SignOffSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded     ValidationSignOff? @relation("SignOffSupersession")
+
+  signedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  validationItem ValidationItem @relation(fields: [validationItemId], references: [id], onDelete: Cascade)
+  signer         User           @relation(fields: [signerUserId], references: [id])
+
+  @@index([validationItemId])
+  @@index([signerUserId])
 }

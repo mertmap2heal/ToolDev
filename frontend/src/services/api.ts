@@ -118,6 +118,18 @@ class ApiClient {
     }
   }
 
+  /** POST a multipart/form-data body. Axios infers the boundary header. */
+  async postForm<T>(url: string, form: FormData): Promise<ApiResponse<T>> {
+    try {
+      const response = await this.client.post<ApiResponse<T>>(url, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return response.data
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+
   async put<T>(url: string, data?: any, headers?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
       const response = await this.client.put<ApiResponse<T>>(url, data, { headers })

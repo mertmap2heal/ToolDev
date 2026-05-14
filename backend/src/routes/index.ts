@@ -61,6 +61,7 @@ import lifecycleRoutes from './lifecycle.routes'
 import transitionChecklistRoutes from './transitionChecklist.routes'
 import searchRoutes from './search.routes'
 import requirementsViewPreferencesRoutes from './requirementsViewPreferences.routes'
+import validationRoutes from './validation.routes'
 
 const router = Router()
 
@@ -142,5 +143,6 @@ router.use('/certification', certificationRoutes)
 router.use('/lifecycle', lifecycleRoutes)
 router.use('/transition-checklists', transitionChecklistRoutes)
 router.use('/search', searchRoutes)
+router.use('/validation', validationRoutes)
 
 export default router

@@ -1,0 +1,799 @@
+/* =============================================================================
+   Validation page — v2 scoped tokens.
+   Imports the parameters-v2 token set so the validation page inherits the
+   same design vocabulary. Anything Validation-specific lives here.
+   ============================================================================ */
+@import url('../Parameters/parameters-v2.css');
+
+.validation-v2 {
+  /* Validation-specific tokens, layered on top of pv-* */
+  --val-suspect:        var(--pv-amber);
+  --val-suspect-tint:   var(--pv-amber-tint);
+  --val-validated:      var(--pv-green);
+  --val-validated-tint: var(--pv-green-tint);
+  /* Burndown bar + legend palette — kept readable on both themes */
+  --val-bar-validated:  var(--pv-green);
+  --val-bar-executed:   var(--pv-blue);
+  --val-bar-planned:    #94A3B8;
+  --val-bar-blocked:    var(--pv-red);
+  --val-bar-obsolete:   #64748B;
+}
+html[data-theme='midnight'] .validation-v2 {
+  --val-bar-planned:    #CBD5E1;
+  --val-bar-obsolete:   #94A3B8;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   "Kill the blue" — design-system.md §3.1: the accent is deep forest, not
+   SaaS-blue. Within the validation surface, every primary action and the
+   info-banner accent are re-pointed at --pv-green / --pv-green-tint. The
+   shared --pv-blue token is left alone (other pages depend on it); these
+   overrides are scoped to .validation-v2.
+   ──────────────────────────────────────────────────────────────────────── */
+.validation-v2 .pv-btn.primary,
+.validation-v2 .pv-btn.primary.compact {
+  background: var(--pv-green) !important;
+  border-color: var(--pv-green) !important;
+  color: #fff !important;
+}
+.validation-v2 .pv-btn.primary:hover {
+  filter: brightness(1.08);
+}
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary,
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary.compact {
+  color: #0D1117 !important;
+}
+
+/* Coverage strip */
+/* Coverage strip — was a verbose card with a row of tiles. Now an inline,
+   compact strip: small uppercase caption, then the metric cluster in a flat
+   horizontal row with thin dividers. Reads like an instrument panel. */
+.validation-v2 .vv-coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--pv-bg);
+  border: 1px solid var(--pv-line);
+  border-radius: 4px;
+}
+.validation-v2 .vv-coverage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.validation-v2 .vv-coverage-head .vv-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--pv-fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.validation-v2 .vv-coverage-head .vv-chips {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.validation-v2 .vv-tile {
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: relative;
+}
+.validation-v2 .vv-tile + .vv-tile {
+  border-left: 1px solid var(--pv-line-soft, var(--pv-line));
+}
+.validation-v2 .vv-tile .vv-tile-label {
+  font-size: 10px;
+  color: var(--pv-fg-3);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.validation-v2 .vv-tile .vv-tile-value {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--pv-fg);
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.validation-v2 .vv-tile.vv-tile-gap {
+  background: var(--pv-amber-tint);
+  border-color: var(--pv-amber-line);
+  cursor: pointer;
+}
+.validation-v2 .vv-tile.vv-tile-gap:hover {
+  filter: brightness(0.98);
+}
+.validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
+  color: #5C4400;
+  font-weight: 700;
+}
+html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
+  color: #EAC54F;
+}
+.validation-v2 .vv-tile.vv-tile-bad {
+  background: var(--pv-red-tint, rgba(220, 38, 38, 0.10));
+  border-color: var(--pv-red-line, rgba(220, 38, 38, 0.30));
+}
+.validation-v2 .vv-tile.vv-tile-bad .vv-tile-value {
+  color: var(--pv-red, #B91C1C);
+  font-weight: 700;
+}
+html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-bad .vv-tile-value {
+  color: #F87171;
+}
+.validation-v2 .vv-tile.vv-tile-validated.is-nonzero .vv-tile-value {
+  color: var(--pv-green);
+  font-weight: 700;
+}
+.validation-v2 .vv-tile.vv-tile-validated .vv-tile-value {
+  color: var(--pv-fg);
+}
+
+/* Suspect chip */
+.validation-v2 .vv-suspect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pv-amber);
+  background: var(--pv-amber-tint);
+  border: 1px solid var(--pv-amber-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.validation-v2 .vv-suspect-chip.active {
+  background: var(--pv-amber);
+  color: #fff;
+  border-color: var(--pv-amber);
+}
+
+/* Row suspect badge */
+.validation-v2 .vv-row-suspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--pv-amber);
+  margin-left: 4px;
+}
+
+/* Star button (cell + header) */
+.validation-v2 .vv-star-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--pv-fg-4);
+}
+.validation-v2 .vv-star-btn:hover { color: var(--pv-amber); }
+.validation-v2 .vv-star-btn.on { color: var(--pv-amber); }
+
+/* Drawer section title (shared) */
+/* Section title — was small uppercase mono. Now a proper title using
+   Fraunces serif (already loaded by the design system) at 15px, slight
+   negative tracking, neutral ink. Aligned with design-system.md §2
+   "show the standard in context" — readable headings not template labels. */
+.validation-v2 .pv-dr-section-title {
+  margin: 0 0 12px;
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--pv-fg);
+  text-transform: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.validation-v2 .pv-dr-section-aside {
+  font-family: var(--pv-font);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--pv-fg-3);
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+
+/* Section dividers between drawer blocks — quieter than the previous double
+   borders. 24px gap; thin line on top of every section after the first. */
+.validation-v2 .vv-drawer-section {
+  padding-top: 24px;
+  margin-top: 24px;
+  border-top: 1px solid var(--pv-line-soft, var(--pv-line));
+}
+.validation-v2 .vv-drawer-section:first-of-type {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+/* Meta strip - definition-list-style horizontal row of compact key/value
+   pairs replacing the old four-column grid of select inputs. Each item
+   becomes a tap target that opens an inline editor. */
+.validation-v2 .vv-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 24px;
+  margin-bottom: 4px;
+}
+.validation-v2 .vv-meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.validation-v2 .vv-meta-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pv-fg-3);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.validation-v2 .vv-meta-value {
+  font-size: 13px;
+  color: var(--pv-fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.validation-v2 .vv-meta-value select,
+.validation-v2 .vv-meta-value input[type="date"] {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--pv-fg);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 80ms ease-out, border-color 80ms ease-out;
+}
+.validation-v2 .vv-meta-value select:hover,
+.validation-v2 .vv-meta-value input[type="date"]:hover {
+  background: var(--pv-surface-soft);
+  border-color: var(--pv-line);
+}
+.validation-v2 .vv-meta-value select:focus,
+.validation-v2 .vv-meta-value input[type="date"]:focus {
+  background: var(--pv-bg);
+  border-color: var(--pv-line-strong);
+  outline: none;
+}
+
+/* Drawer status pill - tighter, 12% tint */
+.validation-v2 .vv-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: var(--pv-font-mono);
+  border: 1px solid transparent;
+}
+.validation-v2 .vv-status-pill.is-validated {
+  background: var(--pv-green-tint);
+  color: var(--pv-green);
+}
+.validation-v2 .vv-status-pill.is-executed {
+  background: var(--pv-amber-tint);
+  color: var(--pv-amber);
+}
+.validation-v2 .vv-status-pill.is-blocked {
+  background: var(--pv-red-tint);
+  color: var(--pv-red);
+}
+.validation-v2 .vv-status-pill.is-obsolete {
+  background: var(--pv-gray-tint);
+  color: var(--pv-fg-3);
+}
+.validation-v2 .vv-status-pill.is-planned {
+  background: var(--pv-surface);
+  color: var(--pv-fg-2);
+  border-color: var(--pv-line);
+}
+.validation-v2 .vv-status-pill.is-deleted,
+.validation-v2 .vv-status-pill.is-unsaved {
+  background: var(--pv-amber-tint);
+  color: var(--pv-amber);
+}
+
+/* Dark theme — lift saturation + luminance for AA contrast on dark surfaces */
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-validated {
+  background: rgba(74, 222, 128, 0.18);
+  color: #86EFAC;
+}
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-executed {
+  background: rgba(251, 191, 36, 0.18);
+  color: #FCD34D;
+}
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-blocked {
+  background: rgba(248, 113, 113, 0.20);
+  color: #FCA5A5;
+}
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-obsolete {
+  background: rgba(148, 163, 184, 0.16);
+  color: #CBD5E1;
+}
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-planned {
+  background: rgba(148, 163, 184, 0.10);
+  color: #E2E8F0;
+  border-color: rgba(148, 163, 184, 0.30);
+}
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-deleted,
+html[data-theme='midnight'] .validation-v2 .vv-status-pill.is-unsaved {
+  background: rgba(251, 191, 36, 0.18);
+  color: #FCD34D;
+}
+
+/* Sticky table header. Parameters scope sets the pane to overflow:hidden
+   which blocks the inherited sticky thead from positioning against the
+   document scroll. Validation uses window-level scroll, so loosen the
+   clip here and let thead pin itself to top:0 of the viewport. */
+.validation-v2 .pv-table-pane {
+  overflow: visible;
+}
+.validation-v2 table.pv-params thead th {
+  box-shadow: inset 0 -1px 0 var(--pv-line);
+}
+
+/* Row selection / active row — Parameters paints them blue.
+   Validation design doctrine is forest, so retint here. */
+.validation-v2 table.pv-params tbody tr.is-selected td,
+.validation-v2 table.pv-params tbody tr.is-selected td.col-check,
+.validation-v2 table.pv-params tbody tr.is-selected td.col-name {
+  background: var(--pv-green-tint);
+}
+.validation-v2 table.pv-params tbody tr.is-active td {
+  background: rgba(27, 67, 50, 0.08);
+  box-shadow: inset 2px 0 0 var(--pv-green);
+}
+html[data-theme='midnight'] .validation-v2 table.pv-params tbody tr.is-active td {
+  background: rgba(63, 185, 80, 0.10);
+}
+
+/* Active pill + badge — Parameters paints blue, Validation paints forest. */
+.validation-v2 .pv-pill.active {
+  background: var(--pv-green-tint);
+  color: var(--pv-green);
+  border-color: var(--pv-green);
+}
+.validation-v2 .pv-badge {
+  background: var(--pv-green);
+  color: #fff;
+}
+.validation-v2 .pv-pill.active .pv-badge {
+  background: var(--pv-green);
+  color: #fff;
+}
+html[data-theme='midnight'] .validation-v2 .pv-pill.active {
+  color: #86EFAC;
+  border-color: rgba(74, 222, 128, 0.40);
+}
+html[data-theme='midnight'] .validation-v2 .pv-badge {
+  background: #3FB950;
+  color: #0D1117;
+}
+
+/* Grouped-list milestone header row — interactive, keyboard-focusable. */
+.validation-v2 table.pv-params tbody tr.vv-group-header {
+  cursor: pointer;
+  background: var(--pv-surface-soft);
+  border-top: 1px solid var(--pv-line);
+  border-bottom: 1px solid var(--pv-line);
+}
+.validation-v2 table.pv-params tbody tr.vv-group-header:hover {
+  background: var(--pv-surface);
+}
+.validation-v2 table.pv-params tbody tr.vv-group-header:focus-visible {
+  outline: 2px solid var(--pv-green);
+  outline-offset: -2px;
+}
+
+/* Search-match highlight — amber wash on matched substring inside row
+   cells. The inline style on <mark> sets background; this rule pins
+   foreground per theme so the marked text stays legible. */
+.validation-v2 mark {
+  color: var(--pv-fg) !important;
+  font-weight: 600;
+}
+html[data-theme='midnight'] .validation-v2 mark {
+  background: rgba(251, 191, 36, 0.32) !important;
+  color: #FCD34D !important;
+}
+
+/* Suspect row — left amber stripe so reviewers spot follow-ups at a glance
+   without having to find the inline chip in the title cell. */
+.validation-v2 table.pv-params tbody tr.is-suspect td.col-check {
+  box-shadow: inset 2px 0 0 var(--pv-amber);
+}
+/* Overdue row — left red stripe. Suspect amber wins if both are set
+   because suspect is the newer signal that something needs review. */
+.validation-v2 table.pv-params tbody tr.is-overdue td.col-check {
+  box-shadow: inset 2px 0 0 var(--pv-red);
+}
+.validation-v2 table.pv-params tbody tr.is-suspect.is-overdue td.col-check {
+  box-shadow: inset 2px 0 0 var(--pv-amber);
+}
+
+/* Print stylesheet — hide all chrome (subbar, dock, drawers, menus)
+   and render the table + KPIs as static black-on-white. Used when a
+   reviewer prints a validation snapshot for a stakeholder meeting. */
+@media print {
+  .validation-v2 .pv-subbar,
+  .validation-v2 .pv-bulk-dock,
+  .validation-v2 .vv-coverage,
+  .validation-v2 [role="dialog"],
+  .validation-v2 .vv-loading-bar,
+  .validation-v2 .vv-board-card-drag,
+  .validation-v2 .pv-pill,
+  .validation-v2 .pv-btn,
+  .validation-v2 .pv-icon-btn,
+  .validation-v2 button {
+    display: none !important;
+  }
+  .validation-v2 .pv-title-row h1 {
+    font-size: 18px;
+  }
+  .validation-v2 table.pv-params {
+    page-break-inside: auto;
+  }
+  .validation-v2 table.pv-params tr {
+    page-break-inside: avoid;
+  }
+  .validation-v2 table.pv-params thead {
+    display: table-header-group;
+  }
+  /* Force black ink on white background so the print is legible. */
+  .validation-v2,
+  .validation-v2 td,
+  .validation-v2 th,
+  .validation-v2 .vv-tile-value,
+  .validation-v2 .vv-status-pill {
+    color: #000 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  .validation-v2 .vv-status-pill {
+    border: 1px solid #000 !important;
+  }
+}
+
+/* Suppress native search-clear UI — cycle 155 swapped the search input
+   to type="search", which paints a Chrome/Edge X plus an IE/Edge legacy
+   X. We already render our own clear button (cycle 117). Hide both
+   built-ins so the user sees one clear control, not three. */
+.validation-v2 input[type='search']::-webkit-search-cancel-button,
+.validation-v2 input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.validation-v2 input[type='search']::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Skip-to-content link — visually hidden, surfaces on focus.
+   Lets keyboard / SR users jump past the toolbar straight to the
+   data table. */
+.validation-v2 .vv-skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 6px 12px;
+  background: var(--pv-green);
+  color: #fff;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  transform: translateY(-200%);
+  transition: transform 100ms ease-out;
+}
+.validation-v2 .vv-skip-link:focus,
+.validation-v2 .vv-skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Focus-visible — keyboard users get a 2px forest ring on every
+   interactive control. :focus-visible (not :focus) so mouse clicks
+   don't paint outlines on the buttons they just clicked. */
+.validation-v2 .pv-pill:focus-visible,
+.validation-v2 .pv-btn:focus-visible,
+.validation-v2 .pv-icon-btn:focus-visible,
+.validation-v2 .vv-menu-item:focus-visible,
+.validation-v2 .pv-check:focus-visible,
+.validation-v2 button:focus-visible,
+.validation-v2 a:focus-visible {
+  outline: 2px solid var(--pv-green);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.validation-v2 table.pv-params tbody tr:focus-visible {
+  outline: 2px solid var(--pv-green);
+  outline-offset: -2px;
+}
+html[data-theme='midnight'] .validation-v2 :focus-visible {
+  outline-color: #86EFAC;
+}
+
+/* Hotkey hint inside a primary forest button — invert kbd colour so the
+   badge stays legible on the dark forest background. */
+.validation-v2 .pv-btn.primary .pv-kbd {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.20);
+}
+html[data-theme='midnight'] .validation-v2 .pv-btn.primary .pv-kbd {
+  color: rgba(13, 17, 23, 0.85);
+  background: rgba(13, 17, 23, 0.12);
+  border-color: rgba(13, 17, 23, 0.25);
+}
+
+/* Top loading bar — animated forest stripe while items are fetching. */
+.validation-v2 .vv-loading-bar,
+.vv-loading-bar {
+  height: 100%;
+  width: 30%;
+  background: var(--pv-green, #1B4332);
+  animation: vv-load-slide 1.1s ease-in-out infinite;
+}
+@keyframes vv-load-slide {
+  0%   { transform: translateX(-110%); }
+  50%  { transform: translateX(160%); }
+  100% { transform: translateX(360%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .validation-v2 .vv-loading-bar,
+  .vv-loading-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+  /* Soft-disable other purely decorative transitions inside the
+     validation surface for users who opt out of motion. */
+  .validation-v2 *,
+  .validation-v2 *::before,
+  .validation-v2 *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Page title — Fraunces serif per design doctrine for the Validation
+   surface. Parameters scope uses Inter; override scoped to .validation-v2
+   so DER / Baselines / Activity sub-pages stay consistent. */
+.validation-v2 .pv-title-row h1 {
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: -0.015em;
+}
+
+/* Activity feed row hover — pairs with .is-clickable cursor:pointer in
+   ActivityPage. Subtle surface lift so the deep-link affordance is
+   obvious on hover, neutral when the row has no link target. */
+.validation-v2 li.is-clickable:hover {
+  background: var(--pv-surface-soft);
+}
+
+/* Priority badge — four tiers with distinct visual weight.
+   Replaces the inline switch in ValidationPage that left medium = low. */
+.validation-v2 .vv-prio {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--pv-font-mono);
+  border: 1px solid transparent;
+}
+.validation-v2 .vv-prio.is-critical {
+  background: var(--pv-red-tint);
+  color: var(--pv-red);
+}
+.validation-v2 .vv-prio.is-high {
+  background: var(--pv-amber-tint);
+  color: var(--pv-amber);
+}
+.validation-v2 .vv-prio.is-medium {
+  background: rgba(43, 108, 176, 0.10);
+  color: var(--pv-blue, #2D4A63);
+}
+html[data-theme='midnight'] .validation-v2 .vv-prio.is-medium {
+  background: rgba(47, 129, 247, 0.18);
+  color: #79B8FF;
+}
+.validation-v2 .vv-prio.is-low {
+  background: var(--pv-gray-tint, rgba(148, 163, 184, 0.10));
+  color: var(--pv-fg-3);
+}
+
+/* Active-sort column header — distinguish from the rest of the row */
+.validation-v2 table.pv-params thead th.sortable.is-sorted {
+  color: var(--pv-fg);
+  font-weight: 600;
+}
+.validation-v2 table.pv-params thead th.sortable.is-sorted::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  background: var(--pv-green);
+}
+.validation-v2 table.pv-params thead th.sortable {
+  position: relative;
+}
+
+/* Drawer header redesign */
+.validation-v2 .vv-dr-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--pv-line);
+  background: var(--pv-bg);
+}
+.validation-v2 .vv-dr-key {
+  font-family: var(--pv-font-mono);
+  font-size: 12px;
+  color: var(--pv-fg-3);
+  font-weight: 500;
+}
+.validation-v2 .vv-dr-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.validation-v2 .vv-dr-title-row {
+  padding: 16px 20px 8px;
+}
+.validation-v2 .vv-dr-title {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  margin: 0;
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--pv-fg);
+}
+.validation-v2 .vv-dr-title::placeholder {
+  color: var(--pv-fg-4);
+  font-style: italic;
+}
+
+/* Body inner padding aligned with header */
+.validation-v2 .vv-dr-body-pad {
+  padding: 0 20px 20px;
+}
+
+/* Avatars — the shared rule paints light-grey initials on a light gradient,
+   which vanishes in dark mode. Re-point to surface.inset fill with proper
+   ink text per design-system.md (initials, not empty circles). */
+.validation-v2 .pv-avatar,
+.validation-v2 .pv-dr-comment .pv-avatar {
+  background: var(--pv-surface-inset, var(--pv-surface)) !important;
+  border: 1px solid var(--pv-line);
+  color: var(--pv-fg-2) !important;
+  font-family: var(--pv-font-mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+html[data-theme='midnight'] .validation-v2 .pv-avatar,
+html[data-theme='midnight'] .validation-v2 .pv-dr-comment .pv-avatar {
+  background: var(--pv-surface-2, #1F262E) !important;
+  color: var(--pv-fg) !important;
+}
+
+/* Popover menu (the "More" button) */
+.validation-v2 .vv-menu-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pv-fg-3);
+  padding: 6px 8px 2px;
+}
+.validation-v2 .vv-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--pv-fg);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.validation-v2 .vv-menu-item:hover {
+  background: var(--pv-surface);
+}
+.validation-v2 .vv-menu-sep {
+  height: 1px;
+  background: var(--pv-line-soft, var(--pv-line));
+  margin: 4px 0;
+}
+
+/* Comfortable density */
+.validation-v2.is-comfortable table.pv-params td { height: 40px; padding: 4px 12px; }
+.validation-v2.is-comfortable table.pv-params thead th { padding: 9px 12px; }
+
+/* Tag chip */
+.validation-v2 .vv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-family: var(--pv-font-mono);
+  border-radius: 3px;
+}
+
+/* Forest accent override for validation dialog confirm buttons. */
+.validation-v2 .pv-dr-btn.primary {
+  background: var(--pv-green);
+  border-color: var(--pv-green);
+  color: #fff;
+}
+.validation-v2 .pv-dr-btn.primary:hover {
+  background: #133124;
+  border-color: #133124;
+}
+.validation-v2 .pv-dr-btn.primary.danger {
+  background: var(--pv-red);
+  border-color: var(--pv-red);
+}
+.validation-v2 .pv-dr-btn.primary.danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* Cluster every subbar control on the left edge rather than pinning the
+   Export pill to the far right. At wide viewports the right-push opens
+   a hundreds-of-pixels void between Group/Columns and Export that reads
+   as a layout bug. Packing left keeps the toolbar tight at any width. */
+.validation-v2 .pv-subbar .pv-subbar-right {
+  margin-left: 0;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
