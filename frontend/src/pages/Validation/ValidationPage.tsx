@@ -601,9 +601,19 @@ export default function ValidationPage() {
         e.preventDefault()
         setSelectedItemId(items[0].id)
       } else if (e.key === 'Escape') {
-        // Cascade: drawer -> filters panel -> bulk selection -> filter set.
-        // First non-empty level handled wins; later levels stay for the
-        // next ESC press.
+        // Cascade: open menus -> drawer -> filters panel -> bulk
+        // selection -> filter set. First non-empty level handled wins;
+        // later levels stay for the next ESC press.
+        if (moreMenuOpen) {
+          e.preventDefault()
+          setMoreMenuOpen(false)
+          return
+        }
+        if (colsMenuOpen) {
+          e.preventDefault()
+          setColsMenuOpen(false)
+          return
+        }
         if (selectedItemId !== null) {
           e.preventDefault()
           setSelectedItemId(null)
@@ -629,7 +639,7 @@ export default function ValidationPage() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones])
+  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones, moreMenuOpen, colsMenuOpen])
 
   if (!projectId) return null
 
