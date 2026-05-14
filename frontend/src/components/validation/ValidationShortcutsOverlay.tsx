@@ -54,6 +54,9 @@ export default function ValidationShortcutsOverlay({ isOpen, onClose, onOpenManu
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="validation-shortcuts-title"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'var(--pv-bg)',
@@ -68,7 +71,7 @@ export default function ValidationShortcutsOverlay({ isOpen, onClose, onOpenManu
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>
+          <h2 id="validation-shortcuts-title" style={{ margin: 0, fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>
             Keyboard shortcuts
           </h2>
           <button
