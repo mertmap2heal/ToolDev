@@ -891,7 +891,7 @@ export function MarkdownPreview({ source, members }: PreviewProps) {
       // Combined regex: legacy `@[Name](uuid)` OR plain `@handle` where handle
       // starts on a word boundary and consists of a-z 0-9 _ . - (matching the
       // slug shape produced by mentionHandle).
-      const re = /@\[([^\]]+)\]\(([^)]+)\)|(?:^|(?<=\s|[(\[]))@([a-z0-9][a-z0-9._-]*)/gi
+      const re = /@\[([^\]]+)\]\(([^)]+)\)|(?:^|(?<=\s|[([]))@([a-z0-9][a-z0-9._-]*)/gi
       let lastIndex = 0
       let m: RegExpExecArray | null
       while ((m = re.exec(text)) !== null) {

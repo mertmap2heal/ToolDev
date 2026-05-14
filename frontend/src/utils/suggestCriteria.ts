@@ -44,7 +44,7 @@ function splitSentences(text: string): string[] {
   // Split on bullets, newlines, periods/semicolons. Keep stop-words intact.
   return text
     .replace(/\r\n/g, '\n')
-    .split(/(?<=[.;])\s+|[\n•\-]\s+/u)
+    .split(/(?<=[.;])\s+|[\n•-]\s+/u)
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
 }
