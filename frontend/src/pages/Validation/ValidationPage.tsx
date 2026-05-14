@@ -1388,7 +1388,12 @@ export default function ValidationPage() {
         )
       })()}
 
-      <div className="pv-subbar" style={{ margin: 0, borderRadius: 6, border: '1px solid var(--pv-line)' }}>
+      <div
+        className="pv-subbar"
+        role="toolbar"
+        aria-label="Validation filters and view controls"
+        style={{ margin: 0, borderRadius: 6, border: '1px solid var(--pv-line)' }}
+      >
         <div className="pv-search">
           <Search size={14} />
           <input
