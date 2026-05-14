@@ -1418,12 +1418,11 @@ export default function ValidationPage() {
       })()}
 
       <div
-        className="pv-subbar is-split"
+        className="pv-subbar"
         role="toolbar"
         aria-label="Validation filters and view controls"
         style={{ margin: 0, borderRadius: 6, border: '1px solid var(--pv-line)' }}
       >
-        <div className="pv-subbar-row">
         <div className="pv-search">
           <Search size={14} />
           <input
@@ -1586,8 +1585,6 @@ export default function ValidationPage() {
             Group: Milestone
           </button>
         )}
-        </div>
-        <div className="pv-subbar-row is-tools">
         {viewMode === 'list' && (
           <div style={{ position: 'relative' }}>
             <button
@@ -1662,87 +1659,6 @@ export default function ValidationPage() {
             )}
           </div>
         )}
-        <label
-          className={`pv-pill ${activeViewName ? 'active' : ''}`}
-          style={{ cursor: 'pointer', paddingRight: 4 }}
-          title={activeViewName ? `Showing saved view: ${activeViewName}` : 'Apply a saved view'}
-        >
-          {activeViewName ? `View · ${activeViewName}` : 'View'}
-          <select
-            value=""
-            onChange={(e) => {
-              const action = e.target.value
-              e.currentTarget.value = ''
-              if (!action) return
-              if (action === '__save__') {
-                saveCurrentAsView()
-                return
-              }
-              if (action.startsWith('__delete__:')) {
-                deleteView(action.slice('__delete__:'.length))
-                return
-              }
-              const v = savedViews.find((s) => s.name === action)
-              if (v) applyView(v)
-            }}
-            style={{
-              background: 'transparent',
-              border: 0,
-              color: 'inherit',
-              font: 'inherit',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            <option value="">Select…</option>
-            {savedViews.length > 0 && (
-              <optgroup label="Apply">
-                {savedViews.map((v) => (
-                  <option key={v.name} value={v.name}>
-                    {v.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup label="Manage">
-              <option value="__save__">Save current filters as view…</option>
-              {savedViews.map((v) => (
-                <option key={`d-${v.name}`} value={`__delete__:${v.name}`}>
-                  Delete "{v.name}"
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
-        <label
-          className={`pv-pill ${criterionFilter ? 'active' : ''}`}
-          style={{ cursor: 'pointer', paddingRight: 4 }}
-          title="Filter by acceptance-criteria outcomes"
-        >
-          Criteria
-          <select
-            value={criterionFilter}
-            onChange={(e) =>
-              setCriterionFilter(
-                e.target.value as '' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria',
-              )
-            }
-            style={{
-              background: 'transparent',
-              border: 0,
-              color: 'inherit',
-              font: 'inherit',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            <option value="">Any</option>
-            <option value="allMet">All met</option>
-            <option value="anyPartial">Any partial</option>
-            <option value="anyNotMet">Any not met</option>
-            <option value="noCriteria">No criteria</option>
-          </select>
-        </label>
         <div className="pv-subbar-right">
           <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Export the current view">
             <Download size={14} /> Export
@@ -1768,7 +1684,6 @@ export default function ValidationPage() {
               <option value="pdf">Report — PDF</option>
             </select>
           </label>
-        </div>
         </div>
       </div>
 
@@ -2078,6 +1993,70 @@ export default function ValidationPage() {
               </select>
             </div>
           )}
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+              Criteria
+            </label>
+            <select
+              value={criterionFilter}
+              aria-label="Filter by acceptance-criteria outcomes"
+              onChange={(e) =>
+                setCriterionFilter(
+                  e.target.value as '' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria',
+                )
+              }
+              style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+            >
+              <option value="">Any outcome</option>
+              <option value="allMet">All met</option>
+              <option value="anyPartial">Any partial</option>
+              <option value="anyNotMet">Any not met</option>
+              <option value="noCriteria">No criteria defined</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+              Saved view
+            </label>
+            <select
+              value={activeViewName ?? ''}
+              aria-label="Apply a saved view"
+              onChange={(e) => {
+                const action = e.target.value
+                if (!action) return
+                if (action === '__save__') {
+                  saveCurrentAsView()
+                  return
+                }
+                if (action.startsWith('__delete__:')) {
+                  deleteView(action.slice('__delete__:'.length))
+                  return
+                }
+                const v = savedViews.find((s) => s.name === action)
+                if (v) applyView(v)
+              }}
+              style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+            >
+              <option value="">{activeViewName ? activeViewName : 'Select a saved view…'}</option>
+              {savedViews.length > 0 && (
+                <optgroup label="Apply">
+                  {savedViews.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Manage">
+                <option value="__save__">Save current filters as view…</option>
+                {savedViews.map((v) => (
+                  <option key={`d-${v.name}`} value={`__delete__:${v.name}`}>
+                    Delete "{v.name}"
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
           {settings && settings.tags.length > 0 && (
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>

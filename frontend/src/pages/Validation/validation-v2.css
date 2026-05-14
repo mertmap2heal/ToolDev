@@ -788,13 +788,13 @@ html[data-theme='midnight'] .validation-v2 .pv-dr-comment .pv-avatar {
 }
 
 /* Subbar split into two intentional rows. Row 1 = primary filters,
-   row 2 = table tools. Stops the awkward natural wrap that landed
-   Criteria + Export on their own line. */
+   row 2 = table tools. The two rows render flush (no dashed rule) so
+   visually it reads as one toolbar that wraps at width breakpoints. */
 .validation-v2 .pv-subbar.is-split {
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 4px;
+  padding: 6px 8px;
 }
 .validation-v2 .pv-subbar.is-split .pv-subbar-row {
   display: flex;
@@ -803,18 +803,24 @@ html[data-theme='midnight'] .validation-v2 .pv-dr-comment .pv-avatar {
   align-items: center;
 }
 .validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools {
-  border-top: 1px dashed var(--pv-line-soft, var(--pv-line));
-  padding-top: 8px;
+  padding-top: 0;
 }
-.validation-v2 .pv-subbar.is-split .pv-subbar-row .pv-subbar-right {
+.validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools::before {
+  content: 'Table';
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pv-fg-3);
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+/* Cluster the row-2 controls left; Export gets a slim gap before it
+   rather than being yanked to the far right edge. Keeps the controls
+   reading as a single connected group. */
+.validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools .pv-subbar-right {
   margin-left: auto;
   display: flex;
   gap: 6px;
   align-items: center;
-}
-@media (max-width: 720px) {
-  .validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools {
-    border-top: 0;
-    padding-top: 0;
-  }
 }
