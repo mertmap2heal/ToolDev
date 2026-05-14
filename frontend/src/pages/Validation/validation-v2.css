@@ -409,6 +409,18 @@ html[data-theme='midnight'] .validation-v2 .pv-badge {
   outline-offset: -2px;
 }
 
+/* Search-match highlight — amber wash on matched substring inside row
+   cells. The inline style on <mark> sets background; this rule pins
+   foreground per theme so the marked text stays legible. */
+.validation-v2 mark {
+  color: var(--pv-fg) !important;
+  font-weight: 600;
+}
+html[data-theme='midnight'] .validation-v2 mark {
+  background: rgba(251, 191, 36, 0.32) !important;
+  color: #FCD34D !important;
+}
+
 /* Suspect row — left amber stripe so reviewers spot follow-ups at a glance
    without having to find the inline chip in the title cell. */
 .validation-v2 table.pv-params tbody tr.is-suspect td.col-check {
