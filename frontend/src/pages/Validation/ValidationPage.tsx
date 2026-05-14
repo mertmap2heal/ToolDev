@@ -2238,7 +2238,7 @@ export default function ValidationPage() {
                           color: 'var(--pv-fg-3)',
                         }}
                       >
-                        <span>{it.key}</span>
+                        <span>{renderHighlighted(it.key)}</span>
                         <span title={MILESTONE_TOOLTIP[it.targetMilestone]}>
                           {it.targetMilestone}
                         </span>
@@ -2257,7 +2257,7 @@ export default function ValidationPage() {
                           hyphens: 'auto',
                         }}
                       >
-                        {it.title}
+                        {renderHighlighted(it.title)}
                       </div>
                       <div
                         style={{
