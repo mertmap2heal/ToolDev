@@ -2429,6 +2429,8 @@ export default function ValidationPage() {
         <div
           id="validation-table"
           tabIndex={-1}
+          role="region"
+          aria-label="Validation item list"
           className="pv-table-pane"
           aria-busy={itemsFetching}
           style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}
