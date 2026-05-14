@@ -40,6 +40,14 @@ export default function ValidationSettingsPage() {
     }
   }, [settings])
 
+  useEffect(() => {
+    const prev = document.title
+    document.title = 'Validation · Settings · Tool'
+    return () => {
+      document.title = prev
+    }
+  }, [])
+
   if (!projectId) return null
 
   const save = async () => {
