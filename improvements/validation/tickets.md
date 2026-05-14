@@ -10,7 +10,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ## Section A — Quick wins (≤1 sprint, low coupling)
 
 ### V-Q1 · Remove baseline delete affordance for non-admins
-**Priority:** P0 · **Effort:** S
+**Priority:** P0 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** `DELETE /baselines/:id` now wrapped with `requireProjectOwnerOrAdmin`. `BaselinesPage` hides the archive icon for non-admins via `useAuthStore` role check (`SUPERIOR_ADMIN`/`COMPANY_ADMIN`/`isAdmin`). Soft-delete schema landed in same commit (see V-N9). Confirm + reason prompt routed through `ValidationDialogHost`.
+
 
 **Problem.** `BaselinesPage.tsx:222` renders a `<Trash2>` icon on every baseline row. The handler calls `validationService.deleteBaseline(projectId, id)` which hits `DELETE /baselines/:id`. The endpoint is gated by `requireProjectMember` only — any project member can hard-delete the certification anchor for any baseline. The schema (`ValidationBaseline`) has no `deletedAt`; deletion is irreversible.
 
@@ -24,7 +26,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ---
 
 ### V-Q2 · Stop the cosmetic divergence on Settings page
-**Priority:** P2 · **Effort:** S
+**Priority:** P2 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** `ValidationSettingsPage` rewritten end-to-end with `pv-` CSS variables (no Tailwind dark-mode classes, no `text-blue-*`). "Add" links use `var(--pv-green, #1B4332)`. Forbidden-state banner now uses `--pv-amber` per status.warning slot. Matches `ValidationPage`/`DERView`/`BaselinesPage`/`ActivityPage` visually.
+
 
 **Problem.** `ValidationSettingsPage.tsx` mixes Tailwind dark-mode classes (`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900`) with the validation-v2 CSS variable pattern used by the other four pages. "Add prefix / Add tag / Add template" affordances use `text-blue-600 hover:text-blue-700` — blue is on the `design-system.md` §3.1 kill-list outside the rare `status.info` slot.
 
@@ -38,7 +42,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ---
 
 ### V-Q3 · Replace raw JSON in Activity feed with one-line action summaries
-**Priority:** P2 · **Effort:** S
+**Priority:** P2 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** New `frontend/src/components/validation/activityLabels.ts` exports `summariseActivity(action, details)`. One template per `validation:*` action: `create`, `update`, `duplicate`, `delete`, `restore`, `bulk-update`, `bulk-from-requirements`, `link-/unlink-requirement`, `sign-off`, `sign-off-revoke`, `evidence-attach/upload/detach`, `baseline-create/archive/restore`, `suspect-ack`, `settings-update`, `comment-create/update/delete`. Raw JSON kept on the row's `title` attribute for hover inspection. Unknown actions fall back to humanised action string (never raw JSON).
+
 
 **Problem.** `ActivityPage.tsx:214` renders `r.details ?? ''` as text — so users see `{"validationItemId":"abc-123","key":"VAL-014","reason":"superseded by VAL-014"}` raw. Twenty action types share this rendering path.
 
@@ -56,7 +62,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ---
 
 ### V-Q4 · Add date-range filter to Activity feed
-**Priority:** P3 · **Effort:** S
+**Priority:** P3 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** `ActivityPage` subbar gains a date-range select with `All time` / `Today` / `Last 7 days` / `Last 30 days` / `Custom…`. Custom mode reveals two native `<input type="date">` pickers. Filter is server-side: `GET /projects/:projectId/activity?from=<iso>&to=<iso>`; controller validates date params, service `where.createdAt` clause uses `gte`/`lte`. React Query cache keyed by `[projectId, range, customFrom, customTo]` so refetch is automatic.
+
 
 **Problem.** `ActivityPage` filters only by action and user. For long-running projects the 300-row default is dense; a DER reviewing a quarterly milestone needs to scope to a date range.
 
@@ -69,7 +77,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ---
 
 ### V-Q5 · Build a deep-link adapter for ValidationItem
-**Priority:** P1 · **Effort:** S
+**Priority:** P1 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** New `frontend/src/linkage/adapters/validationAdapter.ts` modelled on `verificationAdapter`. Exports `search`/`getById`/`buildDeepLink`. New EntityType `validation_item` added to `shared/types/linkage.types.ts`. Registered in `buildDeepLink.ts` `ADAPTER_MAP`. Canonical URL: `/projects/:projectId/validation?open=:id`. Cross-module callers should switch to `buildDeepLink(projectId, { type: 'validation_item', id })` in follow-up sweep (existing hard-coded URLs left in place — flagged for separate refactor PR).
+
 
 **Problem.** `frontend/src/linkage/` has 18 entity adapters (per `architecture.md`). **There is no `validation.ts` adapter.** Other modules (change requests, issues, etc.) cannot build a cross-module deep-link to a validation item via `buildDeepLink({ type: 'validation', id, projectId })`.
 
@@ -83,7 +93,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ---
 
 ### V-Q6 · Enforce the `Validation Approver` role at sign-off time
-**Priority:** P1 · **Effort:** S
+**Priority:** P1 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** Backend: `signOff()` and new `bulkRevokeSignOffs()` now call `isValidationApprover(projectId, userId)`. Platform admins (`isAdminUser`) still bypass for stuck-workflow recovery. Failure throws `Error` with `statusCode = 403` and a copy-pastable error pointing to Stakeholders → Roles & assignments. Controller `err()` helper now reads `statusCode` from thrown errors so 403s reach the client as 403s. New endpoint `GET /projects/:projectId/approvers` lists role-holders. Frontend: `ValidationItemDetailDrawer` + `ValidationPage` query `/approvers`, compute `isApprover`, gate Sign-off button and bulk-dock affordance; non-approver hint copy added. `ValidationSettingsPage` shows approver chip list + deep link to role-assignment UI. Test suite updated: `validation.test.ts` `beforeAll` now upserts the role and assigns the approver fixture user; `afterAll` deletes the assignment. 26/26 validation tests pass.
+
 
 **Problem.** `validation.service.ts:201` auto-upserts a system `EngineeringRole(name: 'Validation Approver', isSystem: true)` at module boot. The drawer copy at `ValidationItemDetailDrawer.tsx:1316` reads "`Validation Approver` role-holders are the intended signers". But the sign-off endpoint **does not check** that the signer holds the role on the project. Any project member who is not the creator can sign.
 
@@ -97,7 +109,9 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 ---
 
 ### V-Q7 · Remove the dead `MILESTONE_LABEL` reference in BaselinesPage
-**Priority:** P3 · **Effort:** S
+**Priority:** P3 · **Effort:** S · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** Milestone cell of the baseline snapshot table now renders `MILESTONE_LABEL[it.targetMilestone] ?? it.targetMilestone` (consistent with the method column's `METHOD_LABEL` usage). Hidden `<span style={{display:'none'}}>` and its apologetic comment removed.
+
 
 **Problem.** `BaselinesPage.tsx:400` reads:
 
@@ -246,7 +260,9 @@ with comment: *"MILESTONE_LABEL referenced in tests of the column above (kept he
 ---
 
 ### V-N9 · Soft-delete `ValidationBaseline` (replace `deleteBaseline` with archive)
-**Priority:** P0 · **Effort:** S-M
+**Priority:** P0 · **Effort:** S-M · **Status:** ✅ Shipped (commit `7883ac4`)
+**Resolution.** Schema: `ValidationBaseline.deletedAt DateTime?`, `deletedById String?`, `deleteReason String?`, plus `deletedBy` relation back to `User`. Index on `deletedAt` added. Migration applied via `npx prisma db push`. Service: `deleteBaseline()` now sets `deletedAt`/`deletedById`/`deleteReason` instead of `prisma.delete`; idempotent on already-archived rows. New `restoreBaseline()` clears those columns. Audit events: `validation:baseline-archive` + `validation:baseline-restore` (humanised in V-Q3's `activityLabels.ts`). Routes: archive + restore both gated by `requireProjectOwnerOrAdmin`. `listBaselines()` defaults to `deletedAt: null`; opt-in `?includeArchived=true` query param. UI: BaselinesPage adds `Show archived` toggle, archived rows render at 0.55 opacity with `archived` chip (tooltipped with `deleteReason`), restore icon swaps in for admins on archived rows.
+
 
 **Problem.** Tied to V-Q1. `ValidationBaseline` has no `deletedAt`. Hard-deletion of a certification anchor is wrong. Today the `Trash2` icon on every row makes irreversible deletion a single click.
 
