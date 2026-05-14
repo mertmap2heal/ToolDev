@@ -40,6 +40,7 @@ Nine roles. Each invoked as a Claude sub-agent with the prompt pattern in §6.
 - **Approach.** 3-6 bullets describing the schema migration, service shape, controller shape, frontend integration.
 - **Files touched.** Explicit list with line ranges.
 - **Cross-cutting interactions.** Which `R-N` refactors does this touch; which `cross-cutting.md` entries get refined or appended.
+- **Reuse audit** (required — per `improvements/SHARED-SERVICES.md` §6.1). For each cross-module concern this ticket touches (comments, attachments, audit, sign-off, baseline, evidence, subscription, traceability, deep-link, search, export, owner picker, version diff, objective matrix, keyboard shortcuts, mentions, notifications): cite the canonical service or component path and one of `reuse | extract-then-reuse | build-polymorphic-from-day-one`. If any answer is `build-polymorphic-from-day-one`, surface the matching `SHR-N` ticket as a blocker or co-ticket. Tickets with a missing reuse-audit entry are returned to PM.
 - **Out of scope.** Explicit "not in this ticket" list.
 - **Risk + mitigation.** One paragraph on the riskiest aspect.
 - **Decision.** `Proceed | Block on <dep> | Reshape — see comment | Reject — out of scope`.
@@ -79,6 +80,7 @@ Nine roles. Each invoked as a Claude sub-agent with the prompt pattern in §6.
 - Every backend change uses the singleton Prisma client per `kb/backend-patterns.md`.
 - Every frontend change uses tokens, not `blue-*` / inline styles, per the R-9 ESLint rule (once landed).
 - Every cert-relevant write must populate the provenance lattice once R-1 lands.
+- **Shared-service pre-flight** (per `improvements/SHARED-SERVICES.md`). Before introducing a new `*.service.ts`, a new `*Comment` / `*Attachment` / `*Subscription` / `*AuditLog` / `*SignOff` / `*Baseline` Prisma model, a new comment list component, a new activity feed, a new export pipeline, a new sign-off ceremony, or a new keyboard handler, the Dev opens `SHARED-SERVICES.md` §3 and confirms the canonical equivalent. If found, consume via this module's `entityType`. If absent and the concern is cross-module by nature, open the matching `SHR-N` ticket and block this ticket on it. Module-private duplicates of cross-module concerns are a Reviewer reject.
 - Updates the corresponding `tickets.md` entry inline: changes status, appends a `Shipped — <hash>` note pointing at the commit that closes the ticket.
 
 **Gates.** PR opened against `dev` (per `git-workflow.md`). Reviewer + Security Reviewer + QA approve before merge.
@@ -93,6 +95,7 @@ Nine roles. Each invoked as a Claude sub-agent with the prompt pattern in §6.
 
 - **AC verification.** Quote each acceptance criterion from `tickets.md`; mark `Met / Partial / Missing / Unverifiable`.
 - **Rule conformance.** `.claude/rules.md` items 1-12 — flag any violation by §-number.
+- **Shared-service reuse** (per `improvements/SHARED-SERVICES.md` §6.2). No module-private duplicate of a canonical concern (comments, attachments, audit log, sign-off, baseline, subscription, evidence link, deep-link, owner picker, version diff, objective matrix, keyboard shortcuts, mentions, notifications) was introduced. If a duplicate was unavoidable, the Architect's reuse audit explicitly documented why and the matching `SHR-N` migration ticket exists. A PR that reinvents a shared service is `Request changes` — not a warning.
 - **Cross-cutting drift.** Did this PR re-state a finding in `_shared/cross-cutting.md` instead of fix it? Cite which.
 - **Code quality.** Strict file:line citations for any concern. Imperative ("rename X to Y", not "consider renaming").
 - **Verdict.** `Approve | Request changes | Reject — out of scope`.
@@ -535,6 +538,7 @@ The orchestrator then issues the role/pm sub-agent per §6.1 and pauses.
 ## 11. References
 
 - `improvements/ROADMAP-phase3.md` — what to do, in what order
+- `improvements/SHARED-SERVICES.md` — reuse-don't-reinvent doctrine: canonical service catalogue + SHR-N migration tickets + Architect/Dev/Reviewer enforcement hooks
 - `improvements/_shared/cross-cutting.md` — what spans packages
 - `improvements/_shared/gap-summary.md` — why each ticket exists
 - `improvements/_shared/competitor-matrix.md` — what each ticket has to beat
