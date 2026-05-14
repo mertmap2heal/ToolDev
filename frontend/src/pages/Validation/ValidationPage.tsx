@@ -1046,7 +1046,8 @@ export default function ValidationPage() {
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
-              aria-label="Open Validation help"
+              aria-label="Open Validation help (press ? for keyboard shortcuts)"
+              aria-keyshortcuts="?"
               title="What is this page? Who signs off? How does it work? Click for the user manual. (Press ? for keyboard shortcuts.)"
               className="pv-icon-btn"
               style={{ width: 22, height: 22 }}
@@ -1138,6 +1139,7 @@ export default function ValidationPage() {
             onClick={() => setCreateFromReqOpen(true)}
             className="pv-btn"
             title="Bulk-create items from requirements (Cmd+Shift+F)"
+            aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
           >
             <ListPlus size={14} /> From requirements
             <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⌘⇧F</span>
@@ -1147,6 +1149,7 @@ export default function ValidationPage() {
             onClick={() => setCreateOpen(true)}
             className="pv-btn primary"
             title="Create a new validation item (Cmd+N)"
+            aria-keyshortcuts="Control+N Meta+N"
           >
             <Plus size={14} /> New item
             <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⌘N</span>
