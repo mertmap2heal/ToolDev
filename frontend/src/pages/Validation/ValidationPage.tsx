@@ -744,7 +744,7 @@ export default function ValidationPage() {
           </button>
         </td>
         <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
-          <span>{it.key}</span>
+          <span>{renderHighlighted(it.key)}</span>
           <button
             type="button"
             onClick={(e) => {
