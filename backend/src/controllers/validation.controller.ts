@@ -438,6 +438,61 @@ export async function getTrend(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listSavedViews(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    const data = await svc.listSavedViews(req.params.projectId, userId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createSavedView(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    const body = req.body as { name?: string; scope?: 'personal' | 'project'; payload?: Record<string, unknown> }
+    if (!body?.name) {
+      res.status(400).json({ success: false, error: 'name is required' })
+      return
+    }
+    const data = await svc.createSavedView(req.params.projectId, userId, {
+      name: body.name,
+      scope: body.scope ?? 'personal',
+      payload: body.payload ?? {},
+    })
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function deleteSavedView(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    const result = await svc.deleteSavedView(req.params.projectId, userId, req.params.viewId)
+    if (!result) {
+      res.status(404).json({ success: false, error: 'View not found or not owned by you' })
+      return
+    }
+    res.json({ success: true, data: null })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function getSettings(req: AuthRequest, res: Response) {
   try {
     const data = await svc.getSettings(req.params.projectId)

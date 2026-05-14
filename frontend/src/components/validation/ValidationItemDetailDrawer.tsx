@@ -165,7 +165,14 @@ export default function ValidationItemDetailDrawer({
 
   const isDirty = useMemo(() => {
     if (!draft || !item) return false
-    return JSON.stringify(draft) !== JSON.stringify(item)
+    // Normalise the server item the same way the draft is normalised
+    // on mount (legacy "Source requirement <uuid>\n\n..." prefix
+    // stripped). Without this, opening a legacy item and closing it
+    // immediately would falsely report unsaved changes because the
+    // draft's description differs from the raw stored description.
+    const m = item.description?.match(/^Source requirement [0-9a-f-]{36}\n\n([\s\S]*)$/i)
+    const baseline = m ? { ...item, description: m[1] } : item
+    return JSON.stringify(draft) !== JSON.stringify(baseline)
   }, [draft, item])
   const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
 

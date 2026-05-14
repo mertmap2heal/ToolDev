@@ -29,6 +29,9 @@ import {
   bulkUpdate,
   getCoverage,
   getTrend,
+  listSavedViews,
+  createSavedView,
+  deleteSavedView,
   listUncoveredRequirements,
   star,
   unstar,
@@ -80,6 +83,9 @@ router.put(
 // Coverage rollup + gap finder
 router.get('/projects/:projectId/coverage', getCoverage)
 router.get('/projects/:projectId/trend', getTrend)
+router.get('/projects/:projectId/saved-views', listSavedViews)
+router.post('/projects/:projectId/saved-views', createSavedView)
+router.delete('/projects/:projectId/saved-views/:viewId', deleteSavedView)
 router.get('/projects/:projectId/uncovered-requirements', listUncoveredRequirements)
 
 // Baselines (point-in-time snapshots)

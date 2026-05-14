@@ -104,6 +104,17 @@ export interface ValidationTrendPoint {
   OBSOLETE: number
 }
 
+export interface ValidationSavedView {
+  id: string
+  name: string
+  scope: 'personal' | 'project'
+  payload: Record<string, unknown>
+  createdById: string
+  createdByName?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface UncoveredRequirement {
   id: string
   requirementId: string | null
@@ -351,6 +362,26 @@ export const validationService = {
     days = 30,
   ): Promise<ApiResponse<ValidationTrendPoint[]>> {
     return apiClient.get(`/validation/projects/${projectId}/trend?days=${days}`)
+  },
+
+  async listSavedViews(
+    projectId: string,
+  ): Promise<ApiResponse<ValidationSavedView[]>> {
+    return apiClient.get(`/validation/projects/${projectId}/saved-views`)
+  },
+
+  async createSavedView(
+    projectId: string,
+    payload: { name: string; scope: 'personal' | 'project'; payload: Record<string, unknown> },
+  ): Promise<ApiResponse<ValidationSavedView>> {
+    return apiClient.post(`/validation/projects/${projectId}/saved-views`, payload)
+  },
+
+  async deleteSavedView(
+    projectId: string,
+    viewId: string,
+  ): Promise<ApiResponse<null>> {
+    return apiClient.delete(`/validation/projects/${projectId}/saved-views/${viewId}`)
   },
 
   async uncoveredRequirements(

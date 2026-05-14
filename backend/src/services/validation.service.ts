@@ -1459,6 +1459,134 @@ export async function detachEvidence(
   return { deleted: true }
 }
 
+// ---- Saved views (per-project, scope = personal | project) ----
+
+export interface ValidationSavedViewRecord {
+  id: string
+  name: string
+  scope: 'personal' | 'project'
+  payload: Record<string, unknown>
+  createdById: string
+  createdByName?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+function toRecord(row: {
+  id: string
+  name: string
+  type: string
+  filters: string | null
+  userId: string | null
+  createdAt: Date
+  updatedAt: Date
+  user?: { id: string; name: string | null } | null
+}): ValidationSavedViewRecord {
+  let payload: Record<string, unknown> = {}
+  try {
+    payload = row.filters ? JSON.parse(row.filters) : {}
+  } catch {
+    payload = {}
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    scope: row.type === 'project' ? 'project' : 'personal',
+    payload,
+    createdById: row.userId ?? '',
+    createdByName: row.user?.name ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * List saved validation views the caller can see in this project:
+ *   - every project-scoped view in the project
+ *   - the caller's own personal views in the project
+ */
+export async function listSavedViews(
+  projectId: string,
+  userId: string,
+): Promise<ValidationSavedViewRecord[]> {
+  const rows = await prisma.savedView.findMany({
+    where: {
+      projectId,
+      viewKind: 'validation',
+      OR: [{ type: 'project' }, { type: 'personal', userId }],
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+  // Hydrate creator name in a single batched query (avoids N+1).
+  const userIds = Array.from(new Set(rows.map((r) => r.userId).filter((u): u is string => !!u)))
+  const users = userIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true },
+      })
+    : []
+  const nameById = new Map(users.map((u) => [u.id, u.name]))
+  return rows.map((r) => toRecord({ ...r, user: r.userId ? { id: r.userId, name: nameById.get(r.userId) ?? null } : null }))
+}
+
+export async function createSavedView(
+  projectId: string,
+  userId: string,
+  input: { name: string; scope: 'personal' | 'project'; payload: Record<string, unknown> },
+): Promise<ValidationSavedViewRecord> {
+  const name = input.name.trim()
+  if (!name) throw new Error('view name is required')
+  const scope = input.scope === 'project' ? 'project' : 'personal'
+
+  // Conflict policy: replace any view in the same project + scope with the
+  // same name owned by the same user (personal) or by any project member
+  // (project). The frontend asks the user to confirm overwrite before this
+  // is called, so server-side we honour it idempotently.
+  const conflict = await prisma.savedView.findFirst({
+    where: {
+      projectId,
+      viewKind: 'validation',
+      type: scope,
+      name,
+      ...(scope === 'personal' ? { userId } : {}),
+    },
+    select: { id: true },
+  })
+  if (conflict) {
+    await prisma.savedView.delete({ where: { id: conflict.id } })
+  }
+
+  const row = await prisma.savedView.create({
+    data: {
+      projectId,
+      viewKind: 'validation',
+      name,
+      type: scope,
+      userId,
+      filters: JSON.stringify(input.payload ?? {}),
+    },
+  })
+  return toRecord(row)
+}
+
+export async function deleteSavedView(
+  projectId: string,
+  userId: string,
+  viewId: string,
+): Promise<{ deleted: true } | null> {
+  const row = await prisma.savedView.findFirst({
+    where: { id: viewId, projectId, viewKind: 'validation' },
+  })
+  if (!row) return null
+  // Personal views: only the owner can delete. Project views: only the
+  // creator can delete (cheaper than wiring role-based authority for now;
+  // the user list shows the creator name so attribution is clear).
+  if (row.type === 'personal' && row.userId !== userId) return null
+  if (row.type === 'project' && row.userId !== userId) return null
+  await prisma.savedView.delete({ where: { id: row.id } })
+  return { deleted: true }
+}
+
 // ---- Coverage rollup + gap finder ----
 
 export interface ValidationCoverage {

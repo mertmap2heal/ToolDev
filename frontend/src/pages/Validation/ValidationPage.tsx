@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import './validation-v2.css'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
   AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
@@ -20,6 +20,7 @@ import {
   type ValidationMilestone,
   type ValidationSortBy,
   type ValidationPriority,
+  type ValidationSavedView as ValidationSavedViewSummary,
 } from '../../services/validation.service'
 import { useAuthStore } from '../../store/authStore'
 import ValidationOnboardingBanner from '../../components/validation/ValidationOnboardingBanner'
@@ -162,25 +163,11 @@ export default function ValidationPage() {
   const colVisible = (c: ColKey) => visibleCols.has(c)
   const [colsMenuOpen, setColsMenuOpen] = useState(false)
 
-  // Named filter views. Persisted per project alongside the active-filter
-  // state but in their own LS key so clearing one does not affect the other.
-  interface SavedView {
-    name: string
-    payload: {
-      search: string
-      statusFilter: string
-      methodFilter: string
-      milestoneFilter: string
-      ownerFilter: string
-      tagsAny: string[]
-      starredOnly: boolean
-      overdueOnly: boolean
-      showSuspectOnly: boolean
-      criterionFilter: string
-    }
-  }
-  const [savedViews, setSavedViews] = useState<SavedView[]>([])
+  // Named filter views are persisted server-side as SavedView rows with
+  // viewKind = 'validation'. Each row is either personal (visible only to
+  // the creator) or project-scoped (visible to every project member).
   const toast = useValidationToast()
+  const queryClient = useQueryClient()
 
   // Persist last filter state per project across reloads so users come back to
   // exactly the view they left.
@@ -229,61 +216,82 @@ export default function ValidationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  // Load saved views once per project.
-  const viewsKey = `validation:savedViews:${projectId}`
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(viewsKey)
-      if (!raw) return
-      const arr = JSON.parse(raw)
-      if (Array.isArray(arr)) setSavedViews(arr as SavedView[])
-    } catch { /* ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+  const { data: savedViews = [] } = useQuery({
+    queryKey: ['validation-saved-views', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const res = await validationService.listSavedViews(projectId!)
+      return res.success && res.data ? res.data : []
+    },
+    staleTime: 30_000,
+  })
 
-  const persistViews = (next: SavedView[]) => {
-    setSavedViews(next)
-    try {
-      localStorage.setItem(viewsKey, JSON.stringify(next))
-    } catch { /* ignore */ }
+  const invalidateSavedViews = () => {
+    queryClient.invalidateQueries({ queryKey: ['validation-saved-views', projectId] })
   }
 
-  const applyView = (v: SavedView) => {
-    const p = v.payload
-    setSearch(p.search)
-    setStatusFilter(p.statusFilter as ValidationStatus | '')
-    setMethodFilter(p.methodFilter as ValidationMethodType | '')
-    setMilestoneFilter(p.milestoneFilter as ValidationMilestone | '')
-    setOwnerFilter(p.ownerFilter)
-    setTagsAny(p.tagsAny)
-    setStarredOnly(p.starredOnly)
-    setOverdueOnly(p.overdueOnly)
-    setShowSuspectOnly(p.showSuspectOnly)
-    setCriterionFilter(
-      p.criterionFilter as '' | 'allMet' | 'anyPartial' | 'anyNotMet' | 'noCriteria',
-    )
+  // Type-safe reader for the view payload: every field is optional, so
+  // each setter checks the runtime shape before applying.
+  const applyView = (v: ValidationSavedViewSummary) => {
+    const p = v.payload as Partial<{
+      search: string
+      statusFilter: string
+      methodFilter: string
+      milestoneFilter: string
+      ownerFilter: string
+      tagsAny: string[]
+      starredOnly: boolean
+      overdueOnly: boolean
+      showSuspectOnly: boolean
+      criterionFilter: string
+    }>
+    if (typeof p.search === 'string') setSearch(p.search)
+    if (typeof p.statusFilter === 'string') setStatusFilter(p.statusFilter as ValidationStatus | '')
+    if (typeof p.methodFilter === 'string') setMethodFilter(p.methodFilter as ValidationMethodType | '')
+    if (typeof p.milestoneFilter === 'string') setMilestoneFilter(p.milestoneFilter as ValidationMilestone | '')
+    if (typeof p.ownerFilter === 'string') setOwnerFilter(p.ownerFilter)
+    if (Array.isArray(p.tagsAny)) setTagsAny(p.tagsAny)
+    if (typeof p.starredOnly === 'boolean') setStarredOnly(p.starredOnly)
+    if (typeof p.overdueOnly === 'boolean') setOverdueOnly(p.overdueOnly)
+    if (typeof p.showSuspectOnly === 'boolean') setShowSuspectOnly(p.showSuspectOnly)
+    if (
+      p.criterionFilter === '' ||
+      p.criterionFilter === 'allMet' ||
+      p.criterionFilter === 'anyPartial' ||
+      p.criterionFilter === 'anyNotMet' ||
+      p.criterionFilter === 'noCriteria'
+    ) {
+      setCriterionFilter(p.criterionFilter)
+    }
   }
 
-  const saveCurrentAsView = async () => {
+  const saveCurrentAsView = async (scope: 'personal' | 'project') => {
+    if (!projectId) return
     const raw = await promptDialog({
-      title: 'Save filters as view',
-      message: 'Captures the current search, filters, and toggles so you can recall them in one click later.',
+      title: scope === 'project' ? 'Save view for the project' : 'Save view for yourself',
+      message:
+        scope === 'project'
+          ? 'Captures the current search and filters as a project-wide view. Every project member can apply it.'
+          : 'Captures the current search and filters as a personal view. Only you will see it.',
       inputLabel: 'View name',
       placeholder: 'e.g. My open blockers',
       confirmText: 'Save view',
     })
     const name = raw?.trim()
     if (!name) return
-    if (savedViews.some((v) => v.name === name)) {
+    const clash = savedViews.find(
+      (v) => v.scope === scope && v.name === name && (scope === 'project' || v.createdById === currentUserId),
+    )
+    if (clash) {
       const overwrite = await confirmDialog({
         title: `Overwrite "${name}"?`,
-        message: `A view named "${name}" already exists. Save again to replace it with the current filter set.`,
+        message: `A ${scope === 'project' ? 'project' : 'personal'} view named "${name}" already exists. Save again to replace it with the current filter set.`,
         confirmText: 'Overwrite',
         variant: 'warning',
       })
       if (!overwrite) return
     }
-    const payload: SavedView['payload'] = {
+    const payload = {
       search,
       statusFilter,
       methodFilter,
@@ -295,12 +303,21 @@ export default function ValidationPage() {
       showSuspectOnly,
       criterionFilter,
     }
-    const next = [...savedViews.filter((v) => v.name !== name), { name, payload }]
-    persistViews(next)
-    toast.success(`Saved view "${name}"`)
+    const res = await validationService.createSavedView(projectId, {
+      name,
+      scope,
+      payload,
+    })
+    if (res.success) {
+      invalidateSavedViews()
+      toast.success(`Saved ${scope === 'project' ? 'project ' : ''}view "${name}"`)
+    } else {
+      toast.error(res.error ?? 'Save failed')
+    }
   }
 
-  const deleteView = async (name: string) => {
+  const deleteView = async (id: string, name: string) => {
+    if (!projectId) return
     const ok = await confirmDialog({
       title: `Delete view "${name}"?`,
       message: 'The current filter selection stays - only the saved snapshot is removed.',
@@ -308,7 +325,12 @@ export default function ValidationPage() {
       variant: 'danger',
     })
     if (!ok) return
-    persistViews(savedViews.filter((v) => v.name !== name))
+    const res = await validationService.deleteSavedView(projectId, id)
+    if (res.success) {
+      invalidateSavedViews()
+    } else {
+      toast.error(res.error ?? 'Delete failed')
+    }
   }
 
   // Name of the saved view whose snapshot matches the current filter state,
@@ -327,7 +349,9 @@ export default function ValidationPage() {
       criterionFilter,
     }
     const match = savedViews.find((v) => {
-      const p = { ...v.payload, tagsAny: [...(v.payload.tagsAny ?? [])].sort() }
+      const raw = v.payload as Record<string, unknown>
+      const pTags = Array.isArray(raw.tagsAny) ? [...(raw.tagsAny as string[])].sort() : []
+      const p = { ...raw, tagsAny: pTags }
       return JSON.stringify(p) === JSON.stringify(cur)
     })
     return match?.name ?? null
@@ -2035,41 +2059,70 @@ export default function ValidationPage() {
               Saved view
             </label>
             <select
-              value={activeViewName ?? ''}
-              aria-label="Apply a saved view"
+              value=""
+              aria-label="Apply or manage a saved view"
               onChange={(e) => {
                 const action = e.target.value
                 if (!action) return
-                if (action === '__save__') {
-                  saveCurrentAsView()
+                if (action === '__save_personal__') {
+                  saveCurrentAsView('personal')
+                  return
+                }
+                if (action === '__save_project__') {
+                  saveCurrentAsView('project')
                   return
                 }
                 if (action.startsWith('__delete__:')) {
-                  deleteView(action.slice('__delete__:'.length))
+                  const id = action.slice('__delete__:'.length)
+                  const v = savedViews.find((s) => s.id === id)
+                  if (v) deleteView(v.id, v.name)
                   return
                 }
-                const v = savedViews.find((s) => s.name === action)
+                const v = savedViews.find((s) => s.id === action)
                 if (v) applyView(v)
               }}
               style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
             >
-              <option value="">{activeViewName ? activeViewName : 'Select a saved view…'}</option>
-              {savedViews.length > 0 && (
-                <optgroup label="Apply">
-                  {savedViews.map((v) => (
-                    <option key={v.name} value={v.name}>
-                      {v.name}
+              <option value="">{activeViewName ? `Applied: ${activeViewName}` : 'Select a saved view…'}</option>
+              {(() => {
+                const projectViews = savedViews.filter((v) => v.scope === 'project')
+                const personalViews = savedViews.filter((v) => v.scope === 'personal')
+                return (
+                  <>
+                    {projectViews.length > 0 && (
+                      <optgroup label="Project views">
+                        {projectViews.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}
+                            {v.createdByName && v.createdById !== currentUserId
+                              ? ` · by ${v.createdByName}`
+                              : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {personalViews.length > 0 && (
+                      <optgroup label="My views">
+                        {personalViews.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </>
+                )
+              })()}
+              <optgroup label="Manage">
+                <option value="__save_personal__">Save as my view…</option>
+                <option value="__save_project__">Save for the whole project…</option>
+                {savedViews
+                  .filter((v) => v.createdById === currentUserId)
+                  .map((v) => (
+                    <option key={`d-${v.id}`} value={`__delete__:${v.id}`}>
+                      Delete "{v.name}"{v.scope === 'project' ? ' (project)' : ''}
                     </option>
                   ))}
-                </optgroup>
-              )}
-              <optgroup label="Manage">
-                <option value="__save__">Save current filters as view…</option>
-                {savedViews.map((v) => (
-                  <option key={`d-${v.name}`} value={`__delete__:${v.name}`}>
-                    Delete "{v.name}"
-                  </option>
-                ))}
               </optgroup>
             </select>
           </div>
@@ -2164,6 +2217,19 @@ export default function ValidationPage() {
                   const card = items.find((i) => i.id === id)
                   if (!card || card.status === s) return
                   if (s === 'VALIDATED') {
+                    // signer != author: an engineer cannot validate their own
+                    // work. Block at drop time even though the card is
+                    // draggable - the author may still drive PLANNED ->
+                    // EXECUTED -> BLOCKED. Admin override stays.
+                    if (
+                      card.createdBy?.id === currentUserId &&
+                      user?.role !== 'ADMIN'
+                    ) {
+                      toast.error(
+                        `You authored ${card.key}. Another project member must mark it VALIDATED (signer != author).`,
+                      )
+                      return
+                    }
                     const ok = await confirmDialog({
                       title: `Move ${card.key} to VALIDATED?`,
                       message:
@@ -2244,23 +2310,24 @@ export default function ValidationPage() {
                   // to read the details, but the card is non-draggable so the
                   // board cannot become a free-for-all status board.
                   //
-                  // The author of an item is intentionally NOT a permitted
-                  // mover. This mirrors the signer != author rule that gates
-                  // sign-offs: an engineer cannot ship their own work through
-                  // the board on their own. Even when the author is also the
-                  // assigned owner, they need someone else to advance the
-                  // card.  Admins keep their override.
+                  // Authors can drive their item through PLANNED -> EXECUTED
+                  // -> BLOCKED themselves: that is execution work and they
+                  // are the right person to record outcomes. The transition
+                  // to VALIDATED is the one the author CANNOT do alone -
+                  // that is the signer != author rule, enforced on drop
+                  // below. Admins keep their override either way.
                   const isAuthor = currentUserId === it.createdBy?.id
                   const canMove =
                     !!currentUserId &&
-                    !isAuthor &&
-                    (currentUserId === it.owner?.id || user?.role === 'ADMIN')
+                    (currentUserId === it.owner?.id ||
+                      isAuthor ||
+                      user?.role === 'ADMIN')
                   return (
                     <button
                       key={it.id}
                       type="button"
                       draggable={canMove}
-                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. ${canMove ? 'Drag to change status, or click to open details.' : isAuthor ? 'You authored this item - another project member must advance its status. Open details.' : 'Open details. Only the owner can change status.'}`}
+                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. ${canMove ? (isAuthor ? 'Drag to advance status. Cannot mark VALIDATED on your own item. Click to open details.' : 'Drag to change status, or click to open details.') : 'Open details. Only the owner can change status.'}`}
                       onDragStart={(e) => {
                         if (!canMove) {
                           e.preventDefault()
