@@ -239,6 +239,9 @@ export default function BaselinesPage() {
           onClick={() => setOpenId(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="baseline-drawer-title"
             onClick={(e) => e.stopPropagation()}
             style={{
               width: 'min(880px, 96vw)',
@@ -252,6 +255,7 @@ export default function BaselinesPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div>
                 <h2
+                  id="baseline-drawer-title"
                   style={{
                     margin: 0,
                     fontSize: 18,
