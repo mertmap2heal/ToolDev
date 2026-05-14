@@ -1170,7 +1170,7 @@ export default function ValidationPage() {
       <ValidationOnboardingBanner />
 
       {coverage && coverage.total + coverage.totals.requirements > 0 && (
-        <div className="vv-coverage">
+        <div className="vv-coverage" role="region" aria-label="Coverage summary">
           <div className="vv-coverage-head">
             <Target size={14} style={{ color: 'var(--pv-fg-3)' }} />
             <span className="vv-label">Coverage at a glance</span>
