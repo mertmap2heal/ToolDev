@@ -762,7 +762,7 @@ export default function ValidationPage() {
             <Star size={14} fill={it.starredByMe ? 'currentColor' : 'none'} />
           </button>
         </td>
-        <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
+        <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }} title={it.title}>
           <span>{renderHighlighted(it.key)}</span>
           <button
             type="button"
