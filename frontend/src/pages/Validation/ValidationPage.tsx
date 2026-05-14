@@ -552,6 +552,15 @@ export default function ValidationPage() {
         }
         return
       }
+      // "/" focuses the search box - matches GitHub / Linear convention.
+      if (!isMod && !inField && e.key === '/') {
+        const target = document.getElementById('validation-search') as HTMLInputElement | null
+        if (target) {
+          e.preventDefault()
+          target.focus()
+        }
+        return
+      }
       if (isMod && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
         e.preventDefault()
         setCreateFromReqOpen(true)
