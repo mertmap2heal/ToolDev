@@ -116,7 +116,16 @@ export default function ValidationSettingsPage() {
           >
             <ChevronLeft size={12} /> Back to Validation
           </Link>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white mt-1">
+          <h1
+            className="text-gray-900 dark:text-white mt-1"
+            style={{
+              fontFamily: "'Fraunces', 'Iowan Old Style', Georgia, serif",
+              fontWeight: 500,
+              fontSize: 22,
+              letterSpacing: '-0.015em',
+              margin: 0,
+            }}
+          >
             Validation settings
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
