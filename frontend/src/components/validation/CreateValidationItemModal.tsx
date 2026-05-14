@@ -106,10 +106,13 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
     <div className="params-v2 validation-v2 fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,20,25,0.4)' }}>
       <div
         className="pv-drawer-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-validation-title"
         style={{ width: '100%', maxWidth: 720, margin: 0, maxHeight: '92vh' }}
       >
         <div className="vv-dr-head">
-          <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--pv-fg)' }}>
+          <span id="create-validation-title" style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--pv-fg)' }}>
             New validation item
           </span>
           <div className="vv-dr-head-actions">
