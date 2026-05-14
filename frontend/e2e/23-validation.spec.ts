@@ -14,13 +14,13 @@ test.describe('Validation page', () => {
       timeout: 10_000,
     })
     // Banner OR a button labelled "New item" — both prove the live page rendered
-    await expect(page.getByRole('button', { name: /new item/i })).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('button', { name: /new item/i }).first()).toBeVisible({ timeout: 5_000 })
   })
 
   test('opens the New item modal and validates required fields', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /^New item$/ }).click()
+    await page.getByRole('button', { name: /new item/i }).first().click()
     const modal = page.locator(MODAL).filter({ hasText: /new validation item/i })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Submit button is disabled until title is entered
@@ -34,18 +34,24 @@ test.describe('Validation page', () => {
     const title = `e2e_validation_${stamp}`
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /^New item$/ }).click()
+    await page.getByRole('button', { name: /new item/i }).first().click()
     const modal = page.locator(MODAL).filter({ hasText: /new validation item/i })
     await expect(modal).toBeVisible({ timeout: 5_000 })
+    // Title is the first <input type="text"> in the modal.
     await modal
       .locator('input[type="text"]')
       .first()
       .fill(title)
+    // Description uses the MarkdownEditor — single <textarea>.
     await modal.locator('textarea').first().fill('Description for e2e test')
-    // Method select (first select in modal)
-    await modal.locator('select').first().selectOption('OPERATIONAL_TEST')
-    // Acceptance criteria textarea (second textarea)
-    await modal.locator('textarea').nth(1).fill('First criterion\nSecond criterion')
+    // Method select (first select in modal). Prefix select only renders
+    // when more than one prefix is configured; in that case skip past it.
+    const methodSelect = modal.locator('select').filter({ hasText: /demonstration/i }).first()
+    await methodSelect.selectOption('OPERATIONAL_TEST')
+    // Acceptance criteria are individual <input type="text"> rows below
+    // the title. Fill the first existing row.
+    const criteriaInputs = modal.locator('input[type="text"]')
+    await criteriaInputs.nth(1).fill('First criterion')
     await modal.getByRole('button', { name: /^create item$/i }).click()
     // Modal closes; row appears
     await expect(modal).not.toBeVisible({ timeout: 5_000 })
@@ -68,13 +74,14 @@ test.describe('Validation page', () => {
     await page.keyboard.press('Escape')
   })
 
-  test('CSV export link points at the .csv endpoint', async ({ page, projectId }) => {
+  test('Export control surfaced on the subbar', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    // Triggering Export CSV opens a new tab via window.open — we verify the
-    // button is wired to a click handler rather than navigating away.
-    const exportBtn = page.getByRole('button', { name: /export csv/i })
-    await expect(exportBtn).toBeVisible({ timeout: 5_000 })
+    // Export is now a label-wrapped <select> pill in the subbar (CSV / MD /
+    // PDF). The accessible name on the wrapping label still contains "Export".
+    const exportPill = page.locator('label.pv-pill').filter({ hasText: /^Export/i }).first()
+    await expect(exportPill).toBeVisible({ timeout: 5_000 })
+    await expect(exportPill.locator('select')).toBeVisible()
   })
 
   test('filter pill toggles the filter bar', async ({ page, projectId }) => {
