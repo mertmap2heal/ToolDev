@@ -55,6 +55,26 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
     }
   }, [settings, prefix])
 
+  // ESC closes the modal. Capture phase + stopPropagation so it wins over
+  // the page-level ESC cascade in ValidationPage (which also runs in
+  // capture phase). Without this, ESC inside the modal does nothing because
+  // the page handler runs first and finds no cascade level to handle.
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const tgt = e.target as HTMLElement | null
+      const inField = tgt?.matches('input, textarea, [contenteditable="true"]')
+      // Let the field handle its own ESC first (clearing value etc.).
+      if (inField) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const reset = () => {

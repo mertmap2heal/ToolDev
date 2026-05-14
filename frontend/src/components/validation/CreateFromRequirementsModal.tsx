@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, Search, AlertCircle, Check } from 'lucide-react'
 import { requirementService } from '../../services/requirement.service'
@@ -66,6 +66,23 @@ export default function CreateFromRequirementsModal({
         (r.requirementId ?? '').toLowerCase().includes(q),
     )
   }, [requirements, search, restrictToRequirementIds])
+
+  // ESC closes the modal. Capture + stopPropagation so it wins over the
+  // page-level ESC cascade in ValidationPage.
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const tgt = e.target as HTMLElement | null
+      const inField = tgt?.matches('input, textarea, [contenteditable="true"]')
+      if (inField) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
 

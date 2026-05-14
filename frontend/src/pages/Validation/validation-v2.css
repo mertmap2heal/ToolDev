@@ -787,40 +787,13 @@ html[data-theme='midnight'] .validation-v2 .pv-dr-comment .pv-avatar {
   border-color: #b91c1c;
 }
 
-/* Subbar split into two intentional rows. Row 1 = primary filters,
-   row 2 = table tools. The two rows render flush (no dashed rule) so
-   visually it reads as one toolbar that wraps at width breakpoints. */
-.validation-v2 .pv-subbar.is-split {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  padding: 6px 8px;
-}
-.validation-v2 .pv-subbar.is-split .pv-subbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-.validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools {
-  padding-top: 0;
-}
-.validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools::before {
-  content: 'Table';
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--pv-fg-3);
-  margin-right: 4px;
-  flex-shrink: 0;
-}
-/* Cluster the row-2 controls left; Export gets a slim gap before it
-   rather than being yanked to the far right edge. Keeps the controls
-   reading as a single connected group. */
-.validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools .pv-subbar-right {
-  margin-left: auto;
-  display: flex;
+/* Cluster every subbar control on the left edge rather than pinning the
+   Export pill to the far right. At wide viewports the right-push opens
+   a hundreds-of-pixels void between Group/Columns and Export that reads
+   as a layout bug. Packing left keeps the toolbar tight at any width. */
+.validation-v2 .pv-subbar .pv-subbar-right {
+  margin-left: 0;
+  display: inline-flex;
   gap: 6px;
   align-items: center;
 }

@@ -615,6 +615,12 @@ export default function ValidationPage() {
         e.preventDefault()
         setSelectedItemId(items[0].id)
       } else if (e.key === 'Escape') {
+        // Yield to any open modal / drawer / overlay - they install their
+        // own capture-phase ESC handler and should close themselves before
+        // the page-level cascade kicks in.
+        if (createOpen || createFromReqOpen || helpOpen || shortcutsOpen || uncoveredOpen) {
+          return
+        }
         // Cascade: open menus -> drawer -> filters panel -> bulk
         // selection -> filter set. First non-empty level handled wins;
         // later levels stay for the next ESC press.
@@ -653,7 +659,7 @@ export default function ValidationPage() {
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones, moreMenuOpen, colsMenuOpen])
+  }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones, moreMenuOpen, colsMenuOpen, createOpen, createFromReqOpen, helpOpen, shortcutsOpen, uncoveredOpen])
 
   if (!projectId) return null
 
