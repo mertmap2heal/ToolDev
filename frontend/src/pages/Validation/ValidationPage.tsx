@@ -1983,6 +1983,7 @@ export default function ValidationPage() {
             </label>
             <select
               value={statusFilter}
+              aria-label="Filter by status"
               onChange={(e) => setStatusFilter(e.target.value as ValidationStatus | '')}
               style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
             >
@@ -2000,6 +2001,7 @@ export default function ValidationPage() {
             </label>
             <select
               value={methodFilter}
+              aria-label="Filter by validation method"
               onChange={(e) => setMethodFilter(e.target.value as ValidationMethodType | '')}
               title={methodFilter ? METHOD_TOOLTIP[methodFilter] : 'Filter by validation method'}
               style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
@@ -2018,6 +2020,7 @@ export default function ValidationPage() {
             </label>
             <select
               value={milestoneFilter}
+              aria-label="Filter by milestone"
               onChange={(e) => setMilestoneFilter(e.target.value as ValidationMilestone | '')}
               title={milestoneFilter ? MILESTONE_TOOLTIP[milestoneFilter] : 'Filter by lifecycle milestone'}
               style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
@@ -2037,6 +2040,7 @@ export default function ValidationPage() {
               </label>
               <select
                 value={ownerFilter}
+                aria-label="Filter by owner"
                 onChange={(e) => setOwnerFilter(e.target.value)}
                 style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
               >
