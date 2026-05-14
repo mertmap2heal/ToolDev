@@ -107,11 +107,14 @@ export default function CreateFromRequirementsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,20,25,0.4)' }}>
       <div
         className="pv-drawer-shell params-v2 validation-v2"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-from-reqs-title"
         style={{ width: '100%', maxWidth: 880, margin: 0, maxHeight: '90vh' }}
       >
         <div className="pv-dr-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
+            <h2 id="create-from-reqs-title" style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
               {title ?? 'New validation items from requirements'}
             </h2>
             <div style={{ flex: 1 }} />
