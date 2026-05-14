@@ -95,6 +95,15 @@ export interface ValidationCoverage {
   suspectCount: number
 }
 
+export interface ValidationTrendPoint {
+  date: string
+  PLANNED: number
+  EXECUTED: number
+  VALIDATED: number
+  BLOCKED: number
+  OBSOLETE: number
+}
+
 export interface UncoveredRequirement {
   id: string
   requirementId: string | null
@@ -335,6 +344,13 @@ export const validationService = {
 
   async coverage(projectId: string): Promise<ApiResponse<ValidationCoverage>> {
     return apiClient.get(`/validation/projects/${projectId}/coverage`)
+  },
+
+  async trend(
+    projectId: string,
+    days = 30,
+  ): Promise<ApiResponse<ValidationTrendPoint[]>> {
+    return apiClient.get(`/validation/projects/${projectId}/trend?days=${days}`)
   },
 
   async uncoveredRequirements(

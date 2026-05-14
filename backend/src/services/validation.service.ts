@@ -1473,6 +1473,81 @@ export interface ValidationCoverage {
   suspectCount: number
 }
 
+export interface ValidationTrendPoint {
+  date: string
+  PLANNED: number
+  EXECUTED: number
+  VALIDATED: number
+  BLOCKED: number
+  OBSOLETE: number
+}
+
+/**
+ * Per-day count of validation items that REACHED each status in the
+ * given window. Sources: validation:update (single-item statusAfter),
+ * validation:bulk-update (patch.status + count), validation:sign-off
+ * (implicit promotion to VALIDATED). Days with no transitions render
+ * as zero rows so the resulting array is dense and easy to chart.
+ */
+export async function trend(
+  projectId: string,
+  days: number,
+): Promise<ValidationTrendPoint[]> {
+  const span = Math.max(1, Math.min(180, Math.floor(days)))
+  const since = new Date(Date.now() - span * 86_400_000)
+  const audits = await prisma.auditLog.findMany({
+    where: {
+      projectId,
+      createdAt: { gte: since },
+      action: { in: ['validation:update', 'validation:bulk-update', 'validation:sign-off'] },
+    },
+    select: { action: true, details: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  type Bucket = Record<ValidationStatus, number>
+  const empty = (): Bucket => ({
+    PLANNED: 0,
+    EXECUTED: 0,
+    VALIDATED: 0,
+    BLOCKED: 0,
+    OBSOLETE: 0,
+  })
+  const buckets = new Map<string, Bucket>()
+
+  for (const a of audits) {
+    const day = a.createdAt.toISOString().slice(0, 10)
+    const d = a.details as { statusAfter?: string; statusBefore?: string; patch?: { status?: string }; count?: number } | null
+    let status: ValidationStatus | null = null
+    let count = 0
+    if (a.action === 'validation:update' && d?.statusAfter && d.statusAfter !== d.statusBefore) {
+      status = d.statusAfter as ValidationStatus
+      count = 1
+    } else if (a.action === 'validation:bulk-update' && d?.patch?.status) {
+      status = d.patch.status as ValidationStatus
+      count = d.count ?? 0
+    } else if (a.action === 'validation:sign-off') {
+      status = 'VALIDATED'
+      count = 1
+    }
+    if (!status || count === 0) continue
+    if (!(STATUSES as readonly string[]).includes(status)) continue
+    if (!buckets.has(day)) buckets.set(day, empty())
+    buckets.get(day)![status] += count
+  }
+
+  // Densify: emit a row for every day in the window so the chart can
+  // render zero days as flat bars instead of guessing what's missing.
+  const out: ValidationTrendPoint[] = []
+  for (let i = span - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86_400_000)
+    const key = d.toISOString().slice(0, 10)
+    const b = buckets.get(key) ?? empty()
+    out.push({ date: key, ...b })
+  }
+  return out
+}
+
 export async function coverage(projectId: string): Promise<ValidationCoverage> {
   const items = await prisma.validationItem.findMany({
     where: { projectId, deletedAt: null },

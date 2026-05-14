@@ -28,6 +28,7 @@ import {
   unlinkRequirement,
   bulkUpdate,
   getCoverage,
+  getTrend,
   listUncoveredRequirements,
   star,
   unstar,
@@ -78,6 +79,7 @@ router.put(
 
 // Coverage rollup + gap finder
 router.get('/projects/:projectId/coverage', getCoverage)
+router.get('/projects/:projectId/trend', getTrend)
 router.get('/projects/:projectId/uncovered-requirements', listUncoveredRequirements)
 
 // Baselines (point-in-time snapshots)

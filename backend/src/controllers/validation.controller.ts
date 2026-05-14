@@ -428,6 +428,16 @@ export async function getCoverage(req: AuthRequest, res: Response) {
   }
 }
 
+export async function getTrend(req: AuthRequest, res: Response) {
+  try {
+    const days = Number.parseInt((req.query.days as string) ?? '30', 10) || 30
+    const data = await svc.trend(req.params.projectId, days)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function getSettings(req: AuthRequest, res: Response) {
   try {
     const data = await svc.getSettings(req.params.projectId)

@@ -28,6 +28,7 @@ import CreateFromRequirementsModal from '../../components/validation/CreateFromR
 import UncoveredRequirementsLauncher from '../../components/validation/UncoveredRequirementsLauncher'
 import { useValidationToast, ValidationToastRenderer } from '../../components/validation/useValidationToast'
 import ValidationItemDetailDrawer from '../../components/validation/ValidationItemDetailDrawer'
+import ValidationTrendChart from '../../components/validation/ValidationTrendChart'
 import {
   ValidationDialogHost,
   confirmDialog,
@@ -477,6 +478,16 @@ export default function ValidationPage() {
       const res = await validationService.coverage(projectId!)
       return res.success && res.data ? res.data : null
     },
+  })
+
+  const { data: trend = [], isLoading: trendLoading } = useQuery({
+    queryKey: ['validation-trend', projectId, 30],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const res = await validationService.trend(projectId!, 30)
+      return res.success && res.data ? res.data : []
+    },
+    staleTime: 60_000,
   })
 
   const { data: settings } = useQuery({
@@ -1420,6 +1431,8 @@ export default function ValidationPage() {
         )
       })()}
 
+      <ValidationTrendChart points={trend} isLoading={trendLoading} />
+
       <div
         className="pv-subbar"
         role="toolbar"
@@ -2230,17 +2243,24 @@ export default function ValidationPage() {
                   // change its status. Everyone else can still click the card
                   // to read the details, but the card is non-draggable so the
                   // board cannot become a free-for-all status board.
+                  //
+                  // The author of an item is intentionally NOT a permitted
+                  // mover. This mirrors the signer != author rule that gates
+                  // sign-offs: an engineer cannot ship their own work through
+                  // the board on their own. Even when the author is also the
+                  // assigned owner, they need someone else to advance the
+                  // card.  Admins keep their override.
+                  const isAuthor = currentUserId === it.createdBy?.id
                   const canMove =
                     !!currentUserId &&
-                    (currentUserId === it.owner?.id ||
-                      currentUserId === it.createdBy?.id ||
-                      user?.role === 'ADMIN')
+                    !isAuthor &&
+                    (currentUserId === it.owner?.id || user?.role === 'ADMIN')
                   return (
                     <button
                       key={it.id}
                       type="button"
                       draggable={canMove}
-                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. ${canMove ? 'Drag to change status, or click to open details.' : 'Open details. Only the owner can change status.'}`}
+                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. ${canMove ? 'Drag to change status, or click to open details.' : isAuthor ? 'You authored this item - another project member must advance its status. Open details.' : 'Open details. Only the owner can change status.'}`}
                       onDragStart={(e) => {
                         if (!canMove) {
                           e.preventDefault()
