@@ -1274,6 +1274,8 @@ export default function ValidationPage() {
         if (ms.length === 0) return null
         return (
           <div
+            role="region"
+            aria-label="Milestone readiness burndown"
             style={{
               border: '1px solid var(--pv-line)',
               borderRadius: 6,
