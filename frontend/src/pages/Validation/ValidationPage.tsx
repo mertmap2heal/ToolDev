@@ -1378,6 +1378,14 @@ export default function ValidationPage() {
               if (e.key === 'Escape' && search) {
                 e.preventDefault()
                 setSearch('')
+                return
+              }
+              // ArrowDown from the search box jumps the cursor into the
+              // table - quick way to keep both hands on the keyboard.
+              if (e.key === 'ArrowDown' && items.length > 0) {
+                e.preventDefault()
+                setSelectedItemId(items[0].id)
+                ;(e.currentTarget as HTMLInputElement).blur()
               }
             }}
             placeholder="Search by title, description, or key…"
