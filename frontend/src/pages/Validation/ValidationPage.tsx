@@ -1436,7 +1436,7 @@ export default function ValidationPage() {
               </button>
             </>
           ) : (
-            <span className="pv-kbd">⌘F</span>
+            <span className="pv-kbd" title="Press / or Cmd+F to focus search">/</span>
           )}
         </div>
         <button
