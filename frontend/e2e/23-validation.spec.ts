@@ -66,7 +66,7 @@ test.describe('Validation page', () => {
     await page.getByRole('button', { name: /from requirements/i }).click()
     const modal = page
       .locator(MODAL)
-      .filter({ hasText: /create validation items from requirements/i })
+      .filter({ hasText: /validation items from requirements/i })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Submit is disabled with zero selection
     const submit = modal.getByRole('button', { name: /create.*item/i })
