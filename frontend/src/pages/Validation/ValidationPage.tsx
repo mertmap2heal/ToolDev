@@ -2065,6 +2065,8 @@ export default function ValidationPage() {
                     <button
                       key={t.label}
                       type="button"
+                      aria-pressed={active}
+                      aria-label={`Tag filter ${t.label}`}
                       onClick={() =>
                         setTagsAny((prev) =>
                           prev.includes(t.label)
