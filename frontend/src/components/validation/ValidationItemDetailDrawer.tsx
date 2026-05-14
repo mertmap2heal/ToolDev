@@ -1376,13 +1376,42 @@ export default function ValidationItemDetailDrawer({
                         : 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/10'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-gray-900 dark:text-white">
                         {s.signer?.name ?? 'Unknown'}{' '}
                         <span className="text-gray-500">— {s.signerRoleLabel}</span>
                       </span>
-                      <span className="text-[11px] text-gray-500">
-                        {new Date(s.signedAt).toLocaleString()}
+                      <span className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                        <span className="text-[11px] text-gray-500">
+                          {new Date(s.signedAt).toLocaleString()}
+                        </span>
+                        {!s.supersededById && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!itemId) return
+                              const ok = await confirmDialog({
+                                title: 'Revoke sign-off?',
+                                message: `Revoke ${s.signer?.name ?? 'this'}'s sign-off as ${s.signerRoleLabel}. The original record stays in the audit trail (struck-through). If this is the last active sign-off, the item drops back to EXECUTED so a fresh approval can be requested.`,
+                                confirmText: 'Revoke sign-off',
+                                variant: 'warning',
+                              })
+                              if (!ok) return
+                              const res = await validationService.revokeSignOff(projectId, itemId, s.id)
+                              if (res.success) {
+                                reload()
+                              } else {
+                                setError(res.error ?? 'Revoke failed')
+                              }
+                            }}
+                            className="pv-icon-btn"
+                            title="Revoke this sign-off"
+                            aria-label={`Revoke sign-off by ${s.signer?.name ?? 'unknown'} as ${s.signerRoleLabel}`}
+                            style={{ width: 22, height: 22 }}
+                          >
+                            <RotateCcw size={11} />
+                          </button>
+                        )}
                       </span>
                     </div>
                     {s.comment && (

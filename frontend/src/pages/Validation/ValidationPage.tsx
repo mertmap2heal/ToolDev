@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
   AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
-  MessageCircle, Copy, ChevronDown,
+  MessageCircle, Copy, ChevronDown, CheckCircle2,
 } from 'lucide-react'
 import ValidationShortcutsOverlay from '../../components/validation/ValidationShortcutsOverlay'
 import {
@@ -2818,6 +2818,55 @@ export default function ValidationPage() {
               ))}
             </select>
           )}
+          {!showArchived && (() => {
+            // Eligible sign-off targets: EXECUTED status + not authored by the
+            // current user (signer != author rule, enforced server-side too).
+            const eligible = items.filter(
+              (i) =>
+                selectedIds.has(i.id) &&
+                i.status === 'EXECUTED' &&
+                i.createdBy?.id !== currentUserId,
+            )
+            if (eligible.length === 0) return null
+            return (
+              <button
+                type="button"
+                title={`Sign off ${eligible.length} EXECUTED item${eligible.length === 1 ? '' : 's'} not authored by you`}
+                onClick={async () => {
+                  const role = await promptDialog({
+                    title: `Sign off ${eligible.length} item${eligible.length === 1 ? '' : 's'}?`,
+                    message: `${eligible.length} EXECUTED item${eligible.length === 1 ? '' : 's'} ${eligible.length === 1 ? 'is' : 'are'} eligible. Sign-offs are immutable and recorded on the audit trail. The author of an item cannot sign their own work, so any selected items you authored are skipped.`,
+                    inputLabel: 'Your role for this sign-off',
+                    placeholder: 'e.g. Customer Operations Lead',
+                    confirmText: `Sign off ${eligible.length}`,
+                  })
+                  const trimmed = role?.trim()
+                  if (!trimmed) return
+                  let ok = 0
+                  let fail = 0
+                  for (const it of eligible) {
+                    const res = await validationService.signOff(projectId, it.id, {
+                      signerRoleLabel: trimmed,
+                    })
+                    if (res.success) ok += 1
+                    else fail += 1
+                  }
+                  if (fail === 0) {
+                    toast.success(`Signed off ${ok} item${ok === 1 ? '' : 's'} as "${trimmed}"`)
+                  } else if (ok === 0) {
+                    toast.error(`Sign-off failed for all ${fail} item${fail === 1 ? '' : 's'}`)
+                  } else {
+                    toast.info(`Signed ${ok}, failed ${fail}. See activity log for details.`)
+                  }
+                  setSelectedIds(new Set())
+                  refetchAll()
+                }}
+                className="b"
+              >
+                <CheckCircle2 size={12} /> Sign off ({eligible.length})
+              </button>
+            )
+          })()}
           {showArchived ? (
             <button
               type="button"
