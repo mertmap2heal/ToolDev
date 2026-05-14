@@ -31,6 +31,8 @@ export default function ValidationOnboardingBanner() {
 
   return (
     <div
+      role="note"
+      aria-label="Validation vs Verification primer"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -38,13 +40,13 @@ export default function ValidationOnboardingBanner() {
         padding: '6px 12px',
         background: 'var(--pv-surface-soft)',
         border: '1px solid var(--pv-line)',
-        borderLeft: '2px solid var(--pv-blue)',
+        borderLeft: '2px solid var(--pv-green)',
         borderRadius: 4,
         fontSize: 12,
         color: 'var(--pv-fg-2)',
       }}
     >
-      <Info size={12} style={{ flexShrink: 0, color: 'var(--pv-blue)' }} />
+      <Info size={12} style={{ flexShrink: 0, color: 'var(--pv-green)' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontWeight: 500, color: 'var(--pv-fg)' }}>
           Validation answers to a stakeholder; Verification answers to a requirement.
@@ -57,7 +59,8 @@ export default function ValidationOnboardingBanner() {
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss"
+        aria-label="Dismiss validation primer"
+        title="Dismiss (stays hidden until localStorage is cleared)"
         style={{
           background: 'none',
           border: 0,
