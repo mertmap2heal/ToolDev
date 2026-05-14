@@ -136,7 +136,9 @@ export default function ValidationSettingsPage() {
           type="button"
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="pv-btn primary"
+          aria-keyshortcuts="Control+S Meta+S"
+          title="Save settings (Cmd+S)"
         >
           <Save size={14} /> {saving ? 'Saving…' : okFlash ? 'Saved' : 'Save'}
         </button>
