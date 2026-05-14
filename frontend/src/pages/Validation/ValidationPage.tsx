@@ -30,6 +30,11 @@ import UncoveredRequirementsLauncher from '../../components/validation/Uncovered
 import { useValidationToast, ValidationToastRenderer } from '../../components/validation/useValidationToast'
 import ValidationItemDetailDrawer from '../../components/validation/ValidationItemDetailDrawer'
 import {
+  ValidationDialogHost,
+  confirmDialog,
+  promptDialog,
+} from '../../components/validation/useValidationDialog'
+import {
   METHOD_LABEL,
   METHOD_TOOLTIP,
   MILESTONE_LABEL,
@@ -119,21 +124,6 @@ export default function ValidationPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [tagsAny, setTagsAny] = useState<string[]>([])
   const [overdueOnly, setOverdueOnly] = useState(false)
-  const [density, setDensity] = useState<'compact' | 'comfortable'>(() => {
-    try {
-      const v = localStorage.getItem('validation:density')
-      return v === 'comfortable' ? 'comfortable' : 'compact'
-    } catch {
-      return 'compact'
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem('validation:density', density)
-    } catch {
-      /* storage blocked - ignore */
-    }
-  }, [density])
 
   // Browser-tab title so multiple project tabs disambiguate. Restore the
   // previous title on unmount so navigation away does not leave a stale
@@ -274,11 +264,24 @@ export default function ValidationPage() {
     )
   }
 
-  const saveCurrentAsView = () => {
-    const name = window.prompt('Save current filters as view — name:')?.trim()
+  const saveCurrentAsView = async () => {
+    const raw = await promptDialog({
+      title: 'Save filters as view',
+      message: 'Captures the current search, filters, and toggles so you can recall them in one click later.',
+      inputLabel: 'View name',
+      placeholder: 'e.g. My open blockers',
+      confirmText: 'Save view',
+    })
+    const name = raw?.trim()
     if (!name) return
     if (savedViews.some((v) => v.name === name)) {
-      if (!window.confirm(`A view named "${name}" already exists. Overwrite it?`)) return
+      const overwrite = await confirmDialog({
+        title: `Overwrite "${name}"?`,
+        message: `A view named "${name}" already exists. Save again to replace it with the current filter set.`,
+        confirmText: 'Overwrite',
+        variant: 'warning',
+      })
+      if (!overwrite) return
     }
     const payload: SavedView['payload'] = {
       search,
@@ -297,8 +300,14 @@ export default function ValidationPage() {
     toast.success(`Saved view "${name}"`)
   }
 
-  const deleteView = (name: string) => {
-    if (!window.confirm(`Delete saved view "${name}"?`)) return
+  const deleteView = async (name: string) => {
+    const ok = await confirmDialog({
+      title: `Delete view "${name}"?`,
+      message: 'The current filter selection stays - only the saved snapshot is removed.',
+      confirmText: 'Delete view',
+      variant: 'danger',
+    })
+    if (!ok) return
     persistViews(savedViews.filter((v) => v.name !== name))
   }
 
@@ -538,43 +547,48 @@ export default function ValidationPage() {
     (criterionFilter ? 1 : 0) +
     tagsAny.length
 
-  // ⌘F focuses the search box; j/k navigate rows; Enter opens drawer
+  // Shortcuts: chosen to avoid known browser/OS hijacks.
+  //   "/"          focus search (GitHub / Linear convention)
+  //   n            new validation item       (Ctrl+N hijacked by Firefox)
+  //   N (Shift+n)  new from requirements     (Ctrl+F hijacked by browser find)
+  //   ?            show shortcut overlay
+  //   j / k        navigate rows
+  //   Enter        open selected row
+  //   Esc          cascade close
+  // Listener attaches in the CAPTURE phase so "/" wins over Firefox quick-find
+  // and "n" wins over any inadvertent typeahead before user-visible behaviour.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const isMod = e.metaKey || e.ctrlKey
       const tgt = e.target as HTMLElement | null
-      const inField = !!tgt?.matches('input, textarea, select, [contenteditable="true"]')
-      if (isMod && e.key === 'f' && !e.shiftKey && !inField) {
+      const inField = !!tgt?.matches('input, textarea, [contenteditable="true"]')
+      // Selects are only "in field" when actively expanded — pressing "/"
+      // while a closed-state select has focus should still focus search.
+      if (e.key === '/' && !inField && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const target = document.getElementById('validation-search') as HTMLInputElement | null
         if (target) {
           e.preventDefault()
+          e.stopPropagation()
           target.focus()
+          target.select()
         }
         return
       }
-      // "/" focuses the search box - matches GitHub / Linear convention.
-      if (!isMod && !inField && e.key === '/') {
-        const target = document.getElementById('validation-search') as HTMLInputElement | null
-        if (target) {
+      if (!inField && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.key === 'n') {
           e.preventDefault()
-          target.focus()
+          setCreateOpen(true)
+          return
         }
-        return
-      }
-      if (isMod && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
-        e.preventDefault()
-        setCreateFromReqOpen(true)
-        return
-      }
-      if (isMod && e.key === 'n') {
-        e.preventDefault()
-        setCreateOpen(true)
-        return
-      }
-      if (!inField && e.key === '?') {
-        e.preventDefault()
-        setShortcutsOpen(true)
-        return
+        if (e.key === 'N') {
+          e.preventDefault()
+          setCreateFromReqOpen(true)
+          return
+        }
+        if (e.key === '?') {
+          e.preventDefault()
+          setShortcutsOpen(true)
+          return
+        }
       }
       if (inField) return
       if (e.key === 'j' || e.key === 'k') {
@@ -637,8 +651,8 @@ export default function ValidationPage() {
         }
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
   }, [items, selectedItemId, selectedIds, activeFilterCount, search, filtersOpen, groupByMilestone, collapsedMilestones, moreMenuOpen, colsMenuOpen])
 
   if (!projectId) return null
@@ -1026,7 +1040,8 @@ export default function ValidationPage() {
   }
 
   return (
-    <div className={`params-v2 validation-v2 space-y-4 ${density === 'comfortable' ? 'is-comfortable' : ''}`}>
+    <div className="params-v2 validation-v2 space-y-4">
+      <ValidationDialogHost />
       <a href="#validation-table" className="vv-skip-link">
         Skip to validation table
       </a>
@@ -1112,10 +1127,15 @@ export default function ValidationPage() {
                     className="vv-menu-item"
                     onClick={async () => {
                       setMoreMenuOpen(false)
-                      const label = window.prompt(
-                        'Baseline label (e.g. "PDR snapshot 2026-05-15"):',
-                        `Baseline ${new Date().toISOString().slice(0, 10)}`,
-                      )?.trim()
+                      const raw = await promptDialog({
+                        title: 'Baseline current state',
+                        message: 'Freezes the current set of validation items into an immutable snapshot you can compare against later.',
+                        inputLabel: 'Baseline label',
+                        placeholder: 'e.g. PDR snapshot 2026-05-15',
+                        defaultValue: `Baseline ${new Date().toISOString().slice(0, 10)}`,
+                        confirmText: 'Create baseline',
+                      })
+                      const label = raw?.trim()
                       if (!label) return
                       const res = await validationService.createBaseline(projectId, { label })
                       if (res.success) toast.success(`Baselined ${res.data?.itemCount ?? 0} items as "${label}"`)
@@ -1146,23 +1166,32 @@ export default function ValidationPage() {
           </div>
           <button
             type="button"
+            onClick={() => setHelpOpen(true)}
+            className="pv-btn"
+            title="Open the Validation user guide"
+            aria-label="Open Validation help"
+          >
+            <HelpCircle size={14} /> Help
+          </button>
+          <button
+            type="button"
             onClick={() => setCreateFromReqOpen(true)}
             className="pv-btn"
-            title="Bulk-create items from requirements (Cmd+Shift+F)"
-            aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
+            title="Bulk-create items from requirements (Shift+N)"
+            aria-keyshortcuts="Shift+N"
           >
             <ListPlus size={14} /> From requirements
-            <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⌘⇧F</span>
+            <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⇧N</span>
           </button>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
             className="pv-btn primary"
-            title="Create a new validation item (Cmd+N)"
-            aria-keyshortcuts="Control+N Meta+N"
+            title="Create a new validation item (N)"
+            aria-keyshortcuts="n"
           >
             <Plus size={14} /> New item
-            <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>⌘N</span>
+            <span className="pv-kbd" aria-hidden style={{ marginLeft: 6 }}>N</span>
           </button>
         </div>
       </div>
@@ -1389,11 +1418,12 @@ export default function ValidationPage() {
       })()}
 
       <div
-        className="pv-subbar"
+        className="pv-subbar is-split"
         role="toolbar"
         aria-label="Validation filters and view controls"
         style={{ margin: 0, borderRadius: 6, border: '1px solid var(--pv-line)' }}
       >
+        <div className="pv-subbar-row">
         <div className="pv-search">
           <Search size={14} />
           <input
@@ -1401,7 +1431,7 @@ export default function ValidationPage() {
             type="search"
             role="searchbox"
             aria-label="Search validation items by title, description, or key"
-            aria-keyshortcuts="/ Control+F Meta+F"
+            aria-keyshortcuts="/"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
@@ -1457,7 +1487,7 @@ export default function ValidationPage() {
               </button>
             </>
           ) : (
-            <span className="pv-kbd" title="Press / or Cmd+F to focus search">/</span>
+            <span className="pv-kbd" title="Press / to focus search">/</span>
           )}
         </div>
         <button
@@ -1556,6 +1586,8 @@ export default function ValidationPage() {
             Group: Milestone
           </button>
         )}
+        </div>
+        <div className="pv-subbar-row is-tools">
         {viewMode === 'list' && (
           <div style={{ position: 'relative' }}>
             <button
@@ -1712,21 +1744,6 @@ export default function ValidationPage() {
           </select>
         </label>
         <div className="pv-subbar-right">
-          <button
-            type="button"
-            onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
-            title={density === 'compact' ? 'Switch to comfortable density' : 'Switch to compact density'}
-            className="pv-icon-btn"
-            style={{ width: 30, height: 30 }}
-            aria-label={
-              density === 'compact'
-                ? 'Row density: compact. Switch to comfortable.'
-                : 'Row density: comfortable. Switch to compact.'
-            }
-            aria-pressed={density === 'comfortable'}
-          >
-            {density === 'compact' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-          </button>
           <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Export the current view">
             <Download size={14} /> Export
             <select
@@ -1751,6 +1768,7 @@ export default function ValidationPage() {
               <option value="pdf">Report — PDF</option>
             </select>
           </label>
+        </div>
         </div>
       </div>
 
@@ -2151,11 +2169,13 @@ export default function ValidationPage() {
                   const card = items.find((i) => i.id === id)
                   if (!card || card.status === s) return
                   if (s === 'VALIDATED') {
-                    const ok = window.confirm(
-                      `Move ${card.key} to VALIDATED?\n\n` +
-                        'This signs the validation as complete. Make sure execution evidence ' +
-                        'and criterion outcomes are recorded first.',
-                    )
+                    const ok = await confirmDialog({
+                      title: `Move ${card.key} to VALIDATED?`,
+                      message:
+                        'This signs the validation as complete. Make sure execution evidence and criterion outcomes are recorded first.',
+                      confirmText: 'Mark validated',
+                      variant: 'warning',
+                    })
                     if (!ok) return
                   }
                   const res = await validationService.update(projectId, id, { status: s })
@@ -2224,13 +2244,26 @@ export default function ValidationPage() {
                   const total = it.criteria?.length ?? 0
                   const met = it.criteria?.filter((c) => c.outcome === 'MET').length ?? 0
                   const isDragging = dragItemId === it.id
+                  // Only the item's owner, its author, or a project admin may
+                  // change its status. Everyone else can still click the card
+                  // to read the details, but the card is non-draggable so the
+                  // board cannot become a free-for-all status board.
+                  const canMove =
+                    !!currentUserId &&
+                    (currentUserId === it.owner?.id ||
+                      currentUserId === it.createdBy?.id ||
+                      user?.role === 'ADMIN')
                   return (
                     <button
                       key={it.id}
                       type="button"
-                      draggable
-                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. Open details.`}
+                      draggable={canMove}
+                      aria-label={`${it.key} - ${it.title}. Status ${s}, milestone ${it.targetMilestone}, ${met} of ${total} criteria met. ${canMove ? 'Drag to change status, or click to open details.' : 'Open details. Only the owner can change status.'}`}
                       onDragStart={(e) => {
+                        if (!canMove) {
+                          e.preventDefault()
+                          return
+                        }
                         setDragItemId(it.id)
                         e.dataTransfer.setData('text/plain', it.id)
                         e.dataTransfer.effectAllowed = 'move'
@@ -2262,7 +2295,7 @@ export default function ValidationPage() {
                         borderRadius: 4,
                         padding: '8px 10px',
                         textAlign: 'left',
-                        cursor: isDragging ? 'grabbing' : 'grab',
+                        cursor: canMove ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
                         opacity: isDragging ? 0.4 : 1,
                         font: 'inherit',
                         color: 'inherit',
@@ -2270,7 +2303,7 @@ export default function ValidationPage() {
                         flexDirection: 'column',
                         gap: 6,
                       }}
-                      title={it.title}
+                      title={canMove ? it.title : `${it.title}\n\nOnly the owner or item author can change status. Open the item to request a change.`}
                     >
                       <div
                         style={{
@@ -2681,12 +2714,13 @@ export default function ValidationPage() {
               // to VALIDATED in bulk skips the EXECUTED step, which is normally
               // where evidence and outcomes are recorded. Confirm to proceed.
               if (s === 'VALIDATED') {
-                const ok = window.confirm(
-                  `Set ${selectedIds.size} item(s) to VALIDATED?\n\n` +
-                    'This skips the EXECUTED step for any items still in PLANNED. ' +
-                    'Validation should usually go PLANNED → EXECUTED → VALIDATED so ' +
-                    'evidence and criterion outcomes are recorded first. Continue?',
-                )
+                const ok = await confirmDialog({
+                  title: `Set ${selectedIds.size} item(s) to VALIDATED?`,
+                  message:
+                    'This skips the EXECUTED step for any items still in PLANNED. Validation should usually go PLANNED -> EXECUTED -> VALIDATED so evidence and criterion outcomes are recorded first.',
+                  confirmText: 'Mark all validated',
+                  variant: 'warning',
+                })
                 if (!ok) return
               }
               const res = await validationService.bulkUpdate(projectId, {

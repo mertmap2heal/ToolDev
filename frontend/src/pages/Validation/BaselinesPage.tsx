@@ -8,6 +8,10 @@ import {
   type ValidationBaseline,
 } from '../../services/validation.service'
 import { STATUS_LABEL, METHOD_LABEL, MILESTONE_LABEL } from '../../components/validation/validationLabels'
+import {
+  ValidationDialogHost,
+  confirmDialog,
+} from '../../components/validation/useValidationDialog'
 
 // Per design-system.md §8.3 baselines are frozen point-in-time snapshots.
 // This page lists every baseline a project has taken and lets the user open
@@ -140,7 +144,13 @@ export default function BaselinesPage() {
   if (!projectId) return null
 
   const remove = async (id: string, label: string) => {
-    if (!window.confirm(`Delete baseline "${label}"? Frozen snapshots cannot be recovered.`)) return
+    const ok = await confirmDialog({
+      title: `Delete baseline "${label}"?`,
+      message: 'Frozen snapshots cannot be recovered. Items themselves stay - only this comparison anchor is removed.',
+      confirmText: 'Delete baseline',
+      variant: 'danger',
+    })
+    if (!ok) return
     const res = await validationService.deleteBaseline(projectId, id)
     if (res.success) {
       queryClient.invalidateQueries({ queryKey: ['validation-baselines', projectId] })
@@ -150,6 +160,7 @@ export default function BaselinesPage() {
 
   return (
     <div className="params-v2 validation-v2 space-y-4" style={{ padding: '16px 24px' }}>
+      <ValidationDialogHost />
       <div className="pv-title-row">
         <div>
           <h1>Validation — Baselines</h1>

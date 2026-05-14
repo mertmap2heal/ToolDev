@@ -17,6 +17,7 @@ import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
 import RequirementHoverCard from './RequirementHoverCard'
 import ValidationCommentsSection from './ValidationCommentsSection'
+import { confirmDialog, promptDialog } from './useValidationDialog'
 import {
   validationService,
   CRITERION_OUTCOMES,
@@ -96,7 +97,17 @@ export default function ValidationItemDetailDrawer({
   const [crModalOpen, setCrModalOpen] = useState(false)
 
   useEffect(() => {
-    if (item) setDraft(item)
+    if (!item) return
+    // Strip the legacy "Source requirement <uuid>\n\n..." prefix on load so
+    // the user never sees it inside the description editor. The actual link
+    // to the source requirement is preserved as a TraceLink (rendered under
+    // Linked requirements), so removing the prefix loses no information.
+    const m = item.description?.match(/^Source requirement [0-9a-f-]{36}\n\n([\s\S]*)$/i)
+    if (m) {
+      setDraft({ ...item, description: m[1] })
+    } else {
+      setDraft(item)
+    }
   }, [item])
 
   useEffect(() => {
@@ -158,11 +169,15 @@ export default function ValidationItemDetailDrawer({
   }, [draft, item])
   const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
 
-  const close = () => {
+  const close = async () => {
     if (isDirty) {
-      const ok = window.confirm(
-        'You have unsaved changes. Discard and close?',
-      )
+      const ok = await confirmDialog({
+        title: 'Discard unsaved changes?',
+        message: 'You have unsaved changes on this item. Closing will lose them.',
+        confirmText: 'Discard changes',
+        cancelText: 'Keep editing',
+        variant: 'warning',
+      })
       if (!ok) return
     }
     setDraft(null)
@@ -277,12 +292,25 @@ export default function ValidationItemDetailDrawer({
     }))
     setDraft({ ...draft, criteria: [...draft.criteria, ...next] })
   }
-  const saveCurrentAsTemplate = () => {
+  const saveCurrentAsTemplate = async () => {
     if (!draft || draft.criteria.length === 0) return
-    const label = window.prompt('Save current criteria as a template — name:')?.trim()
+    const raw = await promptDialog({
+      title: 'Save criteria as template',
+      message: 'Saves this item\'s acceptance criteria so you can drop them into future items in one click.',
+      inputLabel: 'Template name',
+      placeholder: 'e.g. UI smoke pass',
+      confirmText: 'Save template',
+    })
+    const label = raw?.trim()
     if (!label) return
     if (templates.some((t) => t.label === label)) {
-      if (!window.confirm(`A template named "${label}" already exists. Overwrite it?`)) return
+      const ok = await confirmDialog({
+        title: `Overwrite "${label}"?`,
+        message: `A template named "${label}" already exists. Save again to replace it.`,
+        confirmText: 'Overwrite',
+        variant: 'warning',
+      })
+      if (!ok) return
     }
     const next = [
       ...templates.filter((t) => t.label !== label),
@@ -293,8 +321,14 @@ export default function ValidationItemDetailDrawer({
     ]
     persistTemplates(next)
   }
-  const deleteTemplate = (label: string) => {
-    if (!window.confirm(`Delete template "${label}"?`)) return
+  const deleteTemplate = async (label: string) => {
+    const ok = await confirmDialog({
+      title: `Delete template "${label}"?`,
+      message: 'Other items already using this template keep their criteria - only the saved snapshot is removed.',
+      confirmText: 'Delete template',
+      variant: 'danger',
+    })
+    if (!ok) return
     persistTemplates(templates.filter((t) => t.label !== label))
   }
 
@@ -392,8 +426,17 @@ export default function ValidationItemDetailDrawer({
 
   const handleDelete = async () => {
     if (!itemId) return
-    const reason = window.prompt('Reason for deletion (optional)?') ?? undefined
-    const res = await validationService.remove(projectId, itemId, reason)
+    const reason = await promptDialog({
+      title: 'Archive this item?',
+      message: 'The item is soft-deleted - it can be restored from the archive view. An optional reason is recorded on the audit trail.',
+      inputLabel: 'Reason (optional)',
+      placeholder: 'e.g. superseded by VAL-014',
+      confirmText: 'Archive item',
+      allowEmpty: true,
+    })
+    if (reason === null) return
+    const trimmed = reason.trim() || undefined
+    const res = await validationService.remove(projectId, itemId, trimmed)
     if (res.success) {
       reload()
       close()
@@ -603,38 +646,6 @@ export default function ValidationItemDetailDrawer({
                 </button>
               </div>
             )}
-            {/* Legacy items created before commit 4d7e... had a literal
-                "Source requirement <uuid>\n\n..." prefix in the description.
-                Detect it, surface a clean callout, and offer a one-click
-                cleanup. New items skip this entirely (auto-link via TraceLink). */}
-            {(() => {
-              const desc = draft?.description ?? ''
-              const match = desc.match(/^Source requirement ([0-9a-f-]{36})\n\n([\s\S]*)$/i)
-              if (!match) return null
-              const [, sourceId, body] = match
-              return (
-                <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/10 text-xs">
-                  <span className="text-gray-700 dark:text-gray-300 flex-shrink-0">
-                    Source requirement:
-                  </span>
-                  <a
-                    href={`/projects/${projectId}/requirements?focus=${sourceId}`}
-                    className="font-mono text-blue-700 dark:text-blue-300 hover:underline truncate"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {sourceId.slice(0, 8)}…
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => draft && setDraft({ ...draft, description: body })}
-                    className="ml-auto text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                    title="Remove the legacy prefix from the description (the link is preserved on this item via Linked requirements)."
-                  >
-                    Clean up
-                  </button>
-                </div>
-              )
-            })()}
             <MarkdownEditor
               value={draft?.description ?? ''}
               onChange={(next) => draft && setDraft({ ...draft, description: next })}

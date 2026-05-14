@@ -767,3 +767,54 @@ html[data-theme='midnight'] .validation-v2 .pv-dr-comment .pv-avatar {
   font-family: var(--pv-font-mono);
   border-radius: 3px;
 }
+
+/* Forest accent override for validation dialog confirm buttons. */
+.validation-v2 .pv-dr-btn.primary {
+  background: var(--pv-green);
+  border-color: var(--pv-green);
+  color: #fff;
+}
+.validation-v2 .pv-dr-btn.primary:hover {
+  background: #133124;
+  border-color: #133124;
+}
+.validation-v2 .pv-dr-btn.primary.danger {
+  background: var(--pv-red);
+  border-color: var(--pv-red);
+}
+.validation-v2 .pv-dr-btn.primary.danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* Subbar split into two intentional rows. Row 1 = primary filters,
+   row 2 = table tools. Stops the awkward natural wrap that landed
+   Criteria + Export on their own line. */
+.validation-v2 .pv-subbar.is-split {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 10px;
+}
+.validation-v2 .pv-subbar.is-split .pv-subbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools {
+  border-top: 1px dashed var(--pv-line-soft, var(--pv-line));
+  padding-top: 8px;
+}
+.validation-v2 .pv-subbar.is-split .pv-subbar-row .pv-subbar-right {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+@media (max-width: 720px) {
+  .validation-v2 .pv-subbar.is-split .pv-subbar-row.is-tools {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
