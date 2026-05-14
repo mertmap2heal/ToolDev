@@ -2631,6 +2631,7 @@ export default function ValidationPage() {
           <span className="sep" />
           <select
             value={bulkMilestone}
+            aria-label="Set milestone on selected items"
             onChange={async (e) => {
               const ms = e.target.value as ValidationMilestone
               if (!ms) return
@@ -2656,6 +2657,7 @@ export default function ValidationPage() {
           </select>
           <select
             defaultValue=""
+            aria-label="Set status on selected items"
             onChange={async (e) => {
               const s = e.target.value as ValidationStatus
               e.currentTarget.value = ''
@@ -2703,6 +2705,7 @@ export default function ValidationPage() {
           </select>
           <select
             defaultValue=""
+            aria-label="Assign owner to selected items"
             onChange={async (e) => {
               const owner = e.target.value
               e.currentTarget.value = ''
@@ -2761,6 +2764,7 @@ export default function ValidationPage() {
           {settings && settings.tags.length > 0 && (
             <select
               defaultValue=""
+              aria-label="Add tag to selected items"
               onChange={async (e) => {
                 const tag = e.target.value
                 e.currentTarget.value = ''
