@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export default function Navbar() {
   return (
     <nav className="pl-nav" aria-label="Primary">
@@ -8,10 +10,10 @@ export default function Navbar() {
           <a href="#customers" className="pl-nav-link pl-nav-desktop-only">Customers</a>
           <a href="#pricing" className="pl-nav-link pl-nav-desktop-only">Pricing</a>
           <a href="#docs" className="pl-nav-link pl-nav-desktop-only">Docs</a>
-          <a href="#signin" className="pl-nav-link">Sign in</a>
-          <a href="#start" className="pl-cta-primary" style={{ height: 36, padding: '0 16px', fontSize: 14 }}>
+          <Link to="/login" className="pl-nav-link">Sign in</Link>
+          <Link to="/login" className="pl-cta-primary" style={{ height: 36, padding: '0 16px', fontSize: 14 }}>
             Start free
-          </a>
+          </Link>
         </div>
       </div>
     </nav>

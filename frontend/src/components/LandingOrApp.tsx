@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { authService } from '../services/auth.service'
 import { useAuthStore } from '../store/authStore'
-import LandingPage from '../pages/Landing/LandingPage'
+import PreviewLandingPage from '../pages/PreviewLanding/PreviewLandingPage'
 
 export default function LandingOrApp() {
   const token = authService.getToken()
@@ -19,7 +19,7 @@ export default function LandingOrApp() {
   }, [token, user, setUser])
 
   if (!token) {
-    return <LandingPage />
+    return <PreviewLandingPage />
   }
 
   return <Outlet />
