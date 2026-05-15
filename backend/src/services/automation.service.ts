@@ -6,10 +6,13 @@ import { randomUUID } from 'crypto'
 // RBAC/permissions will be implemented later.
 
 export class AutomationService {
-  async getRules(): Promise<any[]> {
+  // SEC-2 (#375): getRules now requires a projectId so the unfiltered
+  // findMany cannot leak rules across tenants.
+  async getRules(projectId: string): Promise<any[]> {
     return prisma.automationRule.findMany({
       where: {
         isActive: true,
+        projectId,
       },
       orderBy: {
         createdAt: 'desc',
@@ -22,6 +25,7 @@ export class AutomationService {
     triggerType: string
     conditionsJson: string
     actionsJson: string
+    projectId: string
   }): Promise<any> {
     return prisma.automationRule.create({
       data: {
@@ -29,6 +33,7 @@ export class AutomationService {
         triggerType: data.triggerType,
         conditionsJson: data.conditionsJson,
         actionsJson: data.actionsJson,
+        projectId: data.projectId,
       },
     })
   }
@@ -86,14 +91,33 @@ export class AutomationService {
             })
             break
 
-          case 'add_tag':
-            // Find or create tag
+          case 'add_tag': {
+            // SEC-2 (#375): TaskTag is now project-scoped. Resolve project
+            // from the task we are tagging so the (projectId, name) lookup
+            // uses the correct scope.
+            const taskForTag = await prisma.task.findUnique({
+              where: { id: taskId },
+              select: { projectId: true },
+            })
+            if (!taskForTag?.projectId) {
+              results.push({ action, error: 'task has no projectId', success: false })
+              break
+            }
+            // Find or create tag scoped to the task's project.
             let tag = await prisma.taskTag.findUnique({
-              where: { name: action.value },
+              where: {
+                projectId_name: {
+                  projectId: taskForTag.projectId,
+                  name: action.value,
+                },
+              },
             })
             if (!tag) {
               tag = await prisma.taskTag.create({
-                data: { name: action.value },
+                data: {
+                  name: action.value,
+                  projectId: taskForTag.projectId,
+                },
               })
             }
             // Link tag
@@ -111,6 +135,7 @@ export class AutomationService {
               update: {},
             })
             break
+          }
 
           case 'set_due_date_offset':
             const task = await prisma.task.findUnique({ where: { id: taskId } })
@@ -218,10 +243,15 @@ export class AutomationService {
     triggerContext: any,
     correlationId?: string
   ): Promise<void> {
+    // SEC-2 (#375): scope rules to the task's own project so a foreign
+    // project's rule cannot fire on this task. The trigger pathway is the
+    // only place where projectId was not previously asserted.
+    if (!task?.projectId) return
     const rules = await prisma.automationRule.findMany({
       where: {
         isActive: true,
         triggerType,
+        projectId: task.projectId,
       },
     })
 

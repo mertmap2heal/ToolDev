@@ -5,10 +5,13 @@ import { taskService } from '../../services/task.service'
 import type { AutomationRule, AutomationTriggerType } from 'shared/types/task.types'
 
 interface AutomationRuleBuilderProps {
+  // SEC-2 (#375): rules are project-scoped, so the builder requires the
+  // active project context to call createAutomationRule.
+  projectId: string
   onClose?: () => void
 }
 
-export default function AutomationRuleBuilder({ onClose }: AutomationRuleBuilderProps) {
+export default function AutomationRuleBuilder({ projectId, onClose }: AutomationRuleBuilderProps) {
   const [ruleName, setRuleName] = useState('')
   const [triggerType, setTriggerType] = useState<AutomationTriggerType>('task_created')
   const [conditions, setConditions] = useState<any[]>([])
@@ -21,9 +24,9 @@ export default function AutomationRuleBuilder({ onClose }: AutomationRuleBuilder
       triggerType: string
       conditionsJson: string
       actionsJson: string
-    }) => taskService.createAutomationRule(data),
+    }) => taskService.createAutomationRule({ ...data, projectId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation-rules'] })
+      queryClient.invalidateQueries({ queryKey: ['automation-rules', projectId] })
       if (onClose) onClose()
     },
   })
