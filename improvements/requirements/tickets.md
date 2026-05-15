@@ -12,6 +12,8 @@ Total: 14 tickets — 6 Quick wins, 5 Near-term, 3 Long-term.
 
 ### REQ-S1. Fix reviewer-response auth check
 
+**Status:** Shipped 2026-05-15 - Issue [#376](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/376), PR [#380](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/380), merge commit `47e3cf1`. Resolution: new `verifyActingForSelf` middleware factory; internal reviewers must match `req.user.id`; external reviewers must present a signed `X-Reviewer-Token` JWT bound to `{reviewId, reviewerEmail, requirementReviewerId, purpose}` with `algorithms: ['HS256']` whitelist + 30-day expiry; deny paths write `requirements:reviewer-auth-mismatch-denied` audit rows anchored on requirement projectId; new `htmlEscape` helper applied to user-supplied fields in `sendReviewInviteEmail` HTML body; backfill script `reissueExternalReviewerInvites.ts` with `--throttle-ms` and `--dry-run` flags.
+
 **Description.** `PUT /projects/:projectId/reviews/:reviewId/reviewers/:reviewerId` (`requirementReview.controller.ts:76-115`) accepts a status body without verifying `req.user.id === reviewer.reviewerId`. Any project member can submit any other reviewer's response. This is a Part-11 audit failure plus an authorization bug.
 
 **Acceptance criteria.**

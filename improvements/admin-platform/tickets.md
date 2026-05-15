@@ -10,6 +10,8 @@ Naming convention: `AP-Q*` (quick win, hours), `AP-N*` (near-term, days), `AP-S*
 
 ### AP-S1 — Tenant-scope the AI invocation read endpoint
 
+**Status:** Shipped 2026-05-15 - Issue [#374](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/374), PR [#378](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/378), merge commit `7f6a8ae`. Resolution: split read endpoint into SUPERIOR_ADMIN-only path + COMPANY_ADMIN-scoped `/admin/ai/invocations/company` path with `req.user.company` tenant filter; deny paths audited via `withDenyAudit` wrapper; tenant-scope rule codified in `.claude/kb/backend-patterns.md`.
+
 **Severity:** HIGH. Cross-tenant data leak risk identical to the `mcpKey.routes.ts` HIGH-2 already noted in code comments.
 
 **Problem.** `aiInvocation.routes.ts:7-8` guards the AI invocation list + NDJSON export with `authenticateToken, requireAdmin` only. `requireAdmin` admits both `SUPERIOR_ADMIN` and `COMPANY_ADMIN`. The list controller (`controllers/aiInvocation.controller.ts → list`) is called with no `projectId` filter. A COMPANY_ADMIN of company A can therefore list every `AiInvocation` row in the database, including rows from company B's projects — leaking model usage patterns, prompt IDs, and (via `contextHash` joined to the project graph) potentially classified context shapes.

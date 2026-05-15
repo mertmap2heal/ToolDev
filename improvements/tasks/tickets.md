@@ -5,7 +5,7 @@ Per the constraint Tasks is not the cert-native flagship; six tickets, ordered b
 ---
 
 ## T-4 · Close the AutomationRule + TaskTemplate + TaskTag tenant leaks
-**Priority:** P0 · **Effort:** M
+**Priority:** P0 · **Effort:** M · **Status:** Shipped 2026-05-15 - Issue [#375](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/375), PR [#379](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/379), merge commit `77c18c8`. Resolution: AutomationRule + TaskTag schema gained `projectId`; TaskTag global @unique replaced with @@unique([projectId, name]); orphan rules auto-deactivated; new `requireRuleProjectMember` + `requireTemplateProjectMember` middleware; existing `requireBodyProjectMember` extended with `resourceLabel` option; deny audit rows written with `tasks:tenant-scope-denied` action anchored on resource projectId.
 
 **Problem.** Three Tasks-domain surfaces leak across tenants:
 
