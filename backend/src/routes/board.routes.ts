@@ -12,7 +12,11 @@ const router = Router()
 router.use(authenticateToken)
 
 // GET /board/columns?project_id=... — must be a member of that project.
-router.get('/columns', requireBodyProjectMember('query'), getColumns)
+router.get(
+  '/columns',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'board' }),
+  getColumns
+)
 
 // PATCH /board/columns/:id — resolve column's project, enforce membership.
 router.patch('/columns/:id', requireTaskProjectMember('column'), updateColumn)

@@ -22,8 +22,16 @@ router.use(authenticateToken)
 router.post('/', requireBodyTaskProjectMember(['taskId', 'task_id']), logTime)
 
 // getTimeLogs / getTimeSummary demand a project_id query and verify membership.
-router.get('/', requireBodyProjectMember('query', ['project_id', 'projectId']), getTimeLogs)
-router.get('/summary', requireBodyProjectMember('query', ['project_id', 'projectId']), getTimeSummary)
+router.get(
+  '/',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'time-log' }),
+  getTimeLogs
+)
+router.get(
+  '/summary',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'time-log' }),
+  getTimeSummary
+)
 
 // updateTimeLog / deleteTimeLog resolve the TimeLog -> task -> projectId
 // and enforce membership. Controller further restricts to the log's owner

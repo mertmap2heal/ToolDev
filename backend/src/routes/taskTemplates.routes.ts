@@ -32,7 +32,7 @@ router.delete('/:id', requireTemplateProjectMember(), deleteTemplate)
 // the caller to be a member of the target project (#159).
 router.post(
   '/:id/create-task',
-  requireBodyProjectMember('body', ['project_id', 'projectId']),
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'task-template' }),
   createTaskFromTemplate
 )
 

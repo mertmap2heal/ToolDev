@@ -200,7 +200,7 @@ describe('SEC-2 (#375) — Tasks-domain tenant scope', () => {
     expect([403, 404]).toContain(res.status)
   })
 
-  it('a tenant-scope-denied audit row is written on a foreign rule probe', async () => {
+  it('a tenant-scope-denied audit row is written on a foreign rule probe with resource=automation-rule', async () => {
     await request(app)
       .post(`/api/v1/automation/rules/${ruleBId}/test`)
       .set('Authorization', `Bearer ${tokenA}`)
@@ -211,8 +211,40 @@ describe('SEC-2 (#375) — Tasks-domain tenant scope', () => {
         userId: userAId,
         action: 'tasks:tenant-scope-denied',
       },
+      orderBy: { createdAt: 'desc' },
     })
     expect(audit).not.toBeNull()
+    // SEC-2 review MEDIUM-1: per-route resource label flows into the audit row.
+    const details = JSON.parse(audit!.details ?? '{}')
+    expect(details.resource).toBe('automation-rule')
+    expect(details.resourceId).toBe(ruleBId)
+  })
+
+  it('foreign rule-list probe writes audit row with resource=automation-rule (requireBodyProjectMember query)', async () => {
+    // Clear any prior deny rows so we can assert on the newest write.
+    await prisma.auditLog
+      .deleteMany({
+        where: {
+          projectId: projectBId,
+          userId: userAId,
+          action: 'tasks:tenant-scope-denied',
+        },
+      })
+      .catch(() => {})
+    await request(app)
+      .get(`/api/v1/automation/rules?project_id=${projectBId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    const audit = await prisma.auditLog.findFirst({
+      where: {
+        projectId: projectBId,
+        userId: userAId,
+        action: 'tasks:tenant-scope-denied',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(audit).not.toBeNull()
+    const details = JSON.parse(audit!.details ?? '{}')
+    expect(details.resource).toBe('automation-rule')
   })
 
   // ---------- TaskTemplate ----------
@@ -300,5 +332,146 @@ describe('SEC-2 (#375) — Tasks-domain tenant scope', () => {
     // Controller-side check: tasks in projectB are not visible to A; the
     // membership check rejects with 403.
     expect([403, 404]).toContain(res.status)
+  })
+
+  // ---------- SEC-2 review MEDIUM-1: per-route resource label verification ----------
+  //
+  // Each consumer of `requireBodyProjectMember` passes a specific
+  // resourceLabel option so the deny-audit row records the actual route
+  // resource (e.g. task-tag, tasks-bulk, board) rather than the generic
+  // 'project-scope-body'. The tests below assert one row per resource label
+  // by triggering a foreign-tenant probe on each surface.
+
+  async function clearDenyRows(): Promise<void> {
+    await prisma.auditLog
+      .deleteMany({
+        where: {
+          projectId: projectBId,
+          userId: userAId,
+          action: 'tasks:tenant-scope-denied',
+        },
+      })
+      .catch(() => {})
+  }
+
+  async function findLatestDeny(): Promise<{ resource: string; resourceId: string | null } | null> {
+    const audit = await prisma.auditLog.findFirst({
+      where: {
+        projectId: projectBId,
+        userId: userAId,
+        action: 'tasks:tenant-scope-denied',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (!audit) return null
+    const details = JSON.parse(audit.details ?? '{}')
+    return { resource: details.resource, resourceId: details.resourceId ?? null }
+  }
+
+  it('foreign tag-list probe writes resource=task-tag', async () => {
+    await clearDenyRows()
+    await request(app)
+      .get(`/api/v1/tags?project_id=${projectBId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('task-tag')
+  })
+
+  it('foreign tag-create probe writes resource=task-tag', async () => {
+    await clearDenyRows()
+    await request(app)
+      .post('/api/v1/tags')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ project_id: projectBId, name: `foreign-tag-${stamp}` })
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('task-tag')
+  })
+
+  it('foreign board-columns probe writes resource=board', async () => {
+    await clearDenyRows()
+    await request(app)
+      .get(`/api/v1/board/columns?project_id=${projectBId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('board')
+  })
+
+  it('foreign analytics probe writes resource=task-analytics', async () => {
+    await clearDenyRows()
+    await request(app)
+      .get(`/api/v1/task-analytics/statistics?project_id=${projectBId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('task-analytics')
+  })
+
+  it('foreign time-logs probe writes resource=time-log', async () => {
+    await clearDenyRows()
+    await request(app)
+      .get(`/api/v1/time-tracking?project_id=${projectBId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('time-log')
+  })
+
+  it('foreign import-export probe writes resource=task-import-export', async () => {
+    await clearDenyRows()
+    await request(app)
+      .post('/api/v1/csv/export')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ project_id: projectBId, format: 'csv' })
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('task-import-export')
+  })
+
+  it('foreign /tasks/bulk probe writes resource=tasks-bulk', async () => {
+    await clearDenyRows()
+    await request(app)
+      .post('/api/v1/tasks/bulk')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ project_id: projectBId, task_ids: [taskBId], updates: { priority: 'HIGH' } })
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('tasks-bulk')
+  })
+
+  it('foreign /tasks list probe writes resource=task-list', async () => {
+    await clearDenyRows()
+    await request(app)
+      .get(`/api/v1/tasks?project_id=${projectBId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('task-list')
+  })
+
+  it('foreign /tasks create probe writes resource=task-create', async () => {
+    await clearDenyRows()
+    await request(app)
+      .post('/api/v1/tasks')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ project_id: projectBId, title: 'foreign-create' })
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    expect(latest!.resource).toBe('task-create')
+  })
+
+  it('foreign template-create-task probe writes resource=task-template', async () => {
+    await clearDenyRows()
+    await request(app)
+      .post(`/api/v1/task-templates/${templateBId}/create-task`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ project_id: projectBId })
+    const latest = await findLatestDeny()
+    expect(latest).not.toBeNull()
+    // requireBodyProjectMember writes a row with resourceLabel 'task-template'
+    // because POST /:id/create-task is wired with that label.
+    expect(latest!.resource).toBe('task-template')
   })
 })

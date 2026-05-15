@@ -14,9 +14,21 @@ router.use(authenticateToken)
 // creates supply project_id explicitly; rule-id routes resolve projectId
 // from AutomationRule. /runs also requires project_id (query) and -
 // when filtered by rule_id - additionally checks rule membership.
-router.get('/rules', requireBodyProjectMember('query'), getRules)
-router.post('/rules', requireBodyProjectMember('body'), createRule)
+router.get(
+  '/rules',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'automation-rule' }),
+  getRules
+)
+router.post(
+  '/rules',
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'automation-rule' }),
+  createRule
+)
 router.post('/rules/:id/test', requireRuleProjectMember(), testRule)
-router.get('/runs', requireBodyProjectMember('query'), getRuns)
+router.get(
+  '/runs',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'automation-rule' }),
+  getRuns
+)
 
 export default router

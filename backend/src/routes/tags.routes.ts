@@ -11,7 +11,15 @@ router.use(authenticateToken)
 // project_id (query / body) and project membership. The schema change
 // drops the global unique on `name` and replaces it with
 // @@unique([projectId, name]).
-router.get('/', requireBodyProjectMember('query'), getTags)
-router.post('/', requireBodyProjectMember('body'), createTag)
+router.get(
+  '/',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'task-tag' }),
+  getTags
+)
+router.post(
+  '/',
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'task-tag' }),
+  createTag
+)
 
 export default router

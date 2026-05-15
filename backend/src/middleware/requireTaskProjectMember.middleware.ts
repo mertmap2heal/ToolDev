@@ -1,3 +1,18 @@
+/**
+ * Tasks-domain project-membership middleware.
+ *
+ * SCOPE - This file is the canonical chokepoint for tenant scoping on the
+ * tasks subsystem (Tasks, Automation Rules, Templates, Tags, Board, Time
+ * Tracking, Analytics, Import/Export). Every deny-audit row it writes uses
+ * the `tasks:tenant-scope-denied` action string under the R-8
+ * `<module>:<kebab-verb>` convention.
+ *
+ * Non-tasks consumers must NOT reuse these middlewares. Build a parallel
+ * module-specific file and pick a fresh action namespace
+ * (`<your-module>:tenant-scope-denied`). The `resourceLabel` option on
+ * `requireBodyProjectMember` lets each call site record what kind of
+ * resource was probed (e.g. `automation-rule`, `task-tag`, `tasks-bulk`).
+ */
 import { Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { AuthRequest } from './auth.middleware'
@@ -261,11 +276,20 @@ export function requireBodyTaskProjectMember(
  * `location` lets us read from query or body. When the project id is missing
  * the request is rejected with 400 — unscoped list/search across all projects
  * is the exact IDOR we are removing.
+ *
+ * `options.resourceLabel` (SEC-2 review MEDIUM-1) — string written to the
+ * deny-audit row's `resource` field so each consumer's audit trail records
+ * the actual resource type (e.g. `automation-rule`, `task-tag`,
+ * `tasks-bulk`). Defaults to `'project-scope-body'` for backwards
+ * compatibility; explicit per-consumer labels are required for any route
+ * mounted in this PR.
  */
 export function requireBodyProjectMember(
   location: 'body' | 'query' = 'body',
-  fields: string[] = ['project_id', 'projectId']
+  fields: string[] = ['project_id', 'projectId'],
+  options?: { resourceLabel?: string }
 ) {
+  const resourceLabel = options?.resourceLabel ?? 'project-scope-body'
   return async (
     req: AuthRequest,
     res: Response,
@@ -304,7 +328,7 @@ export function requireBodyProjectMember(
         await writeTenantScopeDenyAudit({
           projectId,
           userId,
-          resource: 'project-scope-body',
+          resource: resourceLabel,
           resourceId: null,
           attemptedAction: req.method,
         })
