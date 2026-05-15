@@ -223,6 +223,7 @@ export default function CreateTaskModal({ isOpen, onClose, projectId, initialSta
               Tags
             </label>
             <TagPicker
+              projectId={projectId}
               selectedTagIds={formData.tagIds || []}
               onTagIdsChange={(tagIds) => setFormData({ ...formData, tagIds })}
             />

@@ -11,12 +11,12 @@ router.use(authenticateToken)
 // controller runs. Matches the pattern used by every other task route.
 router.post(
   '/export',
-  requireBodyProjectMember('body', ['project_id', 'projectId']),
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'task-import-export' }),
   exportTasks,
 )
 router.post(
   '/import',
-  requireBodyProjectMember('body', ['project_id', 'projectId']),
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'task-import-export' }),
   importTasks,
 )
 

@@ -315,6 +315,7 @@ export default function TaskDetailDrawer({ task, isOpen, onClose, onUpdate }: Ta
                   Tags
                 </label>
                 <TagPicker
+                  projectId={task.projectId ?? undefined}
                   selectedTagIds={task.tags?.map((t: any) => t.tagId) || []}
                   onTagIdsChange={(tagIds) => {
                     updateTaskMutation.mutate({ tagIds })

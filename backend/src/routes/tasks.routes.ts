@@ -39,10 +39,30 @@ router.use(authenticateToken)
 
 // Project-scoped list / create — require membership via query/body project_id.
 // Calendar must come before /:id so "calendar" is not treated as a task id.
-router.get('/calendar', requireBodyProjectMember('query'), getCalendarTasks)
-router.get('/', requireBodyProjectMember('query'), getTasks)
-router.post('/', requireBodyProjectMember('body'), createTask)
-router.post('/bulk', bulkUpdateTasks)
+router.get(
+  '/calendar',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'task-calendar' }),
+  getCalendarTasks
+)
+router.get(
+  '/',
+  requireBodyProjectMember('query', ['project_id', 'projectId'], { resourceLabel: 'task-list' }),
+  getTasks
+)
+router.post(
+  '/',
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'task-create' }),
+  createTask
+)
+// SEC-2 (#375): /bulk asserts project_id at the route level. The controller
+// still validates that every task_id belongs to a project the caller is a
+// member of (#159), so multi-project mixes are rejected at the controller
+// even when project_id is present.
+router.post(
+  '/bulk',
+  requireBodyProjectMember('body', ['project_id', 'projectId'], { resourceLabel: 'tasks-bulk' }),
+  bulkUpdateTasks
+)
 
 // Core task routes (resolve projectId from the task itself)
 router.get('/:id', requireTaskProjectMember('task'), getTask)

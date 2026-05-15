@@ -1,3 +1,4 @@
+#!/usr/bin/env sh
 # Pre-push gate - mirrors the CI lint job locally so bad code never
 # reaches the remote. Runs the same checks the GitHub Actions lint job
 # runs, in the same order, against the working tree.

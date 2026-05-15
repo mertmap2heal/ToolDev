@@ -216,7 +216,9 @@ model Project {
   items                       Item[]
   verTestResults              VerTestResult[]
   tasks                       Task[]
+  taskTags                    TaskTag[]
   taskSavedViews              TaskSavedView[]
+  automationRules             AutomationRule[]
   auditLogs                   AuditLog[]
   boardColumns                BoardColumn[]
   taskTemplates               TaskTemplate[]
@@ -2176,14 +2178,25 @@ model Task {
 
 // Tags
 model TaskTag {
+  // SEC-2 (#375): projectId added to scope tags per-tenant. Was globally
+  // unique on `name` which (a) exposed the existence of cross-tenant rows
+  // when a duplicate-name create errored with P2002, and (b) prevented two
+  // tenants from coexisting with shared tag vocabulary ("blocker", "bug").
+  // Backfilled via backfillTaskTagProjectId.ts. Tags used by tasks in
+  // multiple projects are split into per-project copies; tags with no usage
+  // remain projectId=null until an admin reconciles them.
   id        String   @id @default(uuid())
-  name      String   @unique
+  name      String
   color     String?
+  projectId String?
   createdAt DateTime @default(now())
 
-  tasks TaskTagLink[]
+  project Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   TaskTagLink[]
 
+  @@unique([projectId, name])
   @@index([name])
+  @@index([projectId])
 }
 
 model TaskTagLink {
@@ -2363,19 +2376,30 @@ model BoardColumn {
 
 // Automation
 model AutomationRule {
+  // SEC-2 (#375): projectId added to scope rules per-tenant. The previous
+  // schema had no tenant column and `automation.routes.ts` applied only
+  // authenticateToken - every authenticated user could list, create,
+  // test-run, and view runs of every customer's automation rules.
+  // Backfilled via backfillAutomationRuleProjectId.ts (walks
+  // AutomationRun.inputJson -> Task.projectId). Rules with no traceable
+  // project are flagged with projectId=null AND isActive=false so they
+  // cannot fire against unintended projects during admin review.
   id             String   @id @default(uuid())
   name           String
   isActive       Boolean  @default(true)
   triggerType    String // task_created | status_changed | due_date_changed | comment_added | tag_added
   conditionsJson String // JSON string of condition tree
   actionsJson    String // JSON string of action list
+  projectId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  runs AutomationRun[]
+  project Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs    AutomationRun[]
 
   @@index([isActive])
   @@index([triggerType])
+  @@index([projectId])
 }
 
 model AutomationRun {

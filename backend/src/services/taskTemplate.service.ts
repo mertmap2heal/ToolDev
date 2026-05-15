@@ -102,17 +102,25 @@ export class TaskTemplateService {
     // Use taskService to create the task
     const task = await taskService.createTask(taskData, undefined)
 
-    // Handle tags if template has them
-    if (template.tags && template.tags.length > 0) {
+    // Handle tags if template has them. SEC-2 (#375): TaskTag is now
+    // project-scoped; look up / create per (projectId, name).
+    if (template.tags && template.tags.length > 0 && task.projectId) {
       for (const tagName of template.tags) {
         try {
-          // Find or create tag
           let tag = await prisma.taskTag.findUnique({
-            where: { name: tagName },
+            where: {
+              projectId_name: {
+                projectId: task.projectId,
+                name: tagName,
+              },
+            },
           })
           if (!tag) {
             tag = await prisma.taskTag.create({
-              data: { name: tagName },
+              data: {
+                name: tagName,
+                projectId: task.projectId,
+              },
             })
           }
           // Link tag to task

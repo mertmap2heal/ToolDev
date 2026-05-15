@@ -110,6 +110,12 @@ describe('Tasks - security (#159, #160)', () => {
     await prisma.boardColumn.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId] } },
     })
+    // SEC-2 (#375): deny-audit rows may have been written into AuditLog
+    // during the tenant-scope tests; clean them up before deleting the
+    // project rows so the FK does not block teardown.
+    await prisma.auditLog.deleteMany({
+      where: { projectId: { in: [projectId, otherProjectId] } },
+    })
     await prisma.projectMember.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId] } },
     })
@@ -245,10 +251,13 @@ describe('Tasks - security (#159, #160)', () => {
 
   describe('POST /api/v1/tasks/bulk', () => {
     it('403 if the bulk batch contains a task from another project', async () => {
+      // SEC-2 (#375): route-level requireBodyProjectMember demands project_id;
+      // the controller-level membership check then rejects the foreign task.
       const res = await request(app)
         .post('/api/v1/tasks/bulk')
         .set('Authorization', `Bearer ${memberToken}`)
         .send({
+          project_id: projectId,
           task_ids: [taskId, otherTaskId],
           updates: { status: 'DONE' },
         })
