@@ -56,32 +56,74 @@ async function buildTenantScope(callerId: string, requestedProjectId: string | u
   return { where, forbidden: false }
 }
 
-async function writeAccessAudit(
+export type AiInvocationAuditAction =
+  | 'admin:ai-invocations-read'
+  | 'admin:ai-invocations-export'
+  | 'admin:ai-invocations-company-read'
+  | 'admin:ai-invocations-read-denied'
+  | 'admin:ai-invocations-export-denied'
+  | 'admin:ai-invocations-company-read-denied'
+
+export async function writeAccessAudit(
   userId: string,
-  action: 'admin:ai-invocations-read' | 'admin:ai-invocations-export' | 'admin:ai-invocations-company-read',
+  action: AiInvocationAuditAction,
   details: Record<string, unknown>,
 ) {
-  // Pick any project the caller can see so the AuditLog row satisfies
-  // its non-null projectId column. SUPERIOR_ADMIN access events are
-  // platform-wide, but the central AuditLog table requires a projectId
-  // anchor; we pick the projectId from the request if one was supplied,
-  // else the caller's first-owned project as a stable anchor, else skip
-  // the write rather than crash. Unifying this onto a project-less audit
-  // surface is tracked in ROADMAP-phase3.md R-8 (AP-N5).
-  const anchorProjectId =
-    (typeof details.projectId === 'string' && details.projectId) ||
-    (await prisma.project.findFirst({
-      where: { userId },
-      select: { id: true },
-    }).then((p) => p?.id ?? null))
-  if (!anchorProjectId) return
+  // Pick a project anchor so the AuditLog row satisfies its non-null
+  // projectId column. Priority:
+  //   1. projectId from request payload, if a string.
+  //   2. Caller's first-owned project (stable anchor for COMPANY_ADMIN).
+  //   3. Any project in the DB (SUPERIOR_ADMIN fallback - sees all
+  //      projects, so this still attributes the audit correctly to a
+  //      real project even though the access event is platform-wide).
+  // When the fallback at (3) is used, we emit a console.warn so ops can
+  // spot the limitation in logs. Unifying this onto a project-less audit
+  // surface is tracked in ROADMAP-phase3.md R-8 (AP-N5) - see
+  // _shared/cross-cutting.md "AiInvocation ledger leaks cross-tenant via
+  // requireAdmin" for the long-term plan.
+  let anchorProjectId: string | null = null
+  let fallbackUsed: 'none' | 'owned' | 'any' = 'none'
+  if (typeof details.projectId === 'string' && details.projectId) {
+    anchorProjectId = details.projectId
+  } else {
+    const owned = await prisma.project
+      .findFirst({ where: { userId }, select: { id: true } })
+      .catch(() => null)
+    if (owned?.id) {
+      anchorProjectId = owned.id
+      fallbackUsed = 'owned'
+    } else {
+      // SUPERIOR_ADMIN with no owned project: fall back to any project so
+      // the audit trail captures the access. The audit row content only
+      // identifies the actor + action + query params - no cross-tenant
+      // data leaks via the anchor. See R-8 / AP-N5 follow-up.
+      const any = await prisma.project
+        .findFirst({ select: { id: true } })
+        .catch(() => null)
+      if (any?.id) {
+        anchorProjectId = any.id
+        fallbackUsed = 'any'
+        console.warn(
+          `[aiInvocation.audit] using project-any fallback anchor for action=${action} userId=${userId} (R-8 / AP-N5 follow-up)`,
+        )
+      }
+    }
+  }
+  if (!anchorProjectId) {
+    // Genuinely empty database - no projects exist at all. Drop the audit
+    // write rather than crash. Cannot happen post-onboarding.
+    console.warn(
+      `[aiInvocation.audit] dropped audit row - no project anchor available for action=${action} userId=${userId}`,
+    )
+    return
+  }
   await prisma.auditLog
     .create({
       data: {
         projectId: anchorProjectId,
         userId,
         action,
-        details: JSON.stringify(details),
+        details: JSON.stringify({ ...details, ...(fallbackUsed !== 'none' ? { anchorFallback: fallbackUsed } : {}) }),
       },
     })
     .catch(() => {
@@ -102,6 +144,13 @@ export async function list(req: AuthRequest, res: Response) {
 
     const scope = await buildTenantScope(req.userId, projectId)
     if (scope.forbidden) {
+      await writeAccessAudit(req.userId, 'admin:ai-invocations-read-denied', {
+        projectId: projectId ?? null,
+        tier: tier ?? null,
+        page,
+        pageSize,
+        reason: 'project-not-in-tenant',
+      })
       return res.status(403).json({ success: false, error: 'Project not in your tenant' })
     }
     const where: Record<string, unknown> = { ...scope.where }
@@ -149,6 +198,10 @@ export async function exportNdjson(req: AuthRequest, res: Response) {
     const projectId = (req.query.projectId as string) || undefined
     const scope = await buildTenantScope(req.userId, projectId)
     if (scope.forbidden) {
+      await writeAccessAudit(req.userId, 'admin:ai-invocations-export-denied', {
+        projectId: projectId ?? null,
+        reason: 'project-not-in-tenant',
+      })
       return res.status(403).json({ success: false, error: 'Project not in your tenant' })
     }
     const where = scope.where
@@ -228,6 +281,10 @@ export async function listForCompany(req: AuthRequest, res: Response) {
     })
     const company = caller?.company ?? null
     if (!company) {
+      await writeAccessAudit(req.userId, 'admin:ai-invocations-company-read-denied', {
+        tier: tier ?? null,
+        reason: 'caller-has-no-company',
+      })
       return res
         .status(400)
         .json({ success: false, error: 'Caller has no company; cannot scope by tenant' })

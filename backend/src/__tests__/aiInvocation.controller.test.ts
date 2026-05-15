@@ -148,6 +148,26 @@ describe('AI invocation audit - /api/v1/admin/ai/invocations (SEC-1 tenant scope
               'admin:ai-invocations-read',
               'admin:ai-invocations-export',
               'admin:ai-invocations-company-read',
+              'admin:ai-invocations-read-denied',
+              'admin:ai-invocations-export-denied',
+              'admin:ai-invocations-company-read-denied',
+            ],
+          },
+        },
+      })
+      .catch(() => {})
+    // Deny-path audits may have anchored to projects outside this suite's
+    // fixture (any-project fallback). Clean those up by actor + action so
+    // the audit table does not accumulate orphans.
+    await prisma.auditLog
+      .deleteMany({
+        where: {
+          userId: { in: [memberId, companyAdminAId, companyAdminBId, superiorId] },
+          action: {
+            in: [
+              'admin:ai-invocations-read-denied',
+              'admin:ai-invocations-export-denied',
+              'admin:ai-invocations-company-read-denied',
             ],
           },
         },
@@ -309,5 +329,138 @@ describe('AI invocation audit - /api/v1/admin/ai/invocations (SEC-1 tenant scope
     expect(res.status).toBe(200)
     const projectIds = (res.body.data as Array<{ projectId: string }>).map((r) => r.projectId)
     for (const pid of projectIds) expect(pid).not.toBe(projectBId)
+  })
+
+  // ---- AC #5: audit on failure (SEC-1 review round-2 fix) ----
+
+  it('COMPANY_ADMIN denied on /ai/invocations writes admin:ai-invocations-read-denied audit row', async () => {
+    const before = await prisma.auditLog.count({
+      where: { userId: companyAdminAId, action: 'admin:ai-invocations-read-denied' },
+    })
+    const res = await request(app)
+      .get('/api/v1/admin/ai/invocations')
+      .set('Authorization', `Bearer ${tokenAdminA}`)
+    expect(res.status).toBe(403)
+    const after = await prisma.auditLog.count({
+      where: { userId: companyAdminAId, action: 'admin:ai-invocations-read-denied' },
+    })
+    expect(after).toBe(before + 1)
+  })
+
+  it('COMPANY_ADMIN denied on /ai/invocations/export writes admin:ai-invocations-export-denied audit row', async () => {
+    const before = await prisma.auditLog.count({
+      where: { userId: companyAdminAId, action: 'admin:ai-invocations-export-denied' },
+    })
+    const res = await request(app)
+      .get('/api/v1/admin/ai/invocations/export')
+      .set('Authorization', `Bearer ${tokenAdminA}`)
+    expect(res.status).toBe(403)
+    const after = await prisma.auditLog.count({
+      where: { userId: companyAdminAId, action: 'admin:ai-invocations-export-denied' },
+    })
+    expect(after).toBe(before + 1)
+  })
+
+  it('COMPANY_ADMIN with no company set is 400-denied on /ai/invocations/company and writes audit row', async () => {
+    // The /company endpoint admits any admin, then derives the company
+    // from req.user. A COMPANY_ADMIN whose User row has company === null
+    // hits the 400 branch inside the controller. That branch must write
+    // an admin:ai-invocations-company-read-denied audit row per AC #5.
+    //
+    // Note: a non-admin user (USER role) calling the same path is
+    // rejected by the adminRoutes-level requireAdmin middleware mounted
+    // in routes/index.ts before this endpoint's controller runs, so the
+    // deny-audit for that case is intentionally written at the
+    // adminRoutes level (out of scope for SEC-1). This test exercises
+    // the controller-level deny path that is wholly owned by this
+    // endpoint's surface.
+    const secret = process.env.JWT_SECRET || 'secret'
+    const stampNoCompany = Date.now()
+    const noCompanyAdmin = await prisma.user.create({
+      data: {
+        email: `aiinv-noco-${stampNoCompany}@example.test`,
+        password: 'x',
+        name: 'NoCompanyAdmin',
+        role: 'COMPANY_ADMIN',
+        // company intentionally omitted
+      },
+    })
+    const tokenNoCo = jwt.sign({ userId: noCompanyAdmin.id }, secret)
+    try {
+      const before = await prisma.auditLog.count({
+        where: {
+          userId: noCompanyAdmin.id,
+          action: 'admin:ai-invocations-company-read-denied',
+        },
+      })
+      const res = await request(app)
+        .get('/api/v1/admin/ai/invocations/company')
+        .set('Authorization', `Bearer ${tokenNoCo}`)
+      expect(res.status).toBe(400)
+      const after = await prisma.auditLog.count({
+        where: {
+          userId: noCompanyAdmin.id,
+          action: 'admin:ai-invocations-company-read-denied',
+        },
+      })
+      expect(after).toBe(before + 1)
+    } finally {
+      await prisma.auditLog
+        .deleteMany({ where: { userId: noCompanyAdmin.id, action: { startsWith: 'admin:ai-invocations' } } })
+        .catch(() => {})
+      await prisma.user.delete({ where: { id: noCompanyAdmin.id } }).catch(() => {})
+    }
+  })
+
+  it('SUPERIOR_ADMIN with no owned project still writes a read audit row via any-project fallback', async () => {
+    // Create a fresh SUPERIOR_ADMIN with no owned projects to exercise
+    // the writeAccessAudit any-project fallback path (round-2 fix #3).
+    // The audit must still record despite no owned project, anchored to
+    // any project visible to the platform admin. R-8 / AP-N5 will
+    // eventually move this onto a project-less audit surface.
+    const secret = process.env.JWT_SECRET || 'secret'
+    const lonelyStamp = Date.now()
+    const lonely = await prisma.user.create({
+      data: {
+        email: `aiinv-su-lone-${lonelyStamp}@example.test`,
+        password: 'x',
+        name: 'LonelySuperior',
+        role: 'SUPERIOR_ADMIN',
+        // No company; no projects owned.
+      },
+    })
+    const tokenLonely = jwt.sign({ userId: lonely.id }, secret)
+    try {
+      const before = await prisma.auditLog.count({
+        where: { userId: lonely.id, action: 'admin:ai-invocations-read' },
+      })
+      const res = await request(app)
+        .get('/api/v1/admin/ai/invocations')
+        .set('Authorization', `Bearer ${tokenLonely}`)
+        .query({ pageSize: 1 })
+      expect(res.status).toBe(200)
+      const after = await prisma.auditLog.count({
+        where: { userId: lonely.id, action: 'admin:ai-invocations-read' },
+      })
+      expect(after).toBe(before + 1)
+      // Confirm the anchor-fallback marker is recorded in the details JSON
+      // so the AuditLog reader can tell anchored rows from real-project
+      // rows. Either 'owned' (caller had at least one owned project) or
+      // 'any' (true fallback) is acceptable here, but it must be present.
+      const row = await prisma.auditLog.findFirst({
+        where: { userId: lonely.id, action: 'admin:ai-invocations-read' },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(row).not.toBeNull()
+      const details = row?.details ? (JSON.parse(row.details) as Record<string, unknown>) : {}
+      expect(details).toHaveProperty('anchorFallback')
+    } finally {
+      await prisma.auditLog
+        .deleteMany({
+          where: { userId: lonely.id, action: { startsWith: 'admin:ai-invocations' } },
+        })
+        .catch(() => {})
+      await prisma.user.delete({ where: { id: lonely.id } }).catch(() => {})
+    }
   })
 })
