@@ -14,7 +14,12 @@ import bcrypt from 'bcryptjs'
 import { app } from '../../server'
 import { prisma } from '../../lib/prisma'
 
-describe('Inventory UOM service via HTTP', () => {
+// SUNSET (#384): the Inventory module is unmounted from the product surface.
+// The /api/v1/inventory/* routes are no longer registered in routes/index.ts,
+// so these HTTP tests would 404. The route files / controllers / services and
+// the 33 Prisma models are kept on disk pending the CM LotTraceability rework.
+// Skipped rather than deleted so this suite revives if the routes are remounted.
+describe.skip('Inventory UOM service via HTTP', () => {
   const stamp = Date.now()
   const adminEmail = `inv-uom-admin-${stamp}@example.com`
   const userEmail = `inv-uom-user-${stamp}@example.com`
