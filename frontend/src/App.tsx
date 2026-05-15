@@ -78,7 +78,6 @@ import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
 import DataFlowAdminPanel from './pages/PlatformAdmin/DataFlowAdminPanel'
 import OrganizationPage from './pages/Organization/OrganizationPage'
 import SettingsPage from './pages/Settings/SettingsPage'
-import PreviewLandingPage from './pages/PreviewLanding/PreviewLandingPage'
 import { FeaturePackageProvider } from './contexts/FeaturePackageContext'
 import FeatureGuard from './components/access/FeatureGuard'
 import PackageSwitcher from './components/dev/PackageSwitcher'
@@ -92,8 +91,8 @@ function App() {
       <Routes>
         {/* Login - public route */}
         <Route path="/login" element={<LoginPage />} />
-        {/* Preview landing (brand validation sample, public, unauthenticated) */}
-        <Route path="/preview/landing" element={<PreviewLandingPage />} />
+        {/* Preview landing promoted to canonical / - keep redirect so bookmarked links resolve */}
+        <Route path="/preview/landing" element={<Navigate to="/" replace />} />
         {/* Legal - public static pages (accessible without authentication) */}
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfUse />} />

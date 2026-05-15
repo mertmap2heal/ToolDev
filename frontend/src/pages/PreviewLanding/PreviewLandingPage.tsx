@@ -1,5 +1,6 @@
 import './preview-landing.css'
 
+import { Link } from 'react-router-dom'
 import Navbar from './sections/Navbar'
 import Hero from './sections/Hero'
 import StandardsStrip from './sections/StandardsStrip'
@@ -11,12 +12,12 @@ import TrustStrip from './sections/TrustStrip'
 import Footer from './sections/Footer'
 
 /**
- * Preview landing page.
+ * Landing page.
  *
- * Route: /preview/landing
- * This is a brand validation sample. The existing landing at / is untouched
- * for comparison. All styling is scoped under `.preview-landing` via
- * preview-landing.css so nothing leaks into the rest of the app.
+ * Canonical route: / (rendered by LandingOrApp when unauthenticated).
+ * /preview/landing redirects here so bookmarked preview links still resolve.
+ * All styling is scoped under `.preview-landing` via preview-landing.css so
+ * nothing leaks into the rest of the app.
  */
 export default function PreviewLandingPage() {
   return (
@@ -38,7 +39,7 @@ export default function PreviewLandingPage() {
               Fifteen minutes from signing up to your first DO-178C-shaped requirement.
             </p>
             <div className="pl-cta-block__buttons">
-              <a href="#start" className="pl-cta-primary">Start free</a>
+              <Link to="/login" className="pl-cta-primary">Start free</Link>
               <a href="#contact" className="pl-cta-secondary">Talk to an engineer</a>
             </div>
           </div>

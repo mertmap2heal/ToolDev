@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import TraceabilityMatrixMock from '../mocks/TraceabilityMatrixMock'
 
 export default function Hero() {
@@ -13,7 +14,7 @@ export default function Hero() {
             not around ALM. Built for human-AI teams, not AI autonomy.
           </p>
           <div className="pl-hero-cta-row">
-            <a href="#start" className="pl-cta-primary">Start free</a>
+            <Link to="/login" className="pl-cta-primary">Start free</Link>
             <a href="#contact" className="pl-cta-secondary">Talk to an engineer</a>
           </div>
         </div>
