@@ -9,6 +9,7 @@ import {
   BarChart3,
 } from 'lucide-react'
 import { projectService } from '../../services/project.service'
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import {
   MOCK_HAZARDS,
   MOCK_HAZARD_BY_SEVERITY,
@@ -64,9 +65,12 @@ export default function SafetyOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-        Safety Overview
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Safety Overview
+        </h2>
+        {projectId && <SafetyLinkPanel variant="report-pack" ctaOnly />}
+      </div>
 
       {/* Context */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">

@@ -11,7 +11,6 @@ import RequirementsSettingsPage from './pages/Requirements/RequirementsSettingsP
 import RequirementsDashboardPage from './pages/Requirements/RequirementsDashboardPage'
 import TraceabilityViewsPage from './pages/Requirements/TraceabilityViewsPage'
 import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
-import ArchitecturePage from './pages/Architecture/ArchitecturePage'
 import VerificationLayoutPage from './pages/Verification/VerificationLayoutPage'
 import VerificationPage from './pages/Verification/VerificationPage'
 import VerificationReportPage from './pages/Verification/VerificationReportPage'
@@ -24,7 +23,6 @@ import ProjectLandingPage from './pages/ProjectLanding/ProjectLandingPage'
 import StakeholderPage from './pages/Stakeholder/StakeholderPage'
 import PBSPage from './modules/pbs/PBSPage'
 import MBSEModelsPage from './pages/MBSEModels/MBSEModelsPage'
-import ReportsPage from './pages/Reports/ReportsPage'
 import IssueDetailPage from './pages/Issues/IssueDetailPage'
 import IssuesPage from './pages/Issues/IssuesPage'
 import ParametersPage from './pages/Parameters/ParametersPage'
@@ -150,8 +148,6 @@ function App() {
             <Route path="projects/:projectId/parameters/settings" element={<FeatureGuard moduleId="parameters"><ParameterSettingsPage /></FeatureGuard>} />
             <Route path="projects/:projectId/parameters" element={<FeatureGuard moduleId="parameters"><ParametersPage /></FeatureGuard>} />
             <Route path="projects/:projectId/change-requests" element={<FeatureGuard moduleId="change-requests"><ChangeRequestsPage /></FeatureGuard>} />
-            <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
-            <Route path="projects/:projectId/reports" element={<ReportsPage />} />
             <Route path="projects/:projectId/verification" element={<FeatureGuard moduleId="verification"><VerificationLayoutPage /></FeatureGuard>}>
             <Route index element={<VerificationPage />} />
             <Route path="report/:entityType/:entityId" element={<VerificationReportPage />} />
