@@ -320,6 +320,32 @@ describe('SEC-3 (#376) - Reviewer-response self-auth', () => {
     expect(res.status).toBe(403)
   })
 
+  it('External-reviewer PUT with a token signed by a non-HS256 algorithm returns 403 (round-2 polish)', async () => {
+    // Defence-in-depth: even when an attacker controls the `alg` header
+    // and signs with a different symmetric algorithm (here HS512), the
+    // verifier must reject because the algorithm is not on the whitelist.
+    // Prevents algorithm-confusion attacks where the verifier blindly
+    // accepts the algorithm advertised in the JWT header. The mint path
+    // emits HS256 (jsonwebtoken default); the verify path now pins to
+    // ['HS256'] via `jwt.verify(..., { algorithms: ['HS256'] })`.
+    const wrongAlg = jwt.sign(
+      {
+        reviewId,
+        reviewerEmail: externalEmail,
+        requirementReviewerId: reviewerExternalId,
+        purpose: 'reviewer-response',
+      },
+      secret,
+      { algorithm: 'HS512', expiresIn: '30d' }
+    )
+    const res = await request(app)
+      .put(`/api/v1/projects/${projectId}/reviews/${reviewId}/reviewers/${reviewerExternalId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .set('X-Reviewer-Token', wrongAlg)
+      .send({ status: 'approved' })
+    expect(res.status).toBe(403)
+  })
+
   // ---------- Defence in depth ----------
 
   it('Reviewer id from a different review path returns 404', async () => {

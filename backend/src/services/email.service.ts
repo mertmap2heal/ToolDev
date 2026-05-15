@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { escapeHtml } from '../lib/htmlEscape'
 
 const host = (process.env.SMTP_HOST ?? '').trim()
 const user = (process.env.SMTP_USER ?? '').trim()
@@ -225,6 +226,16 @@ export async function sendReviewInviteEmail({
   const subject = `[${toolName}] Review requested: ${requirementKey}`
   const greeting = reviewerName ? `Hello ${reviewerName},` : 'Hello,'
 
+  // SEC-3 (#376) round-2: escape user-supplied fields before interpolating
+  // into the HTML twin. Plain-text body needs no escape (no HTML to break
+  // out of). reviewerName / requirementKey / requirementTitle all flow
+  // through user-controlled inputs and must be entity-encoded.
+  const greetingHtml = reviewerName
+    ? `Hello ${escapeHtml(reviewerName)},`
+    : 'Hello,'
+  const requirementKeyHtml = escapeHtml(requirementKey)
+  const requirementTitleHtml = escapeHtml(requirementTitle)
+
   const text = `
 ${greeting}
 
@@ -246,9 +257,9 @@ This is an automated message; please do not reply.
 <head><meta charset="utf-8"><title>Review requested</title></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #1f2937;">
   <h2 style="margin: 0 0 12px;">${toolName} review request</h2>
-  <p>${greeting}</p>
+  <p>${greetingHtml}</p>
   <p>You have been invited to review a requirement in ${toolName}.</p>
-  <p style="margin: 0 0 6px;"><strong>Requirement:</strong> ${requirementKey} &ndash; ${requirementTitle}</p>
+  <p style="margin: 0 0 6px;"><strong>Requirement:</strong> ${requirementKeyHtml} &ndash; ${requirementTitleHtml}</p>
   <p style="margin: 16px 0;">
     <a href="${approvalUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px;">Open Review</a>
   </p>

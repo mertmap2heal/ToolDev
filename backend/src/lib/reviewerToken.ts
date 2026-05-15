@@ -73,7 +73,14 @@ export function verifyReviewerToken(
   }
   let decoded: Record<string, unknown>
   try {
-    decoded = jwt.verify(token, secret) as Record<string, unknown>
+    // Pin the algorithm whitelist. Without this, `jsonwebtoken.verify`
+    // accepts any algorithm the JWT header advertises (including weaker
+    // ones if the JWT_SECRET happens to be vulnerable, or - historically -
+    // `alg:none` on older library versions). Tokens are minted with HS256
+    // (the library default), so only HS256 is allowed on the verify path.
+    decoded = jwt.verify(token, secret, {
+      algorithms: ['HS256'],
+    }) as Record<string, unknown>
   } catch {
     return { ok: false, reason: 'invalid-or-expired' }
   }

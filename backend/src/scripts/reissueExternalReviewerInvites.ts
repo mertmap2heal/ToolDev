@@ -23,7 +23,14 @@
  * Run manually after deploy:
  *   npx tsx backend/src/scripts/reissueExternalReviewerInvites.ts
  *
- * Add `--dry-run` to log what would be sent without actually sending email.
+ * Flags:
+ *   --dry-run             Log what would be sent without sending email.
+ *   --throttle-ms <N>     Pause N ms between sends (default 250). The
+ *                         default sustains ~4 emails/sec, ~14k/hour - a
+ *                         reasonable lower bound that keeps a large
+ *                         backfill from flooding the SMTP relay. Use a
+ *                         higher value (e.g. 1000) when SMTP_HOST is a
+ *                         provider with strict per-second rate limits.
  */
 import { prisma } from '../lib/prisma'
 import { mintReviewerToken } from '../lib/reviewerToken'
@@ -31,6 +38,27 @@ import { sendReviewInviteEmail } from '../services/email.service'
 
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
 const DRY_RUN = process.argv.includes('--dry-run')
+
+/**
+ * Parse `--throttle-ms <N>` from argv. Default 250ms.
+ * Negative or non-numeric input collapses to 0 (no throttle) rather than
+ * throwing - the script should still make progress for an operator who
+ * fat-fingers the flag.
+ */
+function parseThrottleMs(): number {
+  const idx = process.argv.indexOf('--throttle-ms')
+  if (idx === -1 || idx + 1 >= process.argv.length) return 250
+  const raw = process.argv[idx + 1]
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n < 0) return 0
+  return n
+}
+
+const THROTTLE_MS = parseThrottleMs()
+
+function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
 
 function maskEmail(email: string): string {
   const at = email.indexOf('@')
@@ -54,7 +82,9 @@ function buildApprovalUrl(params: {
 }
 
 async function main(): Promise<void> {
-  console.log(`[SEC-3 backfill] starting${DRY_RUN ? ' (DRY RUN)' : ''}`)
+  console.log(
+    `[SEC-3 backfill] starting${DRY_RUN ? ' (DRY RUN)' : ''} throttle=${THROTTLE_MS}ms`
+  )
 
   const rows = await prisma.requirementReviewer.findMany({
     where: {
@@ -81,7 +111,13 @@ async function main(): Promise<void> {
   let skipped = 0
   let failed = 0
 
-  for (const r of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    // SEC-3 (#376) round-2: throttle between sends. Skip the sleep on the
+    // last iteration so we do not idle after the final send.
+    if (i > 0 && THROTTLE_MS > 0) {
+      await sleep(THROTTLE_MS)
+    }
     const email = r.reviewerEmail ?? ''
     if (!email.includes('@')) {
       skipped++
