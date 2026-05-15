@@ -63,22 +63,14 @@ jobs:
           fi
           echo "OK: certification controllers do not read signer identity from request body."
 
-      - name: Guard inventory + task services use dual-storage auth (#299)
+      - name: Guard task service uses dual-storage auth (#299)
         run: |
           set -e
-          inv=frontend/src/services/inventory.service.ts
+          # #384: the inventory.service.ts clauses were dropped here when the
+          # Inventory module was sunset and its frontend service deleted. The
+          # task-service clauses below remain in force.
           task=frontend/src/services/task.service.ts
           fail=0
-          # inventory.service must read tokens from both localStorage AND
-          # sessionStorage and handle 401/403 via token-expired event.
-          if ! grep -q "sessionStorage.getItem('token')" "$inv"; then
-            echo "::error file=$inv::must read token from sessionStorage (see issue #299)"
-            fail=1
-          fi
-          if ! grep -q "token-expired" "$inv"; then
-            echo "::error file=$inv::must dispatch token-expired on 401/403 (see issue #299)"
-            fail=1
-          fi
           # task.service.exportTasks must not fetch directly with
           # localStorage.getItem('token') — it should go through apiClient.
           if grep -qE "fetch\(.*csv/export" "$task"; then

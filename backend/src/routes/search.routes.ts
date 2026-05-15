@@ -15,9 +15,9 @@ const router = Router()
  * users (SUPERIOR_ADMIN / COMPANY_ADMIN / AdminRole with admin rights)
  * continue to see everything.
  *
- * Issue #296: the previous implementation ran twelve findMany queries with
+ * Issue #296: the previous implementation ran multiple findMany queries with
  * no projectId filter, leaking every tenant's requirement / issue / task /
- * parameter / change-request / component / diagram / test-case / inventory
+ * parameter / change-request / component / diagram / test-case
  * titles and ids to any authenticated user.
  */
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -76,7 +76,6 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       diagrams,
       components,
       testCases,
-      items,
     ] = await Promise.all([
       // ── Projects ──
       prisma.project.findMany({
@@ -285,39 +284,6 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         },
         take: perCategory,
       }),
-
-      // ── Inventory Items ──
-      // Items can be globally shared (projectId null) OR project-scoped.
-      // Non-admins see only the shared bucket plus items in projects they
-      // belong to.
-      prisma.item.findMany({
-        where: {
-          AND: [
-            {
-              OR: [
-                { sku: { contains: q, mode } },
-                { name: { contains: q, mode } },
-                { description: { contains: q, mode } },
-              ],
-            },
-            projectIds === null
-              ? {}
-              : {
-                  OR: [
-                    { projectId: { in: projectIds } },
-                    { projectId: null },
-                  ],
-                },
-          ],
-        },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          isActive: true,
-        },
-        take: perCategory,
-      }),
     ])
 
     // Normalize into a flat results array with category tags
@@ -450,17 +416,6 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         status: t.status,
         projectId: t.projectId,
         route: `/projects/${t.projectId}/verification?tab=cases`,
-      }),
-    )
-
-    items.forEach((i) =>
-      results.push({
-        category: 'inventory-item',
-        id: i.id,
-        displayId: i.sku,
-        title: i.name,
-        status: i.isActive ? 'Active' : 'Inactive',
-        route: '/inventory/items',
       }),
     )
 

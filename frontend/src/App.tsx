@@ -65,13 +65,6 @@ import AuditLogPage from './pages/Safety/AuditLogPage'
 import ExportsPage from './pages/Safety/ExportsPage'
 import SafetySettingsPage from './pages/Safety/SafetySettingsPage'
 import MarkovPage from './pages/Safety/MarkovPage'
-import ItemsPage from './pages/Inventory/Items/ItemsPage'
-import WarehousesPage from './pages/Inventory/Warehouses/WarehousesPage'
-import PurchasingPage from './pages/Inventory/Purchasing/PurchasingPage'
-import SalesPage from './pages/Inventory/Sales/SalesPage'
-import OperationsPage from './pages/Inventory/Operations/OperationsPage'
-import InventoryReportsPage from './pages/Inventory/Reports/ReportsPage'
-import InventoryDashboardPage from './pages/Inventory/Dashboard/DashboardPage'
 import AdminRouteGuard from './components/admin/AdminRouteGuard'
 import AdminPage from './pages/Admin/AdminPage'
 import AiInvocationsPage from './pages/Admin/AiInvocationsPage'
@@ -195,16 +188,6 @@ function App() {
             <Route path="admin" element={<AdminRouteGuard />}>
               <Route index element={<AdminPage />} />
               <Route path="ai-invocations" element={<AiInvocationsPage />} />
-            </Route>
-            <Route path="inventory">
-            <Route index element={<Navigate to="/inventory/items" replace />} />
-            <Route path="items" element={<ItemsPage />} />
-            <Route path="warehouses" element={<WarehousesPage />} />
-            <Route path="purchasing" element={<PurchasingPage />} />
-            <Route path="sales" element={<SalesPage />} />
-            <Route path="operations" element={<OperationsPage />} />
-            <Route path="reports" element={<InventoryReportsPage />} />
-              <Route path="dashboard" element={<InventoryDashboardPage />} />
             </Route>
           </Route>
         </Route>

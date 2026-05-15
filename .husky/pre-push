@@ -40,18 +40,12 @@ if grep -nE "\\.\\.\\.req\\.body" backend/src/controllers/project.controller.ts 
   exit 1
 fi
 
-echo "[pre-push] guard: inventory + task dual-storage auth (#299)"
-inv=frontend/src/services/inventory.service.ts
+echo "[pre-push] guard: task service dual-storage auth (#299)"
+# #384: the inventory.service.ts clauses were dropped here when the Inventory
+# module was sunset and its frontend service deleted. The task-service clauses
+# below remain in force.
 task=frontend/src/services/task.service.ts
 fail=0
-if ! grep -q "sessionStorage.getItem('token')" "$inv"; then
-  echo "::error file=$inv::must read token from sessionStorage (see issue #299)"
-  fail=1
-fi
-if ! grep -q "token-expired" "$inv"; then
-  echo "::error file=$inv::must dispatch token-expired on 401/403 (see issue #299)"
-  fail=1
-fi
 if grep -qE "fetch\(.*csv/export" "$task"; then
   echo "::error file=$task::exportTasks must use apiClient.postBlob (see issue #299)"
   fail=1

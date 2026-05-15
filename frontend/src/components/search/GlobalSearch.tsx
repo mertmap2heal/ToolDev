@@ -14,7 +14,6 @@ import {
   LayoutGrid,
   Box,
   FlaskConical,
-  Package,
   ArrowRight,
   Loader2,
 } from 'lucide-react'
@@ -33,7 +32,6 @@ const CATEGORY_META: Record<string, { label: string; icon: typeof Folder; color:
   diagram: { label: 'Diagrams', icon: LayoutGrid, color: 'text-pink-500' },
   component: { label: 'Components', icon: Box, color: 'text-teal-500' },
   'test-case': { label: 'Test Cases', icon: FlaskConical, color: 'text-emerald-500' },
-  'inventory-item': { label: 'Inventory', icon: Package, color: 'text-yellow-600' },
 }
 
 /* ── Quick-nav pages (shown when search is empty) ── */
@@ -41,8 +39,6 @@ const QUICK_PAGES = [
   { label: 'Dashboard', route: '/', keywords: 'home dashboard overview' },
   { label: 'My Tasks', route: '/tasks/my-tasks', keywords: 'tasks my todo' },
   { label: 'All Tasks', route: '/tasks/all', keywords: 'tasks all list' },
-  { label: 'Inventory Items', route: '/inventory/items', keywords: 'inventory items stock' },
-  { label: 'Warehouses', route: '/inventory/warehouses', keywords: 'warehouses locations' },
   { label: 'Settings', route: '/settings', keywords: 'settings preferences profile' },
 ]
 
