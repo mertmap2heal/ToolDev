@@ -6,14 +6,20 @@ import { prisma } from '../lib/prisma'
  * Admin-only AI invocation audit endpoints. Every AI/MCP call writes
  * one AiInvocation row; the list endpoint serves them paged for the
  * admin UI, and the export endpoint streams NDJSON for ISO/IEC 42001
- * Annex B audits. Both are gated by `requireAdmin` upstream.
+ * Annex B audits.
  *
- * SECURITY (HIGH-3): requireAdmin admits any COMPANY_ADMIN. Without an
- * extra company filter, an admin of company A could read or stream every
- * other tenant's AI audit trail. We compute an allowed-project-id set
- * (caller's company's projects) for non-superior admins and intersect any
- * caller-supplied projectId filter with it. SUPERIOR_ADMIN keeps
- * platform-wide visibility.
+ * SECURITY (SEC-1, issue #374): the platform endpoints `list` and
+ * `exportNdjson` are now gated by `requireSuperiorAdmin` at the route
+ * level - they see every tenant's rows and must not be reachable by
+ * COMPANY_ADMIN. `buildTenantScope` is preserved as defence-in-depth so
+ * the controller still applies the company filter if the route gate is
+ * ever loosened. COMPANY_ADMIN callers go through `listForCompany`,
+ * which derives the company filter from `req.user.company` and rejects
+ * the request when the caller has no company set.
+ *
+ * Every call writes one row to the central `AuditLog` using the
+ * `<module>:<kebab-verb>` convention (per .claude/kb/backend-patterns.md
+ * "Tenant Scope" and the validation cross-cut on AuditLog as canonical).
  */
 
 const MAX_PAGE = 200
@@ -48,6 +54,39 @@ async function buildTenantScope(callerId: string, requestedProjectId: string | u
     where.projectId = { in: Array.from(allowedIds) }
   }
   return { where, forbidden: false }
+}
+
+async function writeAccessAudit(
+  userId: string,
+  action: 'admin:ai-invocations-read' | 'admin:ai-invocations-export' | 'admin:ai-invocations-company-read',
+  details: Record<string, unknown>,
+) {
+  // Pick any project the caller can see so the AuditLog row satisfies
+  // its non-null projectId column. SUPERIOR_ADMIN access events are
+  // platform-wide, but the central AuditLog table requires a projectId
+  // anchor; we pick the projectId from the request if one was supplied,
+  // else the caller's first-owned project as a stable anchor, else skip
+  // the write rather than crash. Unifying this onto a project-less audit
+  // surface is tracked in ROADMAP-phase3.md R-8 (AP-N5).
+  const anchorProjectId =
+    (typeof details.projectId === 'string' && details.projectId) ||
+    (await prisma.project.findFirst({
+      where: { userId },
+      select: { id: true },
+    }).then((p) => p?.id ?? null))
+  if (!anchorProjectId) return
+  await prisma.auditLog
+    .create({
+      data: {
+        projectId: anchorProjectId,
+        userId,
+        action,
+        details: JSON.stringify(details),
+      },
+    })
+    .catch(() => {
+      // Audit write failure must not block the read response.
+    })
 }
 
 export async function list(req: AuthRequest, res: Response) {
@@ -91,6 +130,13 @@ export async function list(req: AuthRequest, res: Response) {
       }),
       prisma.aiInvocation.count({ where }),
     ])
+    await writeAccessAudit(req.userId, 'admin:ai-invocations-read', {
+      projectId: projectId ?? null,
+      tier: tier ?? null,
+      page,
+      pageSize,
+      total,
+    })
     res.json({ success: true, data, total, page, pageSize })
   } catch (e) {
     res.status(500).json({ success: false, error: (e as Error).message })
@@ -106,6 +152,10 @@ export async function exportNdjson(req: AuthRequest, res: Response) {
       return res.status(403).json({ success: false, error: 'Project not in your tenant' })
     }
     const where = scope.where
+
+    await writeAccessAudit(req.userId, 'admin:ai-invocations-export', {
+      projectId: projectId ?? null,
+    })
 
     res.setHeader('Content-Type', 'application/x-ndjson')
     res.setHeader(
@@ -151,5 +201,79 @@ export async function exportNdjson(req: AuthRequest, res: Response) {
     } else {
       res.end()
     }
+  }
+}
+
+/**
+ * Company-scoped read of the AI invocation ledger. Admits any admin
+ * tier (per route-level `requireAdmin`) but forces the where-clause to
+ * the caller's company by joining `AiInvocation.projectId ->
+ * Project.companyName`. A caller with no `company` set on their User
+ * row is rejected with 400 - the surface is only meaningful for
+ * COMPANY_ADMIN whose company is known.
+ */
+export async function listForCompany(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+    const tier = (req.query.tier as string) || undefined
+    const page = Math.max(1, parseInt((req.query.page as string) ?? '1', 10) || 1)
+    const pageSize = Math.min(
+      MAX_PAGE,
+      Math.max(1, parseInt((req.query.pageSize as string) ?? '50', 10) || 50),
+    )
+
+    const caller = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { company: true },
+    })
+    const company = caller?.company ?? null
+    if (!company) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Caller has no company; cannot scope by tenant' })
+    }
+
+    const allowed = await prisma.project.findMany({
+      where: { companyName: company },
+      select: { id: true },
+    })
+    const allowedIds = allowed.map((p) => p.id)
+
+    const where: Record<string, unknown> = { projectId: { in: allowedIds } }
+    if (tier) where.tier = tier
+
+    const [data, total] = await Promise.all([
+      prisma.aiInvocation.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          toolName: true,
+          tier: true,
+          projectId: true,
+          userId: true,
+          agentKeyId: true,
+          inputHash: true,
+          outputHash: true,
+          contextTokens: true,
+          success: true,
+          durationMs: true,
+          createdAt: true,
+        },
+      }),
+      prisma.aiInvocation.count({ where }),
+    ])
+    await writeAccessAudit(req.userId, 'admin:ai-invocations-company-read', {
+      company,
+      tier: tier ?? null,
+      page,
+      pageSize,
+      total,
+    })
+    res.json({ success: true, data, total, page, pageSize })
+  } catch (e) {
+    res.status(500).json({ success: false, error: (e as Error).message })
   }
 }

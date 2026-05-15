@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { aiInvocationService, type AiInvocation } from '../../services/aiInvocation.service'
+import { useAuthStore } from '../../store/authStore'
 
 /**
  * Admin-only audit log of every AI / MCP call. Reads /admin/ai/invocations
  * (paged) and provides a one-click NDJSON export for ISO/IEC 42001
- * Annex B audits.
+ * Annex B audits. SEC-1 (#374): the listing endpoint is split into a
+ * SUPERIOR_ADMIN platform-wide read and a COMPANY_ADMIN tenant-scoped
+ * read; the service wrapper picks the right one. NDJSON export
+ * remains SUPERIOR_ADMIN only.
  */
 
 const TIERS = ['', 'rest', 'mcp', 'byok', 'self_hosted', 'env_default'] as const
@@ -18,11 +22,13 @@ export default function AiInvocationsPage() {
   const [tier, setTier] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
+  const canExport = user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin === true
 
   async function refresh() {
     setLoading(true)
     setError(null)
-    const res = await aiInvocationService.list({
+    const res = await aiInvocationService.listInvocations({
       page,
       pageSize: PAGE_SIZE,
       tier: tier || undefined,
@@ -95,13 +101,15 @@ export default function AiInvocationsPage() {
             <RefreshCw size={12} />
             Refresh
           </button>
-          <button
-            onClick={downloadExport}
-            className="px-2 py-1.5 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center gap-1"
-          >
-            <Download size={12} />
-            Export NDJSON
-          </button>
+          {canExport && (
+            <button
+              onClick={downloadExport}
+              className="px-2 py-1.5 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center gap-1"
+            >
+              <Download size={12} />
+              Export NDJSON
+            </button>
+          )}
         </div>
       </header>
 

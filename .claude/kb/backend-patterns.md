@@ -108,6 +108,46 @@ should be unprotected.
 
 ---
 
+## Tenant Scope — `requireAdmin` Is Not a Tenant Filter
+
+`requireAdmin` admits **both** `SUPERIOR_ADMIN` (platform-wide) and
+`COMPANY_ADMIN` (single-tenant). It is a capability gate, not a tenant filter.
+A route gated only by `requireAdmin` that reads data spanning multiple
+customers leaks every customer's rows to the first `COMPANY_ADMIN` who calls
+it. This was the SEC-1 finding on the AI invocation ledger (issue #374).
+
+**Rule.** Any endpoint exposing data that could span multiple tenants must
+declare its tenant scope at the route level. The controller must either:
+
+1. Restrict to `SUPERIOR_ADMIN` explicitly via `requireSuperiorAdmin`, or
+2. Apply a `companyName` or `projectId` filter derived from `req.user`
+   (never from `req.body` or `req.query`).
+
+```ts
+// WRONG — admits COMPANY_ADMIN with no tenant filter; leaks cross-tenant
+router.get('/admin/ai/invocations', authenticateToken, requireAdmin, list)
+
+// CORRECT — split the surface
+router.get('/admin/ai/invocations', authenticateToken, requireSuperiorAdmin, list)
+router.get('/admin/ai/invocations/company', authenticateToken, requireAdmin, listForCompany)
+//   listForCompany derives caller.company from req.userId and forces
+//   `where: { projectId: { in: <projects whose companyName matches> } }`.
+```
+
+The correctly-protected sibling pattern is in `mcpKey.routes.ts:13-18` — its
+`projectIdParam` resolver scopes a project-id URL parameter against the
+caller's company before the controller runs. Reach for that pattern any time
+the URL carries a `:projectId`. When the URL has no project parameter (admin
+ledger views, cross-tenant exports), use the SUPERIOR_ADMIN / company-split
+pattern above.
+
+Every access attempt - success or 403 - should write one row to the central
+`AuditLog` using the `<module>:<kebab-verb>` action convention
+(`admin:ai-invocations-read`, `admin:ai-invocations-company-read`, etc.) so
+SUPERIOR_ADMIN can audit the audit endpoints themselves.
+
+---
+
 ## Soft Deletes — Always Filter `deletedAt`
 
 `Requirement` and `RequirementExportTemplate` use soft deletes.
