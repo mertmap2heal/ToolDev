@@ -42,7 +42,11 @@ router.use(authenticateToken)
 router.get('/calendar', requireBodyProjectMember('query'), getCalendarTasks)
 router.get('/', requireBodyProjectMember('query'), getTasks)
 router.post('/', requireBodyProjectMember('body'), createTask)
-router.post('/bulk', bulkUpdateTasks)
+// SEC-2 (#375): /bulk asserts project_id at the route level. The controller
+// still validates that every task_id belongs to a project the caller is a
+// member of (#159), so multi-project mixes are rejected at the controller
+// even when project_id is present.
+router.post('/bulk', requireBodyProjectMember('body'), bulkUpdateTasks)
 
 // Core task routes (resolve projectId from the task itself)
 router.get('/:id', requireTaskProjectMember('task'), getTask)

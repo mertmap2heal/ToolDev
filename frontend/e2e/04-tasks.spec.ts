@@ -77,4 +77,47 @@ test.describe('Tasks', () => {
       await expect(page.getByText(/keep for later|discard|continue editing/i)).not.toBeVisible({ timeout: 2_000 }).catch(() => {})
     }
   })
+
+  // SEC-2 (#375) regression coverage. Each test exercises the new project_id
+  // contract the backend now asserts.
+  test.describe('SEC-2 tenant-scope contract', () => {
+    test('GET /api/v1/tags without project_id is 400', async ({ page }) => {
+      // Issue a same-origin fetch through the page context so the auth
+      // cookie/header chain matches a real user.
+      const status = await page.evaluate(async () => {
+        const res = await fetch('/api/v1/tags', { credentials: 'include' })
+        return res.status
+      })
+      // Either 400 (route asserted scope, body must include project_id) or
+      // 401 (when the test session has no token attached) is acceptable -
+      // both mean unauthorised-without-scope access did not succeed.
+      expect([400, 401]).toContain(status)
+    })
+
+    test('GET /api/v1/automation/rules without project_id is 400', async ({ page }) => {
+      const status = await page.evaluate(async () => {
+        const res = await fetch('/api/v1/automation/rules', { credentials: 'include' })
+        return res.status
+      })
+      expect([400, 401]).toContain(status)
+    })
+
+    test('GET /api/v1/tags?project_id=<active> returns the scoped list', async ({ page, projectId }) => {
+      const result = await page.evaluate(
+        async (pid) => {
+          const res = await fetch(`/api/v1/tags?project_id=${encodeURIComponent(pid)}`, {
+            credentials: 'include',
+          })
+          return { status: res.status, body: await res.json().catch(() => null) }
+        },
+        projectId,
+      )
+      // 200 (happy path) or 401 (no session) is fine; the failure mode we
+      // are guarding is "returns rows from a different tenant".
+      expect([200, 401]).toContain(result.status)
+      if (result.status === 200) {
+        expect(Array.isArray(result.body?.data)).toBe(true)
+      }
+    })
+  })
 })

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../../services/api'
+import { useProjectStore } from '../../../store/projectStore'
 
 interface AutomationRule {
   id: string
@@ -53,34 +54,47 @@ type TabId = 'workflow' | 'automation' | 'runs'
 
 export default function TaskWorkflowsPage() {
   const queryClient = useQueryClient()
+  // SEC-2 (#375): automation rules + runs are project-scoped. Pull
+  // project_id from the active project store; the queries / mutation are
+  // disabled when no project is active.
+  const projectId = useProjectStore((s) => s.currentProject?.id)
   const [activeTab, setActiveTab] = useState<TabId>('workflow')
   const [showCreateRule, setShowCreateRule] = useState(false)
   const [ruleForm, setRuleForm] = useState({ name: '', triggerType: 'status_change', conditions: '', actions: '' })
 
   const { data: rules } = useQuery<AutomationRule[]>({
-    queryKey: ['automation-rules'],
+    queryKey: ['automation-rules', projectId],
     queryFn: async () => {
-      const res = await apiClient.get<AutomationRule[] | unknown>('/automation/rules')
+      if (!projectId) return []
+      const res = await apiClient.get<AutomationRule[] | unknown>(
+        `/automation/rules?project_id=${encodeURIComponent(projectId)}`,
+      )
       return Array.isArray(res.data) ? res.data : []
     },
-    enabled: activeTab === 'automation' || activeTab === 'runs',
+    enabled: Boolean(projectId) && (activeTab === 'automation' || activeTab === 'runs'),
   })
 
   const { data: runs } = useQuery<AutomationRun[]>({
-    queryKey: ['automation-runs'],
+    queryKey: ['automation-runs', projectId],
     queryFn: async () => {
-      const res = await apiClient.get<AutomationRun[] | unknown>('/automation/runs')
+      if (!projectId) return []
+      const res = await apiClient.get<AutomationRun[] | unknown>(
+        `/automation/runs?project_id=${encodeURIComponent(projectId)}`,
+      )
       return Array.isArray(res.data) ? res.data : []
     },
-    enabled: activeTab === 'runs',
+    enabled: Boolean(projectId) && activeTab === 'runs',
   })
 
   const createRuleMutation = useMutation({
     mutationFn: async (data: { name: string; trigger_type: string; conditions_json: string; actions_json: string }) => {
-      return apiClient.post('/automation/rules', data)
+      if (!projectId) {
+        throw new Error('Select a project before creating an automation rule')
+      }
+      return apiClient.post('/automation/rules', { ...data, project_id: projectId })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation-rules'] })
+      queryClient.invalidateQueries({ queryKey: ['automation-rules', projectId] })
       setShowCreateRule(false)
       setRuleForm({ name: '', triggerType: 'status_change', conditions: '', actions: '' })
     },

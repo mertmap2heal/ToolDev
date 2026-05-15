@@ -5,20 +5,26 @@ import { taskService } from '../../services/task.service'
 import type { TaskTag } from 'shared/types/task.types'
 
 interface TagPickerProps {
+  // SEC-2 (#375): tags are project-scoped, so the picker now requires
+  // projectId. Callers that do not yet have a project context cannot
+  // create / list tags and the picker degrades to an empty state.
+  projectId: string | undefined
   selectedTagIds: string[]
   onTagIdsChange: (tagIds: string[]) => void
   taskId?: string
 }
 
-export default function TagPicker({ selectedTagIds, onTagIdsChange, taskId }: TagPickerProps) {
+export default function TagPicker({ projectId, selectedTagIds, onTagIdsChange, taskId }: TagPickerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [newTagName, setNewTagName] = useState('')
   const queryClient = useQueryClient()
 
   const { data: tagsData } = useQuery({
-    queryKey: ['tags'],
+    queryKey: ['tags', projectId],
+    enabled: Boolean(projectId),
     queryFn: async () => {
-      const response = await taskService.getTags()
+      if (!projectId) return []
+      const response = await taskService.getTags(projectId)
       if (response.success && response.data) {
         return response.data
       }
@@ -29,9 +35,14 @@ export default function TagPicker({ selectedTagIds, onTagIdsChange, taskId }: Ta
   const tags = tagsData || []
 
   const createTagMutation = useMutation({
-    mutationFn: (data: { name: string; color?: string }) => taskService.createTag(data),
+    mutationFn: (data: { name: string; color?: string }) => {
+      if (!projectId) {
+        return Promise.reject(new Error('projectId is required to create a tag'))
+      }
+      return taskService.createTag({ ...data, project_id: projectId })
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
+      queryClient.invalidateQueries({ queryKey: ['tags', projectId] })
       setNewTagName('')
     },
   })

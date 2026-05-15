@@ -209,18 +209,28 @@ export const importTasks = async (req: AuthRequest, res: Response) => {
         // Create task
         const task = await taskService.createTask(taskData)
 
-        // Handle tags if provided
+        // Handle tags if provided. SEC-2 (#375): TaskTag is project-scoped,
+        // so resolve the (projectId, name) compound key from the newly-
+        // created task's projectId. If a tag with that name does not exist
+        // for this project, create one scoped to the project.
         const tagsColumnIndex = headers.indexOf(columnMapping.tags || 'tags')
-        if (tagsColumnIndex >= 0 && values[tagsColumnIndex]) {
+        if (tagsColumnIndex >= 0 && values[tagsColumnIndex] && task.projectId) {
           const tagNames = values[tagsColumnIndex].split(';').map((t: string) => t.trim()).filter(Boolean)
           for (const tagName of tagNames) {
-            // Find or create tag
             let tag = await prisma.taskTag.findUnique({
-              where: { name: tagName },
+              where: {
+                projectId_name: {
+                  projectId: task.projectId,
+                  name: tagName,
+                },
+              },
             })
             if (!tag) {
               tag = await prisma.taskTag.create({
-                data: { name: tagName },
+                data: {
+                  name: tagName,
+                  projectId: task.projectId,
+                },
               })
             }
             // Link tag

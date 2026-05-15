@@ -111,12 +111,13 @@ export const taskService = {
     )
   },
 
-  // Tag methods
-  async getTags(): Promise<ApiResponse<any[]>> {
-    return apiClient.get<any[]>('/tags')
+  // Tag methods. SEC-2 (#375): tags are now project-scoped; both list
+  // and create require project_id.
+  async getTags(projectId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>(`/tags?project_id=${encodeURIComponent(projectId)}`)
   },
 
-  async createTag(data: { name: string; color?: string }): Promise<ApiResponse<any>> {
+  async createTag(data: { name: string; color?: string; project_id: string }): Promise<ApiResponse<any>> {
     return apiClient.post<any>('/tags', data)
   },
 
@@ -268,9 +269,10 @@ export const taskService = {
     return apiClient.delete<void>(`/saved-views/${viewId}`)
   },
 
-  // Automation methods
-  async getAutomationRules(): Promise<ApiResponse<any[]>> {
-    return apiClient.get<any[]>('/automation/rules')
+  // Automation methods. SEC-2 (#375): rules + runs are project-scoped;
+  // project_id is required on every call.
+  async getAutomationRules(projectId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>(`/automation/rules?project_id=${encodeURIComponent(projectId)}`)
   },
 
   async createAutomationRule(data: {
@@ -278,12 +280,14 @@ export const taskService = {
     triggerType: string
     conditionsJson: string
     actionsJson: string
+    projectId: string
   }): Promise<ApiResponse<any>> {
     return apiClient.post<any>('/automation/rules', {
       name: data.name,
       trigger_type: data.triggerType,
       conditions_json: data.conditionsJson,
       actions_json: data.actionsJson,
+      project_id: data.projectId,
     })
   },
 
@@ -291,12 +295,12 @@ export const taskService = {
     return apiClient.post<any>(`/automation/rules/${ruleId}/test`, { task_id: taskId })
   },
 
-  async getAutomationRuns(ruleId?: string, limit?: number): Promise<ApiResponse<any[]>> {
+  async getAutomationRuns(projectId: string, ruleId?: string, limit?: number): Promise<ApiResponse<any[]>> {
     const params = new URLSearchParams()
+    params.append('project_id', projectId)
     if (ruleId) params.append('rule_id', ruleId)
     if (limit) params.append('limit', String(limit))
-    const queryString = params.toString()
-    return apiClient.get<any[]>(`/automation/runs${queryString ? `?${queryString}` : ''}`)
+    return apiClient.get<any[]>(`/automation/runs?${params.toString()}`)
   },
 
   // CSV Import/Export methods

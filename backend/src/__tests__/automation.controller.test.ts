@@ -1,10 +1,14 @@
 /**
- * Tests for /api/v1/automation — automation rules + runs.
+ * Tests for /api/v1/automation - automation rules + runs.
  *
- * The router only requires authentication; rule data is project-agnostic.
+ * SEC-2 (#375): rules became project-scoped. Routes require project_id
+ * (query / body) for list / create / runs, and rule-id routes resolve
+ * projectId from AutomationRule.
+ *
  * Coverage:
  *   - 401 without token on each route
  *   - 400 when required body fields are missing
+ *   - 400 when project_id is missing on list / create / runs
  *   - 200/201 happy paths for getRules, createRule, testRule, getRuns
  *   - testRule with shouldExecute=true and shouldExecute=false branches
  *   - getRuns with rule_id and limit query filters
@@ -15,7 +19,7 @@ import jwt from 'jsonwebtoken'
 import { app } from '../server'
 import { prisma } from '../lib/prisma'
 
-describe('Automation controller — /api/v1/automation', () => {
+describe('Automation controller - /api/v1/automation', () => {
   const stamp = Date.now()
   let userId: string
   let token: string
@@ -39,6 +43,10 @@ describe('Automation controller — /api/v1/automation', () => {
     })
     projectId = project.id
 
+    await prisma.projectMember.create({
+      data: { projectId, userId, role: 'owner', status: 'accepted' },
+    })
+
     const task = await prisma.task.create({
       data: {
         projectId,
@@ -59,14 +67,22 @@ describe('Automation controller — /api/v1/automation', () => {
       await prisma.automationRule.deleteMany({ where: { id: { in: createdRuleIds } } }).catch(() => {})
     }
     await prisma.task.delete({ where: { id: taskId } }).catch(() => {})
+    await prisma.projectMember.deleteMany({ where: { projectId } }).catch(() => {})
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {})
     await prisma.user.delete({ where: { id: userId } }).catch(() => {})
     await prisma.$disconnect()
   })
 
   it('GET /rules without token returns 401', async () => {
-    const res = await request(app).get('/api/v1/automation/rules')
+    const res = await request(app).get(`/api/v1/automation/rules?project_id=${projectId}`)
     expect(res.status).toBe(401)
+  })
+
+  it('GET /rules without project_id returns 400 (SEC-2 #375)', async () => {
+    const res = await request(app)
+      .get('/api/v1/automation/rules')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(400)
   })
 
   it('POST /rules without token returns 401', async () => {
@@ -74,11 +90,19 @@ describe('Automation controller — /api/v1/automation', () => {
     expect(res.status).toBe(401)
   })
 
+  it('POST /rules without project_id returns 400 (SEC-2 #375)', async () => {
+    const res = await request(app)
+      .post('/api/v1/automation/rules')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'partial', trigger_type: 'status_changed', conditions_json: '{}', actions_json: '[]' })
+    expect(res.status).toBe(400)
+  })
+
   it('POST /rules without required fields returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/automation/rules')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'partial' })
+      .send({ name: 'partial', project_id: projectId })
     expect(res.status).toBe(400)
     expect(res.body.success).toBe(false)
   })
@@ -93,6 +117,7 @@ describe('Automation controller — /api/v1/automation', () => {
       .post('/api/v1/automation/rules')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        project_id: projectId,
         name: `e2e_rule_${stamp}`,
         trigger_type: 'status_changed',
         conditions_json: conditions,
@@ -102,12 +127,13 @@ describe('Automation controller — /api/v1/automation', () => {
     expect(res.body.success).toBe(true)
     expect(res.body.data.id).toBeDefined()
     expect(res.body.data.name).toBe(`e2e_rule_${stamp}`)
+    expect(res.body.data.projectId).toBe(projectId)
     createdRuleIds.push(res.body.data.id)
   })
 
   it('GET /rules returns the active rules', async () => {
     const res = await request(app)
-      .get('/api/v1/automation/rules')
+      .get(`/api/v1/automation/rules?project_id=${projectId}`)
       .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
@@ -147,6 +173,7 @@ describe('Automation controller — /api/v1/automation', () => {
       .post('/api/v1/automation/rules')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        project_id: projectId,
         name: `e2e_rule_b_${stamp}`,
         trigger_type: 'status_changed',
         conditions_json: conditions,
@@ -164,8 +191,15 @@ describe('Automation controller — /api/v1/automation', () => {
   })
 
   it('GET /runs without token returns 401', async () => {
-    const res = await request(app).get('/api/v1/automation/runs')
+    const res = await request(app).get(`/api/v1/automation/runs?project_id=${projectId}`)
     expect(res.status).toBe(401)
+  })
+
+  it('GET /runs without project_id returns 400 (SEC-2 #375)', async () => {
+    const res = await request(app)
+      .get('/api/v1/automation/runs')
+      .set('Authorization', `Bearer ${token}`)
+    expect(res.status).toBe(400)
   })
 
   it('GET /runs returns array', async () => {
@@ -179,7 +213,7 @@ describe('Automation controller — /api/v1/automation', () => {
     })
     createdRunIds.push(run.id)
     const res = await request(app)
-      .get('/api/v1/automation/runs')
+      .get(`/api/v1/automation/runs?project_id=${projectId}`)
       .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
@@ -188,21 +222,22 @@ describe('Automation controller — /api/v1/automation', () => {
 
   it('GET /runs?rule_id=... filters by ruleId', async () => {
     const res = await request(app)
-      .get(`/api/v1/automation/runs?rule_id=${createdRuleIds[0]}&limit=5`)
+      .get(`/api/v1/automation/runs?project_id=${projectId}&rule_id=${createdRuleIds[0]}&limit=5`)
       .set('Authorization', `Bearer ${token}`)
     expect(res.status).toBe(200)
     expect(res.body.data.every((r: any) => r.ruleId === createdRuleIds[0])).toBe(true)
     expect(res.body.data.length).toBeLessThanOrEqual(5)
   })
 
-  it('POST /rules/:id/test with non-existent rule returns shouldExecute=false', async () => {
-    // evaluateRule short-circuits when rule is missing or inactive.
+  it('POST /rules/:id/test with non-existent rule returns 404 (SEC-2: rule middleware rejects unknown ids)', async () => {
+    // SEC-2 (#375): requireRuleProjectMember now resolves the rule first;
+    // unknown rule ids fail at the middleware with 404 rather than the
+    // controller short-circuit.
     const fakeId = '00000000-0000-0000-0000-000000000000'
     const res = await request(app)
       .post(`/api/v1/automation/rules/${fakeId}/test`)
       .set('Authorization', `Bearer ${token}`)
       .send({ task_id: taskId })
-    expect(res.status).toBe(200)
-    expect(res.body.data.shouldExecute).toBe(false)
+    expect(res.status).toBe(404)
   })
 })
