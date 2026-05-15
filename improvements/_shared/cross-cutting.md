@@ -248,6 +248,25 @@ These are already documented in `gap-summary.md` "Cross-cutting refactors that s
 **Suggested resolution:** Open follow-up GitHub issues during SEC-2 close stage. (1) New admin page (`/admin/automation-rules/orphans`) reading `prisma.automationRule.findMany({ where: { projectId: null } })`, scoped to SUPERIOR_ADMIN via `requireSuperiorAdmin`. UI lets the admin reassign each orphan to a project or hard-delete it. (2) Add `requireTemplateProjectMember()` (or a list-scope variant) to `GET /task-templates`; keep the controller filter as defence-in-depth. Both deferred until the next sprint.
 **Sources:** `https://github.com/chriertcafdle-beep/ToolDevelopment/pull/379#issuecomment-4461094721` (Stage 5 review LOW-1 + LOW-2); `backend/src/routes/taskTemplates.routes.ts:26`; `backend/src/middleware/requireTaskProjectMember.middleware.ts:403-409` (orphan 404 branch).
 
+## 2026-05-16 — Closure: `/preview/landing` promoted to canonical `/` (N-1c)
+
+**Closed by:** N-1c / Issue #386 / PR #387 / merge commit `02c52c8` on `dev` 2026-05-16.
+**Resolution:** `frontend/src/components/LandingOrApp.tsx` unauthenticated branch now renders `PreviewLandingPage` instead of the legacy `LandingPage`. `/preview/landing` route returns `<Navigate to="/" replace />` so bookmarked preview links resolve. Legacy `frontend/src/pages/Landing/LandingPage.tsx` + all 9 `frontend/src/components/landing/` files deleted. The 4 primary auth CTAs (`Navbar` "Sign in" + "Start free", `Hero` "Start free", CTA-block "Start free") wired from dead `#` anchors to React Router `<Link to="/login">` — closes the broken-front-door risk the architect had deferred. Build + tsc + lint + 90 unit tests clean post-deletion.
+**Follow-ups (NX-6 brand work, not regressions):**
+- `PreviewLandingPage` not renamed to `LandingPage` — cosmetic, folded into the NX-6 per-section rebuild.
+- Residual placeholder anchors in Navbar/Footer (features, pricing, docs, `/privacy`, `/terms`, `/help`) still point at `#` — non-breaking (anchors resolve to no-ops, not 404s); NX-6 owns the per-section link targets.
+- Stale `index.html` comment referencing `/preview/landing` (comment text only; fonts still load).
+
+**N-1 batch complete:** N-1a placeholders (`98d6bf7`), N-1b inventory sunset (`6e593f6`), N-1c preview-landing promotion (`02c52c8`) all shipped. N-1d (Safety keep-as-mock) is a no-op decision — documented, no code.
+
+## 2026-05-15 — Closure: Inventory module sunset from product surface (N-1b)
+
+**Closed by:** N-1b / Issue #384 / PR #385 / merge commit `6e593f6` on `dev` 2026-05-15.
+**Resolution:** Inventory removed from the product surface per ROADMAP-phase3.md section 2 N-1 + `inventory/README.md` sunset verdict. Deleted: `frontend/src/pages/Inventory/` (7 files), `frontend/src/components/inventory/` (22 files), `frontend/src/services/inventory.service.ts`, `frontend/e2e/15-inventory.spec.ts`; `/inventory/*` routes from `App.tsx`. Excised: the inventory branch from universal search (`search.routes.ts` `prisma.item` query + `GlobalSearch.tsx` config). Unmounted: 5 inventory backend route groups (`items`, `warehouses`, `uoms`, `purchasing`, `sales`) in `routes/index.ts` — `importExport.routes` left mounted (it is a tasks route). **33 inventory Prisma models preserved** (rules.md section 4); backend route files / `controllers/inventory/` / `services/inventory/` kept on disk, unmounted, for the future `LotTraceability`-child-of-`ConfigItem` CM rework. 8 inventory backend test suites `describe.skip`'d with a SUNSET comment, not deleted. `.husky/pre-push` + `.github/workflows/ci.yml` #299 guard updated to drop the deleted-`inventory.service.ts` clauses, retaining the task-service clauses.
+**Follow-ups (separate tickets, not regressions):**
+- Hard-delete the unmounted inventory backend route files / controllers / services once the CM `LotTraceability` rework decides what (if anything) to salvage.
+- `LotTraceability` child of `ConfigItem` inside CM is the A&D-appropriate hardware-traceability story (per ROADMAP-phase3.md section 2 N-1).
+
 ## 2026-05-15 — Closure: Reviewer-response endpoint cross-module authorization gap (closes 2026-05-14 requirements entry)
 
 **Closed by:** SEC-3 / Issue #376 / PR #380 / merge commit `47e3cf1` on `dev` 2026-05-15.

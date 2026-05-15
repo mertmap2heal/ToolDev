@@ -6,6 +6,20 @@ Each ticket carries: a one-line goal, files touched, acceptance criteria, and a 
 
 ---
 
+## Ticket 0 — Promote `/preview/landing` to the canonical `/` route
+
+**Status:** Shipped 2026-05-16 - Issue [#386](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/386), PR [#387](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/387), merge commit `02c52c8`. Resolution: `LandingOrApp.tsx` unauthenticated branch now renders `PreviewLandingPage`; `/preview/landing` redirects to `/`; legacy `LandingPage` + 9 `components/landing/` files deleted; 4 auth CTAs wired to `/login`. Residual placeholder anchors + the `PreviewLandingPage` rename deferred to NX-6 brand work.
+
+**Goal.** Point the canonical `/` route at `PreviewLandingPage` and retire the legacy `LandingPage`. This is the route-swap step that precedes the per-component rebuilds in Tickets 1-7. Per `README.md` "Target state" — `/preview/landing` already proves out the correct direction with scoped design tokens; the Phase 2 task is to promote that scaffolding to `/`.
+
+**Scope.** Route swap only — not a reskin. Wave N (Now bucket), effort S. R-9 (design tokens) is not a hard blocker: `PreviewLandingPage` ships its own scoped tokens via `preview-landing.css`.
+
+**Files.** `frontend/src/components/LandingOrApp.tsx` (unauthenticated branch), `frontend/src/App.tsx` (`/preview/landing` route), `frontend/src/pages/Landing/LandingPage.tsx` + `frontend/src/components/landing/*` (deleted).
+
+**Roadmap reference.** `ROADMAP-phase3.md` §2 N-1 `/preview/landing` sub-row.
+
+---
+
 ## Ticket 1 — Rebuild `LandingHero.tsx` with the elevator-pitch copy and a real product screenshot
 
 **Goal.** Replace the placeholder gradient hero with the three-second elevator pitch from `vision-and-usp.md` §12 and a real product screenshot of the objective-completion matrix.

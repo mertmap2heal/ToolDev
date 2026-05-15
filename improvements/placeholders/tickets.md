@@ -13,6 +13,8 @@ Four small tickets. The whole package is one PR with no schema migration and no 
 
 ## PH-1 — Delete `/architecture` route + page
 
+**Status:** Shipped 2026-05-15 - Issue [#382](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/382), PR [#383](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/383), merge commit `98d6bf7`. Resolution: route + page directory + e2e spec deleted from `frontend/src/App.tsx` + `frontend/src/pages/Architecture/` + `frontend/e2e/08-architecture.spec.ts`.
+
 **Files to change:**
 
 - `frontend/src/App.tsx` — delete line 14 (import) and line 153 (route declaration)
@@ -35,6 +37,8 @@ Four small tickets. The whole package is one PR with no schema migration and no 
 ---
 
 ## PH-2 — Delete `/reports` route + page; rehome the safety CTA
+
+**Status:** Shipped 2026-05-15 - Issue [#382](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/382), PR [#383](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/383), merge commit `98d6bf7`. Resolution: route + page directory + e2e spec deleted; SafetyLinkPanel report-pack CTA rehomed to `frontend/src/pages/Safety/SafetyOverviewPage.tsx:66-72` header row.
 
 **Files to change:**
 

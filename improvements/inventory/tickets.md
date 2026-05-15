@@ -8,6 +8,8 @@ A third section §C captures **cross-cutting items** that apply regardless of th
 
 ## A. SUNSET — recommended path
 
+**Status:** Shipped 2026-05-15 — Issue [#384](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/384), PR [#385](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/385), merge commit `6e593f6`. Resolution: Inventory frontend (31 files: pages/Inventory, components/inventory, inventory.service.ts, e2e/15-inventory.spec.ts) deleted; /inventory/* routes removed from App.tsx; universal search inventory branch excised; 5 backend route groups unmounted in routes/index.ts. 33 Prisma models preserved per rules.md section 4. Backend route files / controllers / services kept on disk (unmounted) for the future LotTraceability-child-of-ConfigItem CM rework. 8 inventory backend test suites describe.skip'd.
+
 Goal: remove Inventory from the launch product. Schema preserved (per `.claude/rules.md` §4, never delete data without permission) but archived; UI removed; routes removed.
 
 Recommended sequencing: tickets run in **the listed order**. No parallelisation — each ticket touches files the next needs to leave alone. Total estimate: **5–7 engineer-days**.
