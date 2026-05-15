@@ -101,13 +101,18 @@ describe('Requirement reviews — /api/v1/projects/:projectId/...', () => {
   })
 
   it('POST /:projectId/requirements/:reqId/reviews creates a draft review', async () => {
+    // SEC-3 (#376): the reviewer-response PUT now requires the actor to
+    // match the row's reviewerId (internal path) or present a signed token
+    // (external path). Seed the reviewer as an internal user so the
+    // happy-path PUT below remains authorised under tokenOwner. The
+    // external-reviewer path is covered separately in sec3-reviewer-auth.test.ts.
     const res = await request(app)
       .post(`/api/v1/projects/${projectId}/requirements/${requirementId}/reviews`)
       .set('Authorization', `Bearer ${tokenOwner}`)
       .send({
         reviewType: 'initial',
         reviewers: [
-          { reviewerName: 'Jane Reviewer', reviewerEmail: 'jane@example.test', role: 'reviewer' },
+          { reviewerId: ownerId, reviewerName: 'Owner Reviewer', role: 'reviewer' },
         ],
         reviewNotes: 'Please review.',
       })

@@ -1,5 +1,31 @@
 import { prisma } from '../lib/prisma'
 import { notifyRequirementSubscribers } from './requirementNotification.service'
+import { mintReviewerToken } from '../lib/reviewerToken'
+import { sendReviewInviteEmail } from './email.service'
+
+const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
+
+/**
+ * SEC-3 (#376) - build the absolute approval URL for an external reviewer.
+ * The frontend route is the canonical reviews page with the review id pinned
+ * and the token presented as a query parameter; the client is expected to
+ * forward the token on the `X-Reviewer-Token` request header when calling
+ * the response-submission endpoint.
+ */
+function buildReviewApprovalUrl(params: {
+  projectId: string
+  reviewId: string
+  reviewerId: string
+  token: string
+}): string {
+  const url = new URL(
+    `${APP_URL.replace(/\/+$/, '')}/projects/${params.projectId}/requirements`
+  )
+  url.searchParams.set('reviewId', params.reviewId)
+  url.searchParams.set('reviewerId', params.reviewerId)
+  url.searchParams.set('reviewToken', params.token)
+  return url.toString()
+}
 
 
 export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'cancelled'
@@ -79,6 +105,46 @@ export const requirementReviewService = {
           reviewers: true,
         },
       })
+
+      // SEC-3 (#376) - external reviewers (email-only, no internal user id)
+      // need a signed approval link to submit a response. Mint the token now
+      // and deliver via the invite email. Email failures must not roll back
+      // the review row; log and continue so the reviewer can be re-invited
+      // via `scripts/reissueExternalReviewerInvites.ts`.
+      const externalReviewers = review.reviewers.filter(
+        (r) => !r.reviewerId && r.reviewerEmail && r.reviewerEmail.includes('@')
+      )
+      if (externalReviewers.length > 0) {
+        await Promise.all(
+          externalReviewers.map(async (r) => {
+            try {
+              const token = mintReviewerToken({
+                reviewId: review.id,
+                reviewerEmail: r.reviewerEmail!,
+                requirementReviewerId: r.id,
+              })
+              const approvalUrl = buildReviewApprovalUrl({
+                projectId: review.projectId,
+                reviewId: review.id,
+                reviewerId: r.id,
+                token,
+              })
+              await sendReviewInviteEmail({
+                to: r.reviewerEmail!,
+                reviewerName: r.reviewerName ?? '',
+                requirementKey: requirement.requirementId ?? requirement.id,
+                requirementTitle: requirement.title,
+                approvalUrl,
+              })
+            } catch (sendError) {
+              console.error(
+                `[requirementReview.service] failed to send invite to ${r.reviewerEmail}:`,
+                sendError
+              )
+            }
+          })
+        )
+      }
 
       return { success: true, data: review }
     } catch (error: any) {
