@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   Design-system colour tokens (improvements/design-system.md section 3.1)
+   Phase A of the brand-token migration (ROADMAP-phase3.md R-9).
+   Light values in :root; dark (Midnight) values in .dark - Tailwind keys on
+   the .dark class (tailwind.config.js darkMode: 'class'; themeStore sets it).
+   These ink, surface, border, accent and status custom-property names are
+   disjoint from the pre-existing theme custom properties; the two coexist.
+   ========================================================================== */
+:root {
+  --ink-primary: #0F1419;
+  --ink-muted: #6B6660;
+  --ink-faint: #A8A29A;
+  --surface-base: #FAF8F3;
+  --surface-raised: #F2EEE3;
+  --surface-inset: #EBE5D5;
+  --border-default: #E2DCCD;
+  --border-strong: #C9C2AF;
+  --accent-primary: #1B4332;
+  --accent-primary-hover: #2D5A3D;
+  --status-success: #1B4332;
+  --status-warning: #B8860B;
+  --status-danger: #8B0000;
+  --status-info: #2D4A63;
+}
+
+.dark {
+  --ink-primary: #F5F1E8;
+  --ink-muted: #9B9489;
+  --ink-faint: #6B645C;
+  --surface-base: #0F1014;
+  --surface-raised: #161821;
+  --surface-inset: #0A0B0E;
+  --border-default: #2A2C36;
+  --border-strong: #3A3D4A;
+  --accent-primary: #4A9065;
+  --accent-primary-hover: #5FA878;
+  --status-success: #4A9065;
+  --status-warning: #D4A030;
+  --status-danger: #D63A3A;
+  --status-info: #6B9AC4;
+}
+
 html {
   scroll-behavior: smooth;
 }
