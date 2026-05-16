@@ -213,11 +213,15 @@ export async function createFromRequirements(req: AuthRequest, res: Response) {
 
 export async function signOffItem(req: AuthRequest, res: Response) {
   try {
+    // N-2.1 (CFR 21 Part 11): the route is gated by `requireReauth`. The
+    // reauthentication timestamp recorded on the SignatureEvent is the server's
+    // own clock at sign time — never a client value.
     const data = await svc.signOff(
       req.params.projectId,
       req.params.id,
       userId(req),
       req.body ?? {},
+      new Date(),
     )
     if (!data) return fail(res, 404, 'Validation item not found')
     res.status(201).json({ success: true, data })
@@ -235,11 +239,13 @@ export async function signOffItem(req: AuthRequest, res: Response) {
 
 export async function revokeSignOff(req: AuthRequest, res: Response) {
   try {
+    // N-2.1: the route is gated by `requireReauth`; reauthAt is server-stamped.
     const data = await svc.revokeSignOff(
       req.params.projectId,
       req.params.id,
       req.params.signOffId,
       userId(req),
+      new Date(),
     )
     if (!data) return fail(res, 404, 'Sign-off not found')
     res.json({ success: true, data })
@@ -253,7 +259,15 @@ export async function bulkRevokeSignOffs(req: AuthRequest, res: Response) {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x: unknown): x is string => typeof x === 'string') : []
     if (ids.length === 0) return fail(res, 400, '`ids` must be a non-empty array')
     const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
-    const data = await svc.bulkRevokeSignOffs(req.params.projectId, ids, userId(req), reason)
+    // N-2.1: the route is gated by `requireReauth`; one server-stamped reauthAt
+    // covers the batch (a single user action).
+    const data = await svc.bulkRevokeSignOffs(
+      req.params.projectId,
+      ids,
+      userId(req),
+      reason,
+      new Date(),
+    )
     res.json({ success: true, data })
   } catch (e) {
     err(res, e)

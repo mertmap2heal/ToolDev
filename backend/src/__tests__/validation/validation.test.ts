@@ -13,6 +13,18 @@ describe('Validation module integration', () => {
   const stamp = Date.now()
   const secret = process.env.JWT_SECRET || 'secret'
 
+  // N-2.1: the sign-off / revoke routes are gated by `requireReauth` (CFR 21
+  // Part 11). requireReauth validates a signed reauth JWT — not the password —
+  // so a directly-minted token is sufficient here (the password round-trip is
+  // exercised in signOff.signature.test.ts). Mint a fresh 60s reauth token.
+  const reauthHeader = (userIdForToken: string): Record<string, string> => ({
+    'X-Reauth-Token': jwt.sign(
+      { userId: userIdForToken, purpose: 'reauth' },
+      secret,
+      { expiresIn: '60s' },
+    ),
+  })
+
   let authorId: string
   let approverId: string
   let outsiderId: string
@@ -118,6 +130,15 @@ describe('Validation module integration', () => {
     await prisma.validationSignOff.deleteMany({
       where: { validationItem: { projectId: { in: [projectId, otherProjectId] } } },
     })
+    // N-2.1: sign-off / revoke now record CFR 21 Part 11 SignatureEvent rows.
+    // SignatureEvent is append-only — the $use guard blocks Prisma deletes — so
+    // clean the test rows with raw SQL (which bypasses the middleware) before
+    // the user delete, or SignatureEvent_signerUserId_fkey fails.
+    await prisma.$executeRaw`DELETE FROM "SignatureEvent" WHERE "signerUserId" = ANY(${[
+      authorId,
+      approverId,
+      outsiderId,
+    ]})`
     await prisma.validationItem.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId] } },
     })
@@ -257,6 +278,7 @@ describe('Validation module integration', () => {
       const res = await request(app)
         .post(`/api/v1/validation/projects/${projectId}/items/${itemId}/sign-off`)
         .set('Authorization', `Bearer ${authorToken}`)
+        .set(reauthHeader(authorId))
         .send({ signerRoleLabel: 'Pilot' })
       expect(res.status).toBe(403)
       expect(res.body.error).toMatch(/cannot be the creator/i)
@@ -266,6 +288,7 @@ describe('Validation module integration', () => {
       const res = await request(app)
         .post(`/api/v1/validation/projects/${projectId}/items/${itemId}/sign-off`)
         .set('Authorization', `Bearer ${approverToken}`)
+        .set(reauthHeader(approverId))
         .send({ signerRoleLabel: 'Customer Operations Lead', comment: 'Approved.' })
       expect(res.status).toBe(201)
       const item = await request(app)
@@ -285,6 +308,7 @@ describe('Validation module integration', () => {
           `/api/v1/validation/projects/${projectId}/items/${itemId}/sign-off/${target.id}/revoke`,
         )
         .set('Authorization', `Bearer ${approverToken}`)
+        .set(reauthHeader(approverId))
       expect(revoke.status).toBe(200)
       const item = await request(app)
         .get(`/api/v1/validation/projects/${projectId}/items/${itemId}`)
@@ -302,6 +326,7 @@ describe('Validation module integration', () => {
           `/api/v1/validation/projects/${projectId}/items/${created.body.data.id}/sign-off`,
         )
         .set('Authorization', `Bearer ${approverToken}`)
+        .set(reauthHeader(approverId))
         .send({ signerRoleLabel: 'Approver' })
       expect(res.status).toBe(403)
     })

@@ -253,14 +253,20 @@ export const validationService = {
     )
   },
 
+  // N-2.1: sign-off / revoke / bulk-revoke are CFR 21 Part 11 signing events —
+  // the routes are gated by `requireReauth`. The caller obtains a reauth token
+  // via authService.reauth(password) and passes it here; it is forwarded as
+  // the `X-Reauth-Token` header.
   async signOff(
     projectId: string,
     id: string,
     payload: { signerRoleLabel: string; comment?: string },
+    reauthToken: string,
   ): Promise<ApiResponse<ValidationSignOff>> {
     return apiClient.post(
       `/validation/projects/${projectId}/items/${id}/sign-off`,
       payload,
+      { 'X-Reauth-Token': reauthToken },
     )
   },
 
@@ -272,21 +278,25 @@ export const validationService = {
     projectId: string,
     id: string,
     signOffId: string,
+    reauthToken: string,
   ): Promise<ApiResponse<ValidationSignOff>> {
     return apiClient.post(
       `/validation/projects/${projectId}/items/${id}/sign-off/${signOffId}/revoke`,
       {},
+      { 'X-Reauth-Token': reauthToken },
     )
   },
 
   async bulkRevokeSignOffs(
     projectId: string,
     ids: string[],
-    reason?: string | null,
+    reason: string | null | undefined,
+    reauthToken: string,
   ): Promise<ApiResponse<{ revoked: number; demoted: number; skipped: number }>> {
     return apiClient.post(
       `/validation/projects/${projectId}/sign-offs/bulk-revoke`,
       { ids, reason: reason ?? null },
+      { 'X-Reauth-Token': reauthToken },
     )
   },
 
