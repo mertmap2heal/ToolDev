@@ -529,8 +529,8 @@ export default function DashboardPage() {
 
       {/* #262: Analytics / Audit modals used to render just a title + Close
           button with no actual content, making the features look broken.
-          Render an explicit Coming Soon body so the user knows the feature
-          is planned rather than failing. */}
+          Render an explicit empty-state body so the user knows the feature
+          is not built on this page rather than failing. */}
       {analyticsModalProject && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
              onClick={() => setAnalyticsModalProject(null)}>
@@ -542,8 +542,7 @@ export default function DashboardPage() {
               Project Analytics: {analyticsModalProject.name}
             </h2>
             <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
-              Coming soon — dashboards and charts for this project are not yet
-              implemented. Tracking for a future release.
+              Per-project analytics are not built on this page yet. Track requirement coverage, verification status, and traceability from the project's own dashboard once you open the project.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={() => setAnalyticsModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
@@ -563,9 +562,7 @@ export default function DashboardPage() {
               Audit Log: {auditLogModalProject.name}
             </h2>
             <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
-              Coming soon — a per-project audit-log view is not yet
-              implemented on this page. Platform admins can access the
-              tenant-wide audit log via Platform Admin in the meantime.
+              A per-project audit-log view is not built on this page yet. Platform admins can read the tenant-wide audit log from Platform Admin.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={() => setAuditLogModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>

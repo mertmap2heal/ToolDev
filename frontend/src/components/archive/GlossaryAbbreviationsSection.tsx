@@ -134,7 +134,6 @@ export default function GlossaryAbbreviationsSection({ projectId }: GlossaryAbbr
             <Download size={16} />
             Export
           </button>
-          <span className="text-xs text-gray-400 dark:text-gray-500">Bulk import (coming soon)</span>
         </div>
       </div>
 

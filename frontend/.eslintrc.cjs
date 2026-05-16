@@ -26,6 +26,18 @@ module.exports = {
         selector: "TemplateElement[value.cooked=/(?:blue|indigo|purple)-[0-9]/]",
         message: 'Banned brand colour: blue-*/indigo-*/purple-* Tailwind palette classes are not allowed. Use a design-system token (accent-*, ink-*, surface-*, border-*, status-*) - see improvements/design-system.md section 3.1.',
       },
+      {
+        selector: "JSXText[value=/coming soon/i]",
+        message: 'Banned copy: "coming soon" is not allowed. Remove the dead affordance, or write an engineer-voice empty state - see improvements/design-system.md section 5.4 and kb/feature-flags.md "hidden = non-existent".',
+      },
+      {
+        selector: "Literal[value=/coming soon/i]",
+        message: 'Banned copy: "coming soon" is not allowed. Remove the dead affordance, or write an engineer-voice empty state - see improvements/design-system.md section 5.4 and kb/feature-flags.md "hidden = non-existent".',
+      },
+      {
+        selector: "TemplateElement[value.cooked=/coming soon/i]",
+        message: 'Banned copy: "coming soon" is not allowed. Remove the dead affordance, or write an engineer-voice empty state - see improvements/design-system.md section 5.4 and kb/feature-flags.md "hidden = non-existent".',
+      },
     ],
   },
 }
