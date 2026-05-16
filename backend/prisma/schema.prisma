@@ -53,6 +53,7 @@ model User {
   validationBaselinesCreated          ValidationBaseline[]              @relation("ValidationBaselineCreatedBy")
   validationBaselinesDeleted          ValidationBaseline[]              @relation("ValidationBaselineDeletedBy")
   signatureEvents                     SignatureEvent[]
+  baselineRootsCreated                BaselineRoot[]                    @relation("BaselineRootCreatedBy")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -277,6 +278,7 @@ model Project {
   validationItems             ValidationItem[]
   validationSettings          ValidationSettings?
   validationBaselines         ValidationBaseline[]
+  baselineRoots               BaselineRoot[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -4389,4 +4391,41 @@ model SignatureEvent {
 
   @@index([linkedEntityType, linkedEntityId])
   @@index([signerUserId])
+}
+
+// R-4 (#401) — unified baseline primitive. Header for a point-in-time
+// snapshot of any cert-relevant artefact set. `kind` is a controlled
+// vocabulary validated by baseline.service.ts. A signed baseline is a
+// SignatureEvent (linkedEntityType='BaselineRoot') — no separate table.
+model BaselineRoot {
+  id              String   @id @default(uuid())
+  projectId       String
+  kind            String // VER | CERT | PARAM | VALIDATION | CM (service-validated)
+  name            String
+  description     String?
+  status          String   @default("draft") // draft | frozen
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User               @relation("BaselineRootCreatedBy", fields: [createdByUserId], references: [id])
+  items     BaselineRootItem[]
+
+  @@index([projectId, kind])
+}
+
+// R-4 (#401) — polymorphic per-item snapshot. One row per baselined
+// artefact; contentHash is a server-computed sha256 of the artefact
+// payload at baseline time, the unit of comparison in compareBaselineRoots.
+model BaselineRootItem {
+  id               String   @id @default(uuid())
+  baselineRootId   String
+  linkedEntityType String // e.g. Requirement, VerTestCase, Parameter, ValidationItem
+  linkedEntityId   String
+  contentHash      String // sha256, server-computed from the passed payload
+  createdAt        DateTime @default(now())
+
+  baselineRoot BaselineRoot @relation(fields: [baselineRootId], references: [id], onDelete: Cascade)
+
+  @@index([baselineRootId])
 }
