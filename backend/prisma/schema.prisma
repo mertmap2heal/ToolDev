@@ -527,6 +527,16 @@ model Requirement {
   changeRequestLinks RequirementChangeRequestLink[]
   subscriptions      RequirementSubscription[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@unique([projectId, requirementId])
   @@index([projectId])
   @@index([parentId])
@@ -666,6 +676,16 @@ model TraceLink {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@index([projectId, linkType])
   @@index([projectId, sourceType, targetType, linkType])
   @@index([projectId, targetId, linkType])
@@ -683,6 +703,16 @@ model Document {
   updatedAt DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 }
 
 model Issue {
@@ -719,6 +749,16 @@ model Issue {
   links               IssueLink[]          @relation("IssueToLink")
   attachments         IssueAttachment[]
   checklistItemIssues ChecklistItemIssue[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([projectId])
   @@index([issueKey])
@@ -1051,6 +1091,16 @@ model ChangeRequest {
   attachments      ChangeRequestAttachment[]
   requirementLinks RequirementChangeRequestLink[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@unique([projectId, crId], map: "ChangeRequest_projectId_crId_key")
   @@index([projectId])
   @@index([sourceType, sourceId])
@@ -1205,6 +1255,16 @@ model RequirementVersion {
   baselineId         String? // baseline that created this version (when included in a baseline)
   baselineName       String? // denormalized for display
   createdAt          DateTime @default(now())
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([requirementId])
   @@index([projectId])
@@ -1374,6 +1434,16 @@ model RequirementReview {
   requirement Requirement           @relation(fields: [requirementId], references: [id], onDelete: Cascade)
   reviewers   RequirementReviewer[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@index([requirementId])
   @@index([projectId])
   @@index([reviewStatus])
@@ -1395,6 +1465,16 @@ model RequirementReviewer {
   updatedAt      DateTime  @updatedAt
 
   review RequirementReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([reviewId])
   @@index([requirementId])
@@ -2166,6 +2246,16 @@ model Task {
   activityFeed        ActivityFeed[]
   timeLogs            TimeLog[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@index([projectId])
   @@index([status])
   @@index([priority])
@@ -2397,6 +2487,16 @@ model AutomationRule {
   project Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   runs    AutomationRun[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@index([isActive])
   @@index([triggerType])
   @@index([projectId])
@@ -2501,6 +2601,16 @@ model TaskTemplate {
 
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@index([projectId])
   @@index([isGlobal])
 }
@@ -2523,6 +2633,16 @@ model VerMoc {
   methods      VerMethod[]
   testCases    VerTestCase[]
   requirements Requirement[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([isActive])
 }
@@ -2659,6 +2779,16 @@ model VerTestCase {
   customSections VerTestCaseCustomSection[]
   procedure      VerTestProcedure?
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@unique([projectId, key])
   @@index([projectId])
   @@index([linkedMocCode])
@@ -2726,6 +2856,16 @@ model VerTestPlan {
   planSetups VerTestPlanSetup[]
   revisions  VerTestPlanRevision[]
   testRuns   VerTestRun[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@unique([projectId, key])
   @@index([projectId])
@@ -2812,6 +2952,16 @@ model VerTestRun {
   testLog             VerTestLog?
   timerSegments       VerTestRunExecutionTimer[]
   exportedTestResults VerTestResult[] // Test results exported from this run
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([projectId])
   @@index([environmentId])
@@ -2914,6 +3064,16 @@ model VerEvidence {
   project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   links   VerEvidenceLink[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@index([projectId])
   @@index([evidenceType])
 }
@@ -2961,6 +3121,16 @@ model VerTestResult {
   setup         VerTestSetup?       @relation(fields: [linkedSetupId], references: [id], onDelete: SetNull)
   sourceTestRun VerTestRun?         @relation(fields: [sourceTestRunId], references: [id], onDelete: SetNull)
   links         VerTestResultLink[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([projectId])
   @@index([resultStatus])
@@ -3042,6 +3212,16 @@ model VerNonconformity {
   project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sourceResult  VerTestRunResult? @relation(fields: [sourceTestRunResultId], references: [id], onDelete: SetNull)
   reverifyTasks VerReverifyTask[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([projectId])
   @@index([sourceTestRunResultId])
@@ -3353,6 +3533,16 @@ model CertObjective {
   project          Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   requirementLinks CertObjectiveRequirementLink[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@unique([projectId, objId])
   @@index([projectId])
   @@index([regRef])
@@ -3622,6 +3812,16 @@ model CertSignOff {
   checklist  CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   signer     User?          @relation("CertSignOffSigner", fields: [signerId], references: [id], onDelete: SetNull)
   assignedTo User?          @relation("CertSignOffAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([projectId])
   @@index([checklistId])
@@ -4021,6 +4221,16 @@ model ValidationItem {
   stars     ValidationItemStar[]
   comments  ValidationComment[]
 
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
   @@unique([projectId, key])
   @@index([projectId, status])
   @@index([projectId, deletedAt])
@@ -4136,6 +4346,16 @@ model ValidationSignOff {
 
   validationItem ValidationItem @relation(fields: [validationItemId], references: [id], onDelete: Cascade)
   signer         User           @relation(fields: [signerUserId], references: [id])
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
 
   @@index([validationItemId])
   @@index([signerUserId])
