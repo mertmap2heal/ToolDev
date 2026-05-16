@@ -202,12 +202,12 @@ async function writeDenyAudit(params: {
         projectId: params.projectId,
         userId: params.userId,
         action: params.action,
-        details: JSON.stringify({
+        detailsJson: {
           resource: params.resource,
           resourceId: params.resourceId,
           reason: params.reason,
           attemptedMethod: params.attemptedMethod,
-        }),
+        },
       },
     })
   } catch (err) {

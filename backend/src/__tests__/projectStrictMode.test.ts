@@ -248,7 +248,7 @@ describe('Project strict mode — PATCH /projects/:id/strict-mode (R-6)', () => 
       orderBy: { createdAt: 'desc' },
     })
     expect(audit).not.toBeNull()
-    const details = JSON.parse(audit!.details ?? '{}')
+    const details = (audit!.detailsJson ?? {}) as Record<string, unknown>
     expect(details.strictMode).toBe(false)
     expect(typeof details.previous).toBe('boolean')
   })

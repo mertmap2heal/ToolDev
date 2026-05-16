@@ -232,7 +232,7 @@ describe('SEC-3 (#376) - Reviewer-response self-auth', () => {
       orderBy: { createdAt: 'desc' },
     })
     expect(audit).not.toBeNull()
-    const details = JSON.parse(audit!.details ?? '{}')
+    const details = (audit!.detailsJson ?? {}) as Record<string, unknown>
     expect(details.resource).toBe('requirement-reviewer-internal')
     expect(details.resourceId).toBe(reviewerAId)
     expect(details.reason).toBe('user-id-mismatch')

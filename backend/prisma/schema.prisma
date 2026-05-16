@@ -1704,14 +1704,15 @@ model BarcodeDefinition {
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  action    String
-  details   String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String
+  details     String? // LEGACY - frozen. Historical rows only; no new writes. Dropped by a future cleanup ticket.
+  detailsJson Json? // R-8: structured audit detail. All new writes target this.
+  createdAt   DateTime @default(now())
 
   @@index([projectId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])

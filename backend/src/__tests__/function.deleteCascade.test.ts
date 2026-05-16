@@ -210,7 +210,7 @@ describe('Function delete — owner hard cascade path (#290)', () => {
       },
     })
     expect(audits.length).toBe(1)
-    const details = JSON.parse(audits[0]!.details!)
+    const details = audits[0]!.detailsJson as Record<string, unknown>
     expect(details.issueId).toBe(issueId)
     expect(details.functionId).toBe(functionId)
   })

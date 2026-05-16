@@ -447,6 +447,68 @@ handles the case where Socket.IO is not yet initialised.
 
 ---
 
+## Audit Logging — central table + action-string convention
+
+The central `AuditLog` table is the canonical audit sink. Do **not** add a
+private per-module audit table — the codebase already carries 11 outliers
+(`VerAuditEvent`, `TaskAuditLog`, `InventoryAuditLog`, `CertActivityLogEntry`,
+…) being collapsed onto `AuditLog` under R-8. A new module writes here.
+
+### Write structured detail to `detailsJson`
+
+`AuditLog` has two detail columns:
+
+- `detailsJson Json?` — **the column every new write targets.** Pass the
+  object directly, never `JSON.stringify`. Prisma stores it as JSONB and
+  returns it already parsed on read — no `JSON.parse` on the reader side.
+- `details String?` — **LEGACY, frozen.** Historical rows only; no new
+  writes. A future cleanup ticket drops the column once `detailsJson` is
+  proven. Do not write to it.
+
+### Action-string convention — `<module>:<kebab-verb>`
+
+Every new `action` string is `<module>:<kebab-verb>` — lowercase module, a
+colon, then a kebab-case verb. One namespace per module; the verb names the
+act.
+
+```
+validation:sign-off
+validation:bulk-update
+baseline:create
+tasks:tenant-scope-denied
+project:strict-mode-set
+```
+
+Existing historical action strings (e.g. `BASELINE_CREATED`,
+`ISSUE_HARD_DELETED_VIA_FUNCTION_CASCADE`, `PROJECT_OWNER_REASSIGNED`) are
+**NOT rewritten** — the convention binds new writes only. A separate
+follow-up may migrate the legacy strings.
+
+### Canonical writer shape
+
+```ts
+import { prisma } from '../lib/prisma'
+
+await prisma.auditLog.create({
+  data: {
+    projectId,
+    userId,
+    action: 'module:kebab-verb',
+    detailsJson: { /* structured detail — object, not a string */ },
+  },
+})
+```
+
+When the detail is genuinely absent, write `Prisma.DbNull` (not JS `null`,
+not `Prisma.JsonNull`) so the nullable-JSON column is set to SQL `NULL`,
+uniform with the rows the R-8 backfill left as SQL `NULL`. Note the
+distinction: `Prisma.DbNull` sets the column to SQL `NULL`, whereas
+`Prisma.JsonNull` writes a JSON `null` literal *into* the JSONB column — a
+different value. The full 11-table unification and a unified `GET /audit`
+read endpoint are deferred "Next" work (ROADMAP §3).
+
+---
+
 ## Background Jobs
 
 The scheduled cleanup job runs via `cleanup.service.ts`. If you need to add

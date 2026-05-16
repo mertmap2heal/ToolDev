@@ -17,7 +17,10 @@ function trim(text: string | undefined, max = 80): string {
 
 export interface ActivitySummaryArgs {
   action: string
+  /** Legacy frozen column - pre-R-8 rows only. */
   details: string | null | undefined
+  /** R-8: structured audit detail - all rows written after R-8. */
+  detailsJson?: Record<string, unknown> | null
   actorName?: string | null
 }
 
@@ -31,8 +34,17 @@ function parseDetails(raw: string | null | undefined): Details {
   }
 }
 
+// R-8: prefer the structured detailsJson (already an object); fall back to
+// parsing the legacy details string for pre-R-8 historical rows.
+function resolveDetails(args: ActivitySummaryArgs): Details {
+  if (args.detailsJson && typeof args.detailsJson === 'object') {
+    return args.detailsJson as Details
+  }
+  return parseDetails(args.details)
+}
+
 export function summariseActivity(args: ActivitySummaryArgs): string {
-  const d = parseDetails(args.details)
+  const d = resolveDetails(args)
   const key = s(d.key) ?? s(d.validationKey)
   const idTail = (s(d.validationItemId) ?? '').slice(0, 8)
   const item = key ?? (idTail ? `item ${idTail}…` : 'item')

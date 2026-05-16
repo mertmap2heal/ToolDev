@@ -1,4 +1,5 @@
 import { Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
@@ -8,12 +9,12 @@ async function logBaselineAudit(
   projectId: string,
   userId: string | undefined,
   action: string,
-  details: string
+  detailsJson: Prisma.InputJsonObject
 ): Promise<void> {
   if (!userId) return
   try {
     await prisma.auditLog.create({
-      data: { projectId, userId, action, details },
+      data: { projectId, userId, action, detailsJson },
     })
   } catch (e) {
     console.warn('Baseline audit log failed:', e)
@@ -416,12 +417,11 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
       return newBaseline
     })
 
-    await logBaselineAudit(
-      projectId,
-      req.user?.id,
-      'BASELINE_CREATED',
-      `Baseline "${name}" created (id: ${baseline.id}, ${requirements.length} requirements)`
-    )
+    await logBaselineAudit(projectId, req.user?.id, 'BASELINE_CREATED', {
+      baselineId: baseline.id,
+      name,
+      requirementCount: requirements.length,
+    })
 
     res.status(201).json({
       success: true,
@@ -491,12 +491,10 @@ export const lockBaseline = async (req: AuthRequest, res: Response) => {
       },
     })
 
-    await logBaselineAudit(
-      projectId,
-      req.user?.id,
-      'BASELINE_LOCKED',
-      `Baseline "${baseline.name}" locked (id: ${baselineId})`
-    )
+    await logBaselineAudit(projectId, req.user?.id, 'BASELINE_LOCKED', {
+      baselineId,
+      name: baseline.name,
+    })
 
     res.json({
       success: true,
@@ -542,12 +540,10 @@ export const deleteBaseline = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    await logBaselineAudit(
-      projectId,
-      req.user?.id,
-      'BASELINE_DELETED',
-      `Baseline "${baseline.name}" deleted (id: ${baselineId})`
-    )
+    await logBaselineAudit(projectId, req.user?.id, 'BASELINE_DELETED', {
+      baselineId,
+      name: baseline.name,
+    })
 
     await prisma.baseline.delete({
       where: { id: baselineId },

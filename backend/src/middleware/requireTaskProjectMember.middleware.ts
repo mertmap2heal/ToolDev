@@ -368,11 +368,11 @@ async function writeTenantScopeDenyAudit(params: {
         projectId: params.projectId,
         userId: params.userId,
         action: 'tasks:tenant-scope-denied',
-        details: JSON.stringify({
+        detailsJson: {
           resource: params.resource,
           resourceId: params.resourceId,
           attemptedAction: params.attemptedAction,
-        }),
+        },
       },
     })
   } catch (err) {

@@ -173,11 +173,11 @@ async function main(): Promise<void> {
                 projectId: requirement.projectId,
                 userId: initiatedBy,
                 action: 'requirements:reviewer-invite-reissued',
-                details: JSON.stringify({
+                detailsJson: {
                   reviewerRowId: r.id,
                   reviewId: r.reviewId,
                   emailMasked: maskEmail(email),
-                }),
+                },
               },
             })
             .catch((err) => {

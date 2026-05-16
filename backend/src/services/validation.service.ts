@@ -192,7 +192,12 @@ async function writeAudit(projectId: string, userId: string, action: string, det
       projectId,
       userId,
       action,
-      details: details ? JSON.stringify(details) : null,
+      // R-8: structured detail written to detailsJson (Json column) directly,
+      // no JSON.stringify. Absent detail -> Prisma.DbNull (SQL NULL),
+      // uniform with backfilled null rows and the Json? nullable-column semantics.
+      detailsJson: details === undefined || details === null
+        ? Prisma.DbNull
+        : (details as Prisma.InputJsonValue),
     },
   })
 }
@@ -397,9 +402,10 @@ export async function listProjectActivity(
 }
 
 export async function listActivity(projectId: string, itemId: string) {
-  // AuditLog rows have `details: String?` containing JSON. We filter to rows
-  // whose action begins with 'validation:' and whose details mention this
-  // item id. Cheap when audit log is small per project.
+  // R-8: AuditLog rows carry structured detail in `detailsJson` (Json column),
+  // returned by Prisma already parsed. We filter to rows whose action begins
+  // with 'validation:' and whose detail mentions this item id. Cheap when the
+  // audit log is small per project.
   const rows = await prisma.auditLog.findMany({
     where: { projectId, action: { startsWith: 'validation:' } },
     orderBy: { createdAt: 'desc' },
@@ -407,18 +413,14 @@ export async function listActivity(projectId: string, itemId: string) {
     include: { user: { select: { id: true, name: true, email: true } } },
   })
   return rows.filter((r) => {
-    if (!r.details) return false
-    try {
-      const parsed = JSON.parse(r.details) as Record<string, unknown>
-      return (
-        parsed.validationItemId === itemId ||
-        parsed.id === itemId ||
-        // bulk operations don't carry the id — exclude unless explicit
-        false
-      )
-    } catch {
-      return false
-    }
+    const detail = r.detailsJson as Record<string, unknown> | null
+    if (!detail || typeof detail !== 'object') return false
+    return (
+      detail.validationItemId === itemId ||
+      detail.id === itemId ||
+      // bulk operations don't carry the id — exclude unless explicit
+      false
+    )
   })
 }
 
@@ -1809,7 +1811,7 @@ export async function trend(
       createdAt: { gte: since },
       action: { in: ['validation:update', 'validation:bulk-update', 'validation:sign-off'] },
     },
-    select: { action: true, details: true, createdAt: true },
+    select: { action: true, detailsJson: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -1825,7 +1827,7 @@ export async function trend(
 
   for (const a of audits) {
     const day = a.createdAt.toISOString().slice(0, 10)
-    const d = a.details as { statusAfter?: string; statusBefore?: string; patch?: { status?: string }; count?: number } | null
+    const d = a.detailsJson as { statusAfter?: string; statusBefore?: string; patch?: { status?: string }; count?: number } | null
     let status: ValidationStatus | null = null
     let count = 0
     if (a.action === 'validation:update' && d?.statusAfter && d.statusAfter !== d.statusBefore) {

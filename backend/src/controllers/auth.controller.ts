@@ -829,7 +829,7 @@ async function writeReauthAudit(
         projectId: anchorProjectId,
         userId,
         action,
-        details: JSON.stringify({ ...details, anchorFallback: fallbackUsed }),
+        detailsJson: { ...details, anchorFallback: fallbackUsed },
       },
     })
     .catch(() => {

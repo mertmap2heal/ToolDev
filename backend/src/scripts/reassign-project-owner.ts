@@ -101,7 +101,7 @@ async function main() {
         projectId: project.id,
         userId: newOwnerId,
         action: 'PROJECT_OWNER_REASSIGNED',
-        details: JSON.stringify({
+        detailsJson: {
           previousOwnerId: oldOwnerId,
           newOwnerId,
           newOwnerEmail,
@@ -109,7 +109,7 @@ async function main() {
             userId: m.userId,
             role: m.role,
           })),
-        }),
+        },
       },
     }),
   ])

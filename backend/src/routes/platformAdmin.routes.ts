@@ -621,6 +621,61 @@ router.get('/audit-logs', async (req: AuthRequest, res: Response) => {
       })
     }
 
+    // R-8 (AP-N5) - central AuditLog. The canonical audit sink (validation,
+    // stakeholder, project, baseline, tasks deny-audits all write here);
+    // it was previously absent from this cross-tenant fan-out so a
+    // SUPERIOR_ADMIN never saw those events. Route stays SUPERIOR_ADMIN-scoped
+    // at the router level (line 9-13) - no per-row tenant filter is added,
+    // matching the three branches above (company is derived for display).
+    const auditWhere: { createdAt?: { gte?: Date; lte?: Date } } = {}
+    if (fromDate) auditWhere.createdAt = { ...auditWhere.createdAt, gte: fromDate }
+    if (toDate) auditWhere.createdAt = { ...auditWhere.createdAt, lte: toDate }
+    const auditEvents = await prisma.auditLog.findMany({
+      where: Object.keys(auditWhere).length > 0 ? auditWhere : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        project: { select: { companyName: true } },
+      },
+    })
+    for (const e of auditEvents) {
+      const actor = e.user?.name ?? e.user?.email ?? e.userId
+      const dj = e.detailsJson as Record<string, unknown> | null
+      const targetId =
+        (typeof dj?.resourceId === 'string' && dj.resourceId) ||
+        (typeof dj?.validationItemId === 'string' && dj.validationItemId) ||
+        (typeof dj?.baselineId === 'string' && dj.baselineId) ||
+        e.projectId
+      const targetKind = typeof dj?.resource === 'string' && dj.resource ? dj.resource : 'project'
+      const target = `${targetKind}:${targetId}`
+      const summary = e.action
+      const companyName = e.project?.companyName ?? null
+      if (actorFilter && !actor.toLowerCase().includes(actorFilter)) continue
+      if (actionFilter && !e.action.toLowerCase().includes(actionFilter)) continue
+      if (targetFilter && !target.toLowerCase().includes(targetFilter)) continue
+      let auditCompanyMatches = true
+      if (companyFilter) {
+        if (companyFilter === '(no name)' || companyFilter === '__null__') {
+          auditCompanyMatches = !companyName || companyName === ''
+        } else {
+          auditCompanyMatches = !!(companyName && companyName.toLowerCase().includes(companyFilter))
+        }
+      }
+      if (!auditCompanyMatches) continue
+      entries.push({
+        id: `audit-${e.id}`,
+        timestamp: e.createdAt.toISOString(),
+        actor,
+        action: e.action,
+        target,
+        summary,
+        source: 'central',
+        companyKey: companyName ? fromCompanyKey(toCompanyKey(companyName)) : null,
+        companyName,
+      })
+    }
+
     entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     const data = entries.slice(0, limit)
 

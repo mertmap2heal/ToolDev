@@ -484,13 +484,13 @@ export const deleteFunction = async (req: AuthRequest, res: Response) => {
           projectId: function_.projectId,
           userId,
           action: 'ISSUE_HARD_DELETED_VIA_FUNCTION_CASCADE',
-          details: JSON.stringify({
+          detailsJson: {
             issueId: issue.id,
             issueKey: issue.issueKey,
             title: issue.title,
             functionId: id,
             functionName: function_.name,
-          }),
+          },
         })),
       })
     } else if (linkedIssues.length > 0) {

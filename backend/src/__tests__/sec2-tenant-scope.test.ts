@@ -215,7 +215,7 @@ describe('SEC-2 (#375) — Tasks-domain tenant scope', () => {
     })
     expect(audit).not.toBeNull()
     // SEC-2 review MEDIUM-1: per-route resource label flows into the audit row.
-    const details = JSON.parse(audit!.details ?? '{}')
+    const details = (audit!.detailsJson ?? {}) as Record<string, unknown>
     expect(details.resource).toBe('automation-rule')
     expect(details.resourceId).toBe(ruleBId)
   })
@@ -243,7 +243,7 @@ describe('SEC-2 (#375) — Tasks-domain tenant scope', () => {
       orderBy: { createdAt: 'desc' },
     })
     expect(audit).not.toBeNull()
-    const details = JSON.parse(audit!.details ?? '{}')
+    const details = (audit!.detailsJson ?? {}) as Record<string, unknown>
     expect(details.resource).toBe('automation-rule')
   })
 
@@ -364,7 +364,7 @@ describe('SEC-2 (#375) — Tasks-domain tenant scope', () => {
       orderBy: { createdAt: 'desc' },
     })
     if (!audit) return null
-    const details = JSON.parse(audit.details ?? '{}')
+    const details = (audit.detailsJson ?? {}) as { resource: string; resourceId: string | null }
     return { resource: details.resource, resourceId: details.resourceId ?? null }
   }
 
