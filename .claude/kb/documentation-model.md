@@ -106,6 +106,35 @@ Watermarks (`Draft`, `Confidential`) are applied server-side during render — d
 
 ---
 
+## Audit-package generator (`auditPackage/`)
+
+`backend/src/services/auditPackage/` (N-2.2) is the opinionated, one-command
+certification-package generator — `vision-and-usp.md` §8.3's "audit package as
+a command". Three deliberately separated layers:
+
+- **`composer.service.ts`** — a pure `projectId -> ComposedAuditPackage`
+  function. It walks the cert artefact graph (`CertObjective` ->
+  `CertObjectiveRequirementLink` -> `Requirement` -> `TraceLink` ->
+  `VerTestResult` -> `VerEvidence` -> `SignatureEvent`) with **batched
+  `findMany({ where: { id: { in: [...] } } })` queries joined in memory** — a
+  constant query count, no N+1, so the export holds its SLA on a large
+  project. It composes *live* project state, not a stored `CertPackage` row.
+- **`sectionMaps/<artefact>.sectionMap.ts`** — the ordered, regulator-shaped
+  section list for one artefact (PSAC = DO-178C §11.1, 14 sections). The
+  renderer emits every numbered section in this order and **never omits one**
+  — an empty section renders its heading plus an engineer-voice empty line,
+  because a regulator reads the document by its fixed structure.
+- **`render/`** — `docxRenderer` / `pdfRenderer` / `jsonRenderer` /
+  `manifest`. Each consumes only the `ComposedAuditPackage` structure.
+
+The endpoint is `POST /:projectId/audit-package?artefactType=PSAC` — project-
+scoped (inherits `projectIdParam`), `artefactType` whitelisted, streams an
+`archiver` ZIP. N-2.2 shipped **PSAC**; to add SDP / SVP / SAS / SCI / SECI,
+add a `sectionMap` + a content builder — the composer and the graph walk do
+not change.
+
+---
+
 ## Sources
 - RTCA DO-178C, § 11 "Software Life Cycle Data". Not publicly distributable; reference SME or purchased copy.
 - SAE ARP4754A (aerospace system development). Cited for Safety Plan + ConOps.
