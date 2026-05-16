@@ -822,6 +822,11 @@ export interface CreateRequirementDto {
     linkType: string
     rationale?: string
   }[]
+  /**
+   * N-2.3 (#428): when present and non-blank, saves the requirement past
+   * INCOSE/EARS `error`-severity quality findings and records an audit row.
+   */
+  qualityOverrideReason?: string
 }
 
 export interface ChecklistCompletionSubmissionDto {
@@ -870,6 +875,12 @@ export interface UpdateRequirementDto {
   verificationStatus?: 'not_verified' | 'verified' | 'failed'
   verificationDate?: string
   verificationNotes?: string
+  /**
+   * N-2.3 (#428): when present and non-blank, saves a changed description
+   * past INCOSE/EARS `error`-severity quality findings and records an
+   * audit row.
+   */
+  qualityOverrideReason?: string
 }
 
 export interface BulkImportRequest {

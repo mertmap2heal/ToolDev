@@ -921,3 +921,201 @@ test.describe('Requirements', () => {
     expect(Math.abs((boxAfter?.width ?? 0) - (boxBefore?.width ?? 0))).toBeGreaterThan(10)
   })
 })
+
+/**
+ * N-2.3 (#428) — INCOSE/EARS write-time requirement quality gate.
+ * The create modal's quality panel blocks a malformed description, clears
+ * when it is fixed, and offers an audited inline override.
+ */
+test.describe('Requirements — INCOSE/EARS quality gate', () => {
+  /** The TipTap description editor inside the create modal. */
+  function descriptionEditor(modal: ReturnType<Page['locator']>) {
+    return modal.locator('.ProseMirror').first()
+  }
+
+  /**
+   * Fill the create modal's required fields (title + a non-Test MoC) so a
+   * footer submit click passes field validation and reaches the quality gate.
+   * Returns false when MoC seed data is absent (caller should skip).
+   */
+  async function fillTitleAndMoc(
+    modal: ReturnType<Page['locator']>,
+    title: string,
+  ): Promise<boolean> {
+    await modal
+      .locator('input[placeholder*="title" i], input[name="title"]')
+      .first()
+      .fill(title)
+    const mocSelect = modal
+      .locator('label')
+      .filter({ hasText: /Means of Compliance/ })
+      .locator('..')
+      .locator('select')
+      .first()
+    await expect(mocSelect).toBeVisible({ timeout: 10_000 })
+    if ((await mocSelect.locator('option').count()) <= 1) return false
+    const pickedNonTest = await mocSelect.evaluate((el: HTMLSelectElement) => {
+      for (let i = 0; i < el.options.length; i++) {
+        const opt = el.options[i]
+        if (!opt.value) continue
+        const mocName = (opt.text.split(':')[1]?.trim() ?? '').split('-')[0]?.trim() ?? ''
+        if (/^test$/i.test(mocName)) continue
+        el.selectedIndex = i
+        el.dispatchEvent(new Event('change', { bubbles: true }))
+        return true
+      }
+      return false
+    })
+    if (!pickedNonTest) await mocSelect.selectOption({ index: 1 })
+    return true
+  }
+
+  test('malformed description: the live pre-check names the vague term, the submit click blocks the save', async ({
+    page,
+    projectId,
+  }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
+    const modal = page.locator(MODAL_OVERLAY)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+
+    const editor = descriptionEditor(modal)
+    await editor.click()
+    await editor.pressSequentially('The system shall be fast.', { delay: 5 })
+
+    // The debounced (300ms) live pre-check surfaces the vague-term finding,
+    // with the offending word shown as a <code> chip.
+    await expect(modal.getByText(/is not measurable/i)).toBeVisible({ timeout: 5_000 })
+    await expect(modal.locator('code', { hasText: 'fast' })).toBeVisible()
+
+    const seeded = await fillTitleAndMoc(modal, `E2E quality blocked ${Date.now()}`)
+    test.skip(!seeded, 'MoC options missing — seed backend mocs to run this test')
+
+    // Clicking the footer submit on the malformed requirement fires the block.
+    await modal.getByRole('button', { name: /^create requirement$/i }).click()
+    await expect(
+      modal.getByText(/cannot be saved while it has unresolved quality findings/i),
+    ).toBeVisible({ timeout: 3_000 })
+
+    // The footer submit is now disabled and relabelled — the modal stays open.
+    const blockedBtn = modal.getByRole('button', { name: /resolve quality findings/i })
+    await expect(blockedBtn).toBeVisible({ timeout: 3_000 })
+    await expect(blockedBtn).toBeDisabled()
+  })
+
+  test('fixing the description to well-formed EARS clears the block and the save succeeds', async ({
+    page,
+    projectId,
+  }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
+    const modal = page.locator(MODAL_OVERLAY)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+
+    const reqTitle = `E2E quality fixed ${Date.now()}`
+    const editor = descriptionEditor(modal)
+    await editor.click()
+    await editor.pressSequentially('The system shall be fast.', { delay: 5 })
+    await expect(modal.getByText(/is not measurable/i)).toBeVisible({ timeout: 5_000 })
+
+    const seeded = await fillTitleAndMoc(modal, reqTitle)
+    test.skip(!seeded, 'MoC options missing — seed backend mocs to run this test')
+
+    // Trigger the block.
+    await modal.getByRole('button', { name: /^create requirement$/i }).click()
+    await expect(
+      modal.getByRole('button', { name: /resolve quality findings/i }),
+    ).toBeVisible({ timeout: 3_000 })
+
+    // Replace with a well-formed EARS requirement.
+    await editor.click()
+    await page.keyboard.press('ControlOrMeta+A')
+    await page.keyboard.press('Backspace')
+    await editor.pressSequentially(
+      'When the door opens, the system shall illuminate the cabin lights within 200ms.',
+      { delay: 5 },
+    )
+
+    // The panel returns to the calm clean state — EARS event-driven.
+    await expect(modal.getByText(/INCOSE quality . clean/i)).toBeVisible({ timeout: 5_000 })
+    await expect(modal.getByText(/event-driven/i)).toBeVisible()
+
+    // The footer button is back to its normal label and the save now succeeds.
+    const createBtn = modal.getByRole('button', { name: /^create requirement$/i })
+    await expect(createBtn).toBeEnabled({ timeout: 3_000 })
+    await createBtn.click()
+    await expect(page.locator('form#create-req-form')).toHaveCount(0, { timeout: 30_000 })
+
+    // Clean up the created requirement.
+    const row = page.locator('table tbody tr').filter({ hasText: reqTitle }).first()
+    await expect(row).toBeVisible({ timeout: 25_000 })
+    await row.getByTitle('Delete requirement').click()
+    await expect(page.getByRole('heading', { name: /move to trash/i })).toBeVisible({
+      timeout: 10_000,
+    })
+    await page.getByRole('button', { name: /^Move to Trash$/ }).click()
+    await expect(
+      page.locator('table tbody tr').filter({ hasText: reqTitle }),
+    ).toHaveCount(0, { timeout: 20_000 })
+  })
+
+  test('the inline override reveals a reason textarea and an audited save-with-reason action', async ({
+    page,
+    projectId,
+  }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
+    const modal = page.locator(MODAL_OVERLAY)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+
+    const reqTitle = `E2E quality override ${Date.now()}`
+    const editor = descriptionEditor(modal)
+    await editor.click()
+    await editor.pressSequentially('The system shall be robust.', { delay: 5 })
+    await expect(modal.getByText(/is not measurable/i)).toBeVisible({ timeout: 5_000 })
+
+    const seeded = await fillTitleAndMoc(modal, reqTitle)
+    test.skip(!seeded, 'MoC options missing — seed backend mocs to run this test')
+
+    // Click the footer submit — field validation passes, the quality gate
+    // fires the block, and the override disclosure appears in the panel.
+    await modal.getByRole('button', { name: /^create requirement$/i }).click()
+    const overrideDisclosure = modal.getByRole('button', {
+      name: /save anyway with a recorded reason/i,
+    })
+    await expect(overrideDisclosure).toBeVisible({ timeout: 3_000 })
+    await overrideDisclosure.click()
+
+    // The override block expands: a real labelled textarea + the audit helper.
+    const reasonField = modal.locator('#quality-override-reason')
+    await expect(reasonField).toBeVisible({ timeout: 3_000 })
+    await expect(
+      modal.getByText(/recorded in the project audit log against your name/i),
+    ).toBeVisible()
+
+    // The save-with-reason button is disabled until a non-blank reason exists.
+    const saveWithReason = modal.getByRole('button', { name: /save with recorded reason/i })
+    await expect(saveWithReason).toBeDisabled()
+    await reasonField.fill('Customer-supplied wording, locked by contract.')
+    await expect(saveWithReason).toBeEnabled()
+
+    // Saving with the override completes the create (audited server-side).
+    await saveWithReason.click()
+    await expect(page.locator('form#create-req-form')).toHaveCount(0, { timeout: 30_000 })
+
+    // Clean up the created requirement.
+    const row = page.locator('table tbody tr').filter({ hasText: reqTitle }).first()
+    await expect(row).toBeVisible({ timeout: 25_000 })
+    await row.getByTitle('Delete requirement').click()
+    await expect(page.getByRole('heading', { name: /move to trash/i })).toBeVisible({
+      timeout: 10_000,
+    })
+    await page.getByRole('button', { name: /^Move to Trash$/ }).click()
+    await expect(
+      page.locator('table tbody tr').filter({ hasText: reqTitle }),
+    ).toHaveCount(0, { timeout: 20_000 })
+  })
+})

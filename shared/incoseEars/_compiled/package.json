@@ -1,0 +1,4 @@
+{
+  "//": "N-2.3 (#428): marks the compiled INCOSE/EARS validator output as ESM. shared/package.json has no `type`, so without this the .js here would be interpreted as CommonJS and the backend's named import `{ validateRequirementText, stripToPlainText }` would fail. Do not delete.",
+  "type": "module"
+}

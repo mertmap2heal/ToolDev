@@ -105,8 +105,11 @@ describe('Requirement Soft Delete Workflow', () => {
             .post(`/api/v1/requirements/${projectId}`)
             .set('Authorization', `Bearer ${token}`)
             .send({
+                // N-2.3 (#428): description is well-formed EARS so the
+                // INCOSE/EARS quality gate does not 422 before the
+                // reserved-ID 400 this test asserts.
                 title: 'Duplicate ID Attempt',
-                description: 'Should fail',
+                description: 'The system shall reject a duplicate requirement ID within 1s.',
                 requirementId: 'REQ-DEL-001', // Same ID as deleted one
                 priority: 'Medium',
                 status: 'Draft',
@@ -163,8 +166,10 @@ describe('Requirement Soft Delete Workflow', () => {
             .post(`/api/v1/requirements/${projectId}`)
             .set('Authorization', `Bearer ${token}`)
             .send({
+                // N-2.3 (#428): well-formed EARS description so the quality
+                // gate does not 422 before this test's expected 201.
                 title: 'Reusing ID Success',
-                description: 'Should succeed now',
+                description: 'The system shall release a permanently-deleted requirement ID within 1s.',
                 requirementId: 'REQ-DEL-001',
                 priority: 'Medium',
                 status: 'Draft',

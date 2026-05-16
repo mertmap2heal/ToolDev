@@ -193,11 +193,18 @@ class ApiClient {
         typeof data === 'object' && data !== null && typeof data.code === 'string'
           ? data.code
           : undefined
+      // N-2.3 (#428): preserve the INCOSE/EARS quality report from a 422 so
+      // the requirement editor can render the server findings (Design item #4).
+      const qualityReport =
+        typeof data === 'object' && data !== null && data.qualityReport
+          ? data.qualityReport
+          : undefined
       return {
         success: false,
         error: String(message),
         statusCode: status,
         ...(code ? { code } : {}),
+        ...(qualityReport ? { qualityReport } : {}),
       }
     }
 

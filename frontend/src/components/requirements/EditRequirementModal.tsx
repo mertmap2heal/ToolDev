@@ -24,6 +24,8 @@ import ParameterPickerModal from '../parameters/ParameterPickerModal'
 import CreateDefinitionModal from '../definitions/CreateDefinitionModal'
 import { toCapitalCase } from '../../utils/toCapitalCase'
 import GlossaryQuickAddPrompt from '../definitions/GlossaryQuickAddPrompt'
+import RequirementQualityCheck from './RequirementQualityCheck'
+import type { RequirementQualityReport } from 'shared/incoseEars'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import {
   placeholdersToEditorSpans,
@@ -257,6 +259,19 @@ export default function EditRequirementModal({
   const [glossaryPromptTerm, setGlossaryPromptTerm] = useState<string | null>(null)
   const [glossaryDismissedTerms, setGlossaryDismissedTerms] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // N-2.3 (#428): INCOSE/EARS write-time quality state.
+  const [qualityReport, setQualityReport] = useState<RequirementQualityReport | null>(null)
+  const [qualityBlocked, setQualityBlocked] = useState(false)
+  const [qualityOverrideReason, setQualityOverrideReason] = useState('')
+  const [serverQualityFindings, setServerQualityFindings] =
+    useState<RequirementQualityReport['findings'] | undefined>(undefined)
+  // N-2.3 (#428): the quality gate fires only when the description is being
+  // changed — editing other fields on a legacy malformed requirement is never
+  // blocked. `requirement` is the loaded entity; `formData.description` is the
+  // current editor content (undefined until the editor first emits a change).
+  const descriptionChanged =
+    formData.description !== undefined &&
+    formData.description !== (requirement?.description ?? '')
   const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(defaultRequirementTypes)
   const [tagInput, setTagInput] = useState('')
   const [allowedTransitions, setAllowedTransitions] = useState<Array<{ toStatusId: string; toStatusName: string }>>([])
@@ -682,6 +697,12 @@ export default function EditRequirementModal({
         queryClient.invalidateQueries({ queryKey: ['requirement-links-in', projectId] })
         resetDirty()
         onClose()
+      } else if (response.statusCode === 422 && response.qualityReport) {
+        // N-2.3 (#428): the server quality gate rejected the save — render the
+        // server findings into the panel and force the override block open.
+        setServerQualityFindings(response.qualityReport.findings)
+        setQualityBlocked(true)
+        setActiveTab('general')
       } else {
         console.error('Update failed:', response.error)
         setErrors({ submit: response.error || 'Failed to update requirement' })
@@ -791,6 +812,37 @@ export default function EditRequirementModal({
       return
     }
 
+    // N-2.3 (#428): INCOSE/EARS write-time quality gate — runs ONLY when the
+    // description is actually being changed (Design item #1). If the live
+    // pre-check reports error-severity findings and there is no recorded
+    // override reason, block — switch to the description tab (Design item #2).
+    if (
+      descriptionChanged &&
+      qualityReport?.hasErrors &&
+      qualityOverrideReason.trim().length === 0
+    ) {
+      setActiveTab('general')
+      setQualityBlocked(true)
+      return
+    }
+
+    doSubmit(qualityOverrideReason.trim() || undefined)
+  }
+
+  /** N-2.3 (#428): the in-panel "Save with recorded reason" action. */
+  const handleSaveWithOverride = () => {
+    if (qualityOverrideReason.trim().length === 0) return
+    doSubmit(qualityOverrideReason.trim())
+  }
+
+  /**
+   * Build the update payload and run the mutation. `overrideReason`, when
+   * present, saves a changed description past INCOSE/EARS quality findings
+   * (audited server-side).
+   */
+  const doSubmit = (overrideReason?: string) => {
+    if (!requirement) return
+
     // Prepare submit data - don't trim HTML content from RichTextEditor
     const submitData: UpdateRequirementDto = {
       ...formData,
@@ -836,6 +888,7 @@ export default function EditRequirementModal({
       requirementLevel: formData.requirementLevel || undefined,
       risk: formData.risk || undefined,
       complexity: formData.complexity || undefined,
+      ...(overrideReason ? { qualityOverrideReason: overrideReason } : {}),
     }
 
     console.log('Submitting requirement update:', requirement.id, submitData)
@@ -1198,6 +1251,29 @@ export default function EditRequirementModal({
                     placeholder="Enter requirement description... Use Insert parameter to add parameters from the library."
                     minHeight="120px"
                     className={errors.description ? 'ring-2 ring-red-500 rounded-lg' : ''}
+                  />
+                  {/* N-2.3 (#428): INCOSE/EARS write-time quality panel. The
+                      gate only blocks when the description is actually
+                      changed; otherwise it shows the calm read-only state. */}
+                  <RequirementQualityCheck
+                    description={formData.description ?? requirement?.description ?? ''}
+                    enabled={descriptionChanged}
+                    blockedSubmit={qualityBlocked}
+                    serverFindings={serverQualityFindings}
+                    overrideReason={qualityOverrideReason}
+                    onOverrideReasonChange={(v) => {
+                      setQualityOverrideReason(v)
+                      if (serverQualityFindings) setServerQualityFindings(undefined)
+                    }}
+                    onSaveWithOverride={handleSaveWithOverride}
+                    saving={updateRequirementMutation.isPending}
+                    onReportChange={(report) => {
+                      setQualityReport(report)
+                      if (!report.hasErrors) {
+                        setQualityBlocked(false)
+                        setServerQualityFindings(undefined)
+                      }
+                    }}
                   />
                   {errors.description && (
                     <p className="mt-1 text-sm text-red-500">{errors.description}</p>
@@ -2507,13 +2583,20 @@ export default function EditRequirementModal({
           >
             Cancel
           </button>
+          {/* N-2.3 (#428): the footer submit stays enabled until the author
+              clicks it on a changed-but-malformed description — that click
+              triggers the block. Once blocked it is disabled and relabelled. */}
           <button
             type="submit"
             form="edit-req-form"
-            disabled={updateRequirementMutation.isPending}
+            disabled={updateRequirementMutation.isPending || qualityBlocked}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {updateRequirementMutation.isPending ? 'Updating...' : 'Update Requirement'}
+            {updateRequirementMutation.isPending
+              ? 'Updating...'
+              : qualityBlocked
+                ? 'Resolve quality findings'
+                : 'Update Requirement'}
           </button>
         </div>
       </div>

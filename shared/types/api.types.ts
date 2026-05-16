@@ -19,6 +19,26 @@ export interface ApiResponse<T = any> {
   code?: string
   /** Present when a requirement update submitted transition checklist completions */
   transitionChecklistSubmissionResults?: TransitionChecklistSubmissionResults
+  /**
+   * N-2.3 (#428): present on requirement create/update responses. On a 422
+   * the body carries the INCOSE/EARS findings that blocked the save; on a
+   * successful save it carries the report so the editor can show the
+   * final quality state. Typed loosely here (the canonical
+   * `RequirementQualityReport` lives in `shared/incoseEars`) to keep this
+   * type-only file dependency-free.
+   */
+  qualityReport?: {
+    findings: Array<{
+      ruleId: string
+      severity: 'error' | 'warn'
+      message: string
+      term?: string
+      span?: [number, number]
+    }>
+    score: number
+    earsPattern: string
+    hasErrors: boolean
+  }
 }
 
 export interface PaginatedResponse<T> {
