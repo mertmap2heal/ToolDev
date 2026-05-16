@@ -901,3 +901,78 @@ export const declineProjectInvitation = async (req: AuthRequest, res: Response) 
     })
   }
 }
+
+/**
+ * PATCH /projects/:id/strict-mode — toggle the regulated-mode flag (ROADMAP
+ * R-6). The dedicated, audited write path for Project.strictMode; the flag is
+ * deliberately NOT settable via the general PUT /:id so there is exactly one
+ * controlled write path.
+ *
+ * Authorisation is enforced by the route middleware chain
+ * (resolveProjectParam -> requireProjectOwnerOrAdmin); req.params.id is a
+ * canonical UUID by the time this handler runs.
+ */
+export const setProjectStrictMode = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+    const { strictMode } = req.body as { strictMode?: unknown }
+
+    if (typeof strictMode !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'strictMode (boolean) is required',
+      })
+    }
+
+    // Kept to return the standard 404 shape when the row vanished between
+    // auth and update (race / concurrent delete) — matches updateProject.
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { id: true, strictMode: true },
+    })
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+      })
+    }
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { strictMode },
+      select: { id: true, strictMode: true },
+    })
+
+    // Audit the toggle. A no-op (setting strictMode to its current value)
+    // still records a row — the act of re-confirming the posture is itself
+    // auditable; details.previous captures whether it changed. The write is
+    // wrapped so an audit failure never fails the toggle.
+    try {
+      await prisma.auditLog.create({
+        data: {
+          projectId: id,
+          userId: req.userId ?? req.user?.userId ?? '',
+          action: 'project:strict-mode-set',
+          details: JSON.stringify({
+            strictMode: updated.strictMode,
+            previous: project.strictMode,
+          }),
+        },
+      })
+    } catch (auditError) {
+      console.error('AuditLog write failed (project:strict-mode-set):', auditError)
+    }
+
+    res.json({
+      success: true,
+      data: { id: updated.id, strictMode: updated.strictMode },
+    })
+  } catch (error) {
+    console.error('Set project strict mode error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}

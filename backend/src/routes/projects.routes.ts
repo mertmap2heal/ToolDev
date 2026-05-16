@@ -15,6 +15,7 @@ import {
   bulkUpdateProjects,
   exportProjects,
   importProjects,
+  setProjectStrictMode,
 } from '../controllers/project.controller'
 import { authenticateToken, requireAdmin } from '../middleware/auth.middleware'
 import { resolveProjectParam } from '../middleware/resolveProjectParam.middleware'
@@ -81,6 +82,11 @@ router.post(
 router.get('/:id', authenticateToken, resolveProjectParam, requireProjectMember, getProject)
 router.put('/:id', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, updateProject)
 router.delete('/:id', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, deleteProject)
+
+// Regulated-mode toggle (ROADMAP R-6). Dedicated, audited write path for
+// Project.strictMode — owner-or-admin only, reusing the same tenant-scoped
+// middleware chain as PUT/DELETE /:id.
+router.patch('/:id/strict-mode', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, setProjectStrictMode)
 
 // Team management — reading membership requires membership (#153); writes require owner/admin.
 router.get('/:id/members', authenticateToken, resolveProjectParam, requireProjectMember, getProjectMembers)
