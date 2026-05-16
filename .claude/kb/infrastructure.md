@@ -44,6 +44,34 @@ in both backend and frontend.
 
 ---
 
+## Shared runtime modules — the `_compiled/` pattern
+
+`shared/` historically held **types only** (erased at compile — no runtime
+artefact needed). A shared module that contains **runtime code** consumed by
+both `backend/` and `frontend/` (the first is `shared/incoseEars/`, the
+INCOSE/EARS requirement validator from N-2.3) cannot be imported the same way:
+
+- The **frontend** imports the `.ts` source directly via the Vite `shared`
+  alias — Vite transpiles it.
+- The **backend** cannot. Its `tsconfig` has `rootDir: ./src`, so `tsc`
+  refuses to compile a `.ts` outside `src/`; and Node ESM rejects a bare
+  directory import (`ERR_UNSUPPORTED_DIR_IMPORT`).
+
+The pattern: the module ships its own `tsconfig.json` and a **committed
+`_compiled/` build output** (`_compiled/index.js` + `index.d.ts` + a
+`package.json` carrying `"type": "module"`). The `.ts` is the single source
+of truth; `_compiled/` is generated. The backend imports `_compiled/index.js`;
+the frontend imports the `.ts`. This mirrors how `shared/types/` ships its
+`.d.ts` build outputs.
+
+**Drift hazard:** an edit to the `.ts` not re-reflected in `_compiled/` leaves
+the backend running stale logic. Regenerate after any edit (`cd shared/<name>
+&& npx tsc`). The structural fix is a CI/husky guard — `npx tsc` then
+`git diff --exit-code shared/<name>/_compiled` — see the N-2.3 closure
+follow-up.
+
+---
+
 ## Detecting Undeclared npm Dependencies
 
 After a merge, imports may exist in source files for packages not in `package.json`.
