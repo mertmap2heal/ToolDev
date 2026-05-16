@@ -298,3 +298,28 @@ const res = await api.get('/parameters')
 
 In production, the Express server serves the built Vite assets directly, so
 relative paths work without any proxy.
+
+---
+
+## Design Tokens — use semantic colours, not the raw palette
+
+The `design-system.md` §3.1 colour tokens are wired into Tailwind (landed by
+R-9). Use the semantic token classes; never the raw Tailwind palette.
+
+| Token group | Tailwind classes | Use for |
+|---|---|---|
+| `ink` | `text-ink-primary`, `text-ink-muted`, `text-ink-faint` | body text, captions, disabled text |
+| `surface` | `bg-surface-base`, `bg-surface-raised`, `bg-surface-inset` | page background, cards, inputs |
+| `border` | `border-default`, `border-strong` | 1px dividers, focus emphasis |
+| `accent` | `bg-accent-primary`, `text-accent-primary`, `*-accent-primary-hover` | primary action (deep forest) |
+| `status` | `*-status-success`, `*-status-warning`, `*-status-danger`, `*-status-info` | pass / warn / fail / info |
+
+The tokens are CSS custom properties declared in `index.css` — light values
+under `:root`, dark (Midnight) values under `.dark`. They re-theme
+automatically when the `.dark` class is present; you do **not** need a `dark:`
+variant for a token colour.
+
+`blue-*`, `indigo-*`, `purple-*` Tailwind palette classes are flagged by an
+ESLint `no-restricted-syntax` rule (`warn` level — Phase A; it becomes `error`
+once the per-page migration completes). Deep forest (`accent-primary`) is the
+only accent; blue appears solely via the rare `status-info` slot.
