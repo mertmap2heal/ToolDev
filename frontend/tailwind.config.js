@@ -41,6 +41,17 @@ export default {
         default: 'var(--border-default)',
         strong: 'var(--border-strong)',
       },
+      // N-2.3 (#428): content fade-in for the requirement quality panel
+      // (design-system.md §7 — fade-in 120ms on the debounced settle).
+      keyframes: {
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+      },
+      animation: {
+        fadeIn: 'fadeIn 120ms ease-out',
+      },
     },
   },
   plugins: [

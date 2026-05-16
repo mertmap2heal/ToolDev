@@ -41,6 +41,8 @@ import ParameterPickerModal from '../parameters/ParameterPickerModal'
 import CreateDefinitionModal from '../definitions/CreateDefinitionModal'
 import { toCapitalCase } from '../../utils/toCapitalCase'
 import GlossaryQuickAddPrompt from '../definitions/GlossaryQuickAddPrompt'
+import RequirementQualityCheck from './RequirementQualityCheck'
+import type { RequirementQualityReport } from 'shared/incoseEars'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import {
   toPlaceholder,
@@ -287,6 +289,12 @@ export default function CreateRequirementModal({
   const [glossaryPromptTerm, setGlossaryPromptTerm] = useState<string | null>(null)
   const [glossaryDismissedTerms, setGlossaryDismissedTerms] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // N-2.3 (#428): INCOSE/EARS write-time quality state.
+  const [qualityReport, setQualityReport] = useState<RequirementQualityReport | null>(null)
+  const [qualityBlocked, setQualityBlocked] = useState(false)
+  const [qualityOverrideReason, setQualityOverrideReason] = useState('')
+  const [serverQualityFindings, setServerQualityFindings] =
+    useState<RequirementQualityReport['findings'] | undefined>(undefined)
   const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(defaultRequirementTypes)
   const [customRequirementType, setCustomRequirementType] = useState('')
   const [showAddRequirementType, setShowAddRequirementType] = useState(false)
@@ -732,6 +740,12 @@ export default function CreateRequirementModal({
         resetDirty()
         onClose()
         resetForm()
+      } else if (response.statusCode === 422 && response.qualityReport) {
+        // N-2.3 (#428): the server quality gate rejected the save — render the
+        // server findings into the panel and force the override block open.
+        setServerQualityFindings(response.qualityReport.findings)
+        setQualityBlocked(true)
+        setActiveTab('general')
       } else {
         setErrors({ submit: response.error || 'Failed to create requirement' })
       }
@@ -783,6 +797,11 @@ export default function CreateRequirementModal({
       customAttributes: {},
     })
     setErrors({})
+    // N-2.3 (#428): clear the quality-gate state on reset.
+    setQualityReport(null)
+    setQualityBlocked(false)
+    setQualityOverrideReason('')
+    setServerQualityFindings(undefined)
     setCustomRequirementType('')
     setShowAddRequirementType(false)
     setCustomSource('')
@@ -905,6 +924,30 @@ export default function CreateRequirementModal({
       return
     }
 
+    // N-2.3 (#428): INCOSE/EARS write-time quality gate. If the live
+    // pre-check reports error-severity findings and there is no recorded
+    // override reason yet, block the save — switch to the description tab so
+    // the quality panel is in view (Design item #2), then surface the block.
+    if (qualityReport?.hasErrors && qualityOverrideReason.trim().length === 0) {
+      setActiveTab('general')
+      setQualityBlocked(true)
+      return
+    }
+
+    await submitRequirement(qualityOverrideReason.trim() || undefined)
+  }
+
+  /** N-2.3 (#428): the in-panel "Save with recorded reason" action. */
+  const handleSaveWithOverride = async () => {
+    if (qualityOverrideReason.trim().length === 0) return
+    await submitRequirement(qualityOverrideReason.trim())
+  }
+
+  /**
+   * Build the create payload and run the mutation. `overrideReason`, when
+   * present, saves past INCOSE/EARS quality findings (audited server-side).
+   */
+  const submitRequirement = async (overrideReason?: string) => {
     const submitData: CreateRequirementDto = {
       ...formData,
       requirementId: autoGenerateId ? undefined : formData.requirementId?.trim() || undefined,
@@ -928,7 +971,8 @@ export default function CreateRequirementModal({
         targetType: l.targetType,
         linkType: l.linkType,
         rationale: l.rationale || undefined
-      }))
+      })),
+      ...(overrideReason ? { qualityOverrideReason: overrideReason } : {}),
     }
     if (LIFECYCLE_V1 && applicableLifecycle) {
       submitData.lifecycleId = applicableLifecycle.lifecycleId
@@ -1340,6 +1384,29 @@ export default function CreateRequirementModal({
                       minHeight="150px"
                     />
                   </div>
+                  {/* N-2.3 (#428): INCOSE/EARS write-time quality panel. */}
+                  <RequirementQualityCheck
+                    description={formData.description || ''}
+                    enabled
+                    blockedSubmit={qualityBlocked}
+                    serverFindings={serverQualityFindings}
+                    overrideReason={qualityOverrideReason}
+                    onOverrideReasonChange={(v) => {
+                      setQualityOverrideReason(v)
+                      // A fresh reason supersedes a stale server 422.
+                      if (serverQualityFindings) setServerQualityFindings(undefined)
+                    }}
+                    onSaveWithOverride={handleSaveWithOverride}
+                    saving={createRequirementMutation.isPending}
+                    onReportChange={(report) => {
+                      setQualityReport(report)
+                      // The author fixed the text -> clear the block + server findings.
+                      if (!report.hasErrors) {
+                        setQualityBlocked(false)
+                        setServerQualityFindings(undefined)
+                      }
+                    }}
+                  />
                   {errors.description && (
                     <p className="mt-1 text-sm text-red-500">{errors.description}</p>
                   )}
@@ -2645,13 +2712,21 @@ export default function CreateRequirementModal({
           >
             Cancel
           </button>
+          {/* N-2.3 (#428): the footer submit stays enabled until the author
+              clicks it on a malformed requirement — that click triggers the
+              block. Once blocked it is disabled and relabelled; the author's
+              path is then "fix the text" or the in-panel override. */}
           <button
             type="submit"
             form="create-req-form"
-            disabled={createRequirementMutation.isPending}
+            disabled={createRequirementMutation.isPending || qualityBlocked}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {createRequirementMutation.isPending ? 'Creating...' : 'Create Requirement'}
+            {createRequirementMutation.isPending
+              ? 'Creating...'
+              : qualityBlocked
+                ? 'Resolve quality findings'
+                : 'Create Requirement'}
           </button>
         </div>
       </div>

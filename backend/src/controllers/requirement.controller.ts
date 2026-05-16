@@ -15,6 +15,11 @@ import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 import { filterIdsExcluding } from '../utils/requirementScopeMerge'
 import { htmlToPlainText, truncatePlainText } from '../utils/htmlToPlainText'
 import {
+  validateRequirementText,
+  stripToPlainText,
+  type RequirementQualityReport,
+} from '../../../shared/incoseEars/_compiled/index.js'
+import {
   validateCreateRow,
   validateUpdateRow,
   type CreateRowContext,
@@ -28,6 +33,32 @@ import {
 import fs from 'fs'
 import path from 'path'
 
+
+/** True when `s` is a present, non-blank string. */
+function isNonBlank(s: unknown): s is string {
+  return typeof s === 'string' && s.trim().length > 0
+}
+
+/**
+ * N-2.3 (#428) — record an INCOSE/EARS quality-override in the central
+ * `AuditLog`. Fired when an author saves a requirement whose description has
+ * `error`-severity findings, supplying a non-blank `qualityOverrideReason`.
+ * Audit failure must never fail the save (matches `baseline.controller.ts`).
+ */
+async function logQualityOverride(
+  projectId: string,
+  userId: string | undefined,
+  detailsJson: Prisma.InputJsonObject
+): Promise<void> {
+  if (!userId) return
+  try {
+    await prisma.auditLog.create({
+      data: { projectId, userId, action: 'requirements:quality-override', detailsJson },
+    })
+  } catch (e) {
+    console.warn('Requirement quality-override audit log failed:', e)
+  }
+}
 
 /** INCOSE-aligned: sync TraceLinks requirement -> parameter (constrained_by) from {{param:id}} in title/description. */
 async function syncRequirementParameterLinks(
@@ -1221,6 +1252,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       objectiveValue,
       customAttributes,
       links,
+      qualityOverrideReason,
     } = req.body
 
     if (!title) {
@@ -1234,6 +1266,22 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Description is required',
+      })
+    }
+
+    // N-2.3 (#428): INCOSE/EARS write-time quality gate. A description with an
+    // `error`-severity finding is rejected 422 with the qualityReport, UNLESS
+    // a non-blank `qualityOverrideReason` is supplied (-> save proceeds + an
+    // AuditLog row). The validator runs the same code the editor pre-check runs.
+    const qualityReport: RequirementQualityReport = validateRequirementText(
+      stripToPlainText(description)
+    )
+    if (qualityReport.hasErrors && !isNonBlank(qualityOverrideReason)) {
+      return res.status(422).json({
+        success: false,
+        error:
+          'Requirement text has quality findings that must be resolved or overridden',
+        qualityReport,
       })
     }
 
@@ -1362,9 +1410,25 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       performedByUserId: req.userId,
     })
 
+    // N-2.3 (#428): record the quality-override when one was applied.
+    if (qualityReport.hasErrors && isNonBlank(qualityOverrideReason)) {
+      await logQualityOverride(projectId, req.userId, {
+        requirementId: requirement.id,
+        requirementKey: requirement.requirementId,
+        mode: 'create',
+        overrideReason: qualityOverrideReason.trim(),
+        score: qualityReport.score,
+        earsPattern: qualityReport.earsPattern,
+        findingRuleIds: qualityReport.findings
+          .filter((f) => f.severity === 'error')
+          .map((f) => f.ruleId),
+      })
+    }
+
     res.status(201).json({
       success: true,
       data: requirement,
+      qualityReport,
     })
   } catch (error: any) {
     console.error('Create requirement error:', error)
@@ -1536,6 +1600,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       objectiveValue,
       customAttributes,
       version: clientVersion,
+      qualityOverrideReason,
     } = req.body
 
     // Find the requirement
@@ -1572,6 +1637,24 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         error: 'Requirement is locked. Please unlock to edit.',
         lockedByUserId: requirement.lockedByUserId,
       })
+    }
+
+    // N-2.3 (#428): INCOSE/EARS write-time quality gate — runs ONLY when the
+    // `description` is actually being changed. Editing any other field on a
+    // pre-existing malformed requirement must never be blocked (Design item #1).
+    const descriptionChanged =
+      description !== undefined && description !== requirement.description
+    let qualityReport: RequirementQualityReport | undefined
+    if (descriptionChanged) {
+      qualityReport = validateRequirementText(stripToPlainText(description))
+      if (qualityReport.hasErrors && !isNonBlank(qualityOverrideReason)) {
+        return res.status(422).json({
+          success: false,
+          error:
+            'Requirement text has quality findings that must be resolved or overridden',
+          qualityReport,
+        })
+      }
     }
 
     // Check for circular reference if parent is being changed
@@ -2002,9 +2085,26 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       },
     }).catch(err => console.error('[updateRequirement] Notification failed (non-fatal):', err))
 
+    // N-2.3 (#428): record the quality-override when the description change
+    // was saved past `error`-severity findings.
+    if (qualityReport?.hasErrors && isNonBlank(qualityOverrideReason)) {
+      await logQualityOverride(projectId, req.userId, {
+        requirementId: updatedRequirement.id,
+        requirementKey: updatedRequirement.requirementId,
+        mode: 'update',
+        overrideReason: qualityOverrideReason.trim(),
+        score: qualityReport.score,
+        earsPattern: qualityReport.earsPattern,
+        findingRuleIds: qualityReport.findings
+          .filter((f) => f.severity === 'error')
+          .map((f) => f.ruleId),
+      })
+    }
+
     res.json({
       success: true,
       data: updatedRequirement,
+      ...(qualityReport ? { qualityReport } : {}),
       ...(transitionChecklistSubmissionResults?.length
         ? { transitionChecklistSubmissionResults }
         : {}),
