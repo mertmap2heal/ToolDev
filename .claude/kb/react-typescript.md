@@ -137,6 +137,36 @@ a new layout.
 
 ---
 
+## Cert-Module Layout (`CertModuleLayout`)
+
+`frontend/src/components/layout/CertModuleLayout.tsx` (R-11) is the shared
+chrome shell for cert-native modules — a collapsible resizable left tree
+panel, the main-column header bar, the unified tab strip, the `<Outlet/>`
+container, and the detail-drawer flex sibling. Verification is the pilot;
+Validation, Certification, and CM adopt it as their own tickets land.
+
+It is a pure presentational shell — zero data, zero React Query, zero
+routing or search-param logic. Everything module-specific is passed in:
+
+- `moduleKey` — the `localStorage` namespace; the panel open/width keys are
+  `${moduleKey}::panel-open::${projectId}` / `...::panel-width::...`.
+- `treePanel` — the entire left-panel interior (the consumer's own panel
+  header plus its tree component).
+- `tabs: CertModuleTab[]` — a discriminated union: `kind:'tab'` (a button
+  routed via `onTabSelect`, may carry a `count`) or `kind:'link'` (a router
+  `<Link>`, carries `to`). The layout renders the strip so the styling is
+  unified across modules.
+- `drawers` — the module's detail drawers, rendered as flex siblings of the
+  main column.
+- `children` — the routed content (Verification passes `<Outlet/>`).
+
+When a cert module needs this layout, consume `<CertModuleLayout>` — do not
+re-implement the panel state, the `localStorage` persistence, or the resize
+handler. Keep all data fetching, mutations, breadcrumb assembly, and
+drawer-routing logic in the consuming page.
+
+---
+
 ## TipTap Rich Text Editor
 
 This codebase uses TipTap for rich text fields (requirement descriptions, etc.).
