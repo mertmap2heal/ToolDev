@@ -259,6 +259,38 @@ will be stale and TypeScript types will not reflect the new schema.
 
 ---
 
+## AI-Provenance Lattice
+
+Cert-relevant models carry an 8-field AI-provenance lattice — the audit spine
+of the AI-native claim (`ai-ready-vision.md` §6.1). R-1 applied it to 22
+models; `Parameter` is the original pilot.
+
+Copy this block verbatim into any **new** cert-relevant model:
+
+```prisma
+authorType             String    @default("human")
+authorAiModel          String?
+authorAiVersion        String?
+authorAiPromptId       String?
+authorAiContextHash    String?
+provenanceReviewStatus String    @default("drafted")
+reviewerUserId         String?
+reviewTimestamp        DateTime?
+```
+
+- **Human writes need no code** — `authorType` defaults to `"human"`, so an
+  ordinary `create()` records correct provenance with zero controller code.
+- **AI write paths must stamp** — a path where an AI agent authors the row
+  sets `authorType` to `ai_suggestion` / `ai_accepted` / `ai_applied` and
+  fills the `authorAi*` fields (model, version, prompt id, context hash).
+- **Review transitions** set `provenanceReviewStatus`, `reviewerUserId`, and
+  `reviewTimestamp` when a human reviews the row.
+- `Parameter` (the pilot) names its review field `reviewStatus`, not
+  `provenanceReviewStatus` — a known naming inconsistency; use
+  `provenanceReviewStatus` for every new model.
+
+---
+
 ## Parameterised Queries — No Raw String Interpolation
 
 Always use Prisma's parameterised API. When `$queryRaw` is unavoidable,
