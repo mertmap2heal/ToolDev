@@ -168,6 +168,12 @@ model Project {
   status               String            @default("active")
   deadline             DateTime?
   strictLifecycleGates Boolean?          @default(false)
+  // Regulated-mode flag (ROADMAP R-6; kb/configuration-management.md). Broad
+  // project-wide posture switch: when true, regulated modules (CM,
+  // Verification, Validation, Certification, Safety) enforce audit-grade
+  // behaviour. Distinct from strictLifecycleGates, which gates only
+  // lifecycle-status transitions. Toggled solely via PATCH /:id/strict-mode.
+  strictMode           Boolean           @default(false)
 
   // AI feature flag (ai-ready-vision.md §5). Global env kill-switch
   // (FEATURES_AI_ENABLED) overrides this; this field is the per-project
