@@ -193,9 +193,10 @@ async function writeAudit(projectId: string, userId: string, action: string, det
       userId,
       action,
       // R-8: structured detail written to detailsJson (Json column) directly,
-      // no JSON.stringify. Absent detail -> Prisma.JsonNull (DB SQL NULL).
+      // no JSON.stringify. Absent detail -> Prisma.DbNull (SQL NULL),
+      // uniform with backfilled null rows and the Json? nullable-column semantics.
       detailsJson: details === undefined || details === null
-        ? Prisma.JsonNull
+        ? Prisma.DbNull
         : (details as Prisma.InputJsonValue),
     },
   })

@@ -499,10 +499,13 @@ await prisma.auditLog.create({
 })
 ```
 
-When the detail is genuinely absent, write `Prisma.JsonNull` (not JS `null`)
-so the nullable-JSON column is set to SQL `NULL`. The full 11-table
-unification and a unified `GET /audit` read endpoint are deferred "Next" work
-(ROADMAP §3).
+When the detail is genuinely absent, write `Prisma.DbNull` (not JS `null`,
+not `Prisma.JsonNull`) so the nullable-JSON column is set to SQL `NULL`,
+uniform with the rows the R-8 backfill left as SQL `NULL`. Note the
+distinction: `Prisma.DbNull` sets the column to SQL `NULL`, whereas
+`Prisma.JsonNull` writes a JSON `null` literal *into* the JSONB column — a
+different value. The full 11-table unification and a unified `GET /audit`
+read endpoint are deferred "Next" work (ROADMAP §3).
 
 ---
 
