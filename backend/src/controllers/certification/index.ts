@@ -966,6 +966,64 @@ export async function generatePackageBundleRoute(req: AuthRequest, res: Response
   }
 }
 
+// N-2.2 (#425) — the one-command, opinionated audit-package export.
+//
+// Composes the PSAC from the project's CURRENT state and streams a ZIP of
+// PSAC.docx / PSAC.pdf / PSAC.json / manifest.json. The projectId is resolved
+// by the projectIdParam middleware (membership-checked) — it is read only from
+// req.params, never the body. The only client input is `artefactType`, which is
+// whitelisted to PSAC.
+export async function generateAuditPackageRoute(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const userId = req.userId! // guaranteed by authenticateToken
+    // artefactType may arrive as a query param or in the body; default PSAC.
+    const rawType =
+      (req.body && req.body.artefactType) ?? (req.query.artefactType as string) ?? 'PSAC'
+    if (!certExport.isSupportedAuditArtefactType(rawType)) {
+      return res.status(400).json({
+        success: false,
+        error: `Unsupported artefactType "${rawType}". Only PSAC is available.`,
+      })
+    }
+
+    const result = await certExport.generateAuditPackage(projectId, {
+      artefactType: rawType,
+      generatedBy: userId,
+    })
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Project not found' })
+    }
+
+    // Audit row — the export is a cert-relevant action. detailsJson per R-8.
+    // JSON round-trip yields a plain JSON value Prisma accepts as InputJsonValue.
+    const auditDetails = JSON.parse(
+      JSON.stringify({
+        artefactType: rawType,
+        files: result.manifest.files.map((f) => f.name),
+        graphCounts: result.manifest.graphCounts,
+      }),
+    )
+    await prisma.auditLog
+      .create({
+        data: {
+          projectId,
+          userId,
+          action: 'certification:audit-package-export',
+          detailsJson: auditDetails,
+        },
+      })
+      .catch((e) => console.error('Cert audit-package-export audit log error:', e))
+
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`)
+    res.setHeader('Content-Type', 'application/zip')
+    result.stream.pipe(res)
+  } catch (e) {
+    console.error('Cert generateAuditPackage error:', e)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
 // ----- Full state (for frontend hydration) -----
 export async function getFullState(req: AuthRequest, res: Response) {
   try {

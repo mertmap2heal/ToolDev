@@ -4,6 +4,16 @@ import ExcelJS from 'exceljs'
 import PDFDocument from 'pdfkit'
 import archiver from 'archiver'
 import type { Readable } from 'stream'
+import { composePsac } from './auditPackage/composer.service'
+import { renderPsacDocx } from './auditPackage/render/docxRenderer'
+import { renderPsacPdf } from './auditPackage/render/pdfRenderer'
+import { renderPsacJson } from './auditPackage/render/jsonRenderer'
+import { buildManifest, manifestFileOf } from './auditPackage/render/manifest'
+import {
+  SUPPORTED_AUDIT_ARTEFACT_TYPES,
+  type AuditArtefactType,
+  type PackageManifest,
+} from './auditPackage/types'
 
 
 export type ExportFormat = 'xlsx' | 'pdf'
@@ -371,4 +381,70 @@ export async function generatePackageBundle(
 
   archive.finalize()
   return { stream: archive, filename }
+}
+
+// ---------------------------------------------------------------------------
+// N-2.2 (#425) — the opinionated, regulator-shaped audit-package generator.
+//
+// Composes the artefact graph once (composer.service.ts — 9 batched queries,
+// no N+1), renders the PSAC into DOCX + PDF + JSON, builds a manifest, and zips
+// the four files. Separate from `generatePackageBundle` (the legacy 5-doc ZIP),
+// which is left untouched.
+// ---------------------------------------------------------------------------
+
+export type { AuditArtefactType } from './auditPackage/types'
+
+/** Whitelist guard — only PSAC is built; SDP/SVP/SAS/SCI/SECI are follow-on tickets. */
+export function isSupportedAuditArtefactType(value: unknown): value is AuditArtefactType {
+  return (
+    typeof value === 'string' &&
+    SUPPORTED_AUDIT_ARTEFACT_TYPES.includes(value as AuditArtefactType)
+  )
+}
+
+/**
+ * Generate the opinionated audit package for a project's CURRENT state.
+ *
+ * Returns `null` when the project does not exist (controller -> 404). The
+ * `generatedBy` string is the audit attribution recorded in the manifest.
+ */
+export async function generateAuditPackage(
+  projectId: string,
+  options: { artefactType: AuditArtefactType; generatedBy: string },
+): Promise<{ stream: Readable; filename: string; manifest: PackageManifest } | null> {
+  // PSAC is the only artefact type built. The route already whitelisted it; this
+  // switch keeps the service honest if a future caller passes something else.
+  if (options.artefactType !== 'PSAC') {
+    throw new Error(`Unsupported audit artefact type: ${options.artefactType}`)
+  }
+
+  const composed = await composePsac(projectId)
+  if (!composed) return null
+
+  // Render with a preliminary manifest (graph counts visible in Appendix B; the
+  // per-file hash table cannot exist yet — a file cannot hash itself).
+  const preliminaryManifest = buildManifest(composed, options.generatedBy, [])
+  const docxBuf = await renderPsacDocx(composed, preliminaryManifest)
+  const pdfBuf = await renderPsacPdf(composed, preliminaryManifest)
+  const jsonBuf = renderPsacJson(composed, preliminaryManifest)
+
+  // The final manifest carries the sha256 + byte count of every rendered file.
+  const manifest = buildManifest(composed, options.generatedBy, [
+    manifestFileOf('PSAC.docx', docxBuf),
+    manifestFileOf('PSAC.pdf', pdfBuf),
+    manifestFileOf('PSAC.json', jsonBuf),
+  ])
+  const manifestBuf = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8')
+
+  const archive = archiver('zip', { zlib: { level: 9 } })
+  archive.append(docxBuf, { name: 'PSAC.docx' })
+  archive.append(pdfBuf, { name: 'PSAC.pdf' })
+  archive.append(jsonBuf, { name: 'PSAC.json' })
+  archive.append(manifestBuf, { name: 'manifest.json' })
+  archive.finalize()
+
+  const filename = `psac-audit-package-${projectId.slice(0, 8)}-${new Date()
+    .toISOString()
+    .slice(0, 10)}.zip`
+  return { stream: archive, filename, manifest }
 }

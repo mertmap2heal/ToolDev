@@ -454,3 +454,24 @@ export async function downloadPackageBundle(
     return { success: false, error: (e as { message?: string })?.message ?? 'Export failed' }
   }
 }
+
+// N-2.2 (#425): the one-command opinionated audit-package export. Composes the
+// PSAC from the project's current state and downloads a ZIP (PSAC.docx / .pdf /
+// .json / manifest.json).
+export async function downloadAuditPackage(
+  projectId: string,
+  artefactType: 'PSAC' = 'PSAC'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const blob = await apiClient.postBlob(`${BASE}/${projectId}/audit-package`, {
+      artefactType,
+    })
+    const filename = `psac-audit-package-${projectId.slice(0, 8)}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.zip`
+    downloadBlob(blob, filename)
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as { message?: string })?.message ?? 'Export failed' }
+  }
+}
