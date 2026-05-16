@@ -52,6 +52,7 @@ model User {
   validationComments                  ValidationComment[]
   validationBaselinesCreated          ValidationBaseline[]              @relation("ValidationBaselineCreatedBy")
   validationBaselinesDeleted          ValidationBaseline[]              @relation("ValidationBaselineDeletedBy")
+  signatureEvents                     SignatureEvent[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -4358,5 +4359,34 @@ model ValidationSignOff {
   reviewTimestamp        DateTime?
 
   @@index([validationItemId])
+  @@index([signerUserId])
+}
+
+// Universal CFR 21 Part 11 electronic-signature primitive (R-3, issue #398).
+// Append-only: rows are NEVER updated or deleted (enforced by Prisma $use
+// middleware in lib/prisma.ts). Revocation = a new row whose supersededById
+// points at the superseded row; the superseded row is never mutated.
+// Polymorphic via linkedEntityType / linkedEntityId, consistent with VerEvidenceLink.
+model SignatureEvent {
+  id               String   @id @default(uuid())
+  linkedEntityType String // e.g. ValidationItem, CertObjective, RequirementReview
+  linkedEntityId   String
+  linkedBaselineId String? // plain String? until R-4 (BaselineRoot) lands, then FK
+  signerUserId     String
+  meaningCode      String // CFR 21 Part 11 11.200(a)(2): review|approval|responsibility|authorship
+  reauthAt         DateTime // R-2 reauthentication timestamp (#392)
+  signedAt         DateTime @default(now())
+  contentHash      String // sha256 chain-of-custody of the signed artefact snapshot
+
+  // Append-only revocation chain (prototype: ValidationSignOff supersededById)
+  supersededById String?         @unique
+  supersededBy   SignatureEvent? @relation("SignatureSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded     SignatureEvent? @relation("SignatureSupersession")
+
+  createdAt DateTime @default(now())
+
+  signer User @relation(fields: [signerUserId], references: [id])
+
+  @@index([linkedEntityType, linkedEntityId])
   @@index([signerUserId])
 }
