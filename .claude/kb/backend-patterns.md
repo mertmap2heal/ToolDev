@@ -333,6 +333,25 @@ service writes none.
 
 ---
 
+## AI Invocation -> Artefact Join (`AiInvocationLink`)
+
+`AiInvocation` is the AI call ledger. `AiInvocationLink` (R-5) joins an
+invocation to the artefact(s) it produced, so the audit can answer "which
+prompt produced REQ-1024" (`ai-ready-vision.md` §6.2).
+
+- When an AI write path creates or modifies an artefact, call
+  `linkInvocationToArtefact(invocationId, artefactType, artefactId)` —
+  `artefactType` is a free string (`Requirement`, `Parameter`, ...), the
+  `TraceLink` polymorphic convention.
+- Query both directions via `getArtefactsForInvocation` /
+  `getInvocationsForArtefact` in `aiInvocationLink.service.ts`.
+- `AiInvocation.credentialId` is the nullable BYOK `UserAiCredential` that
+  carried the outbound call (null for default-tier hosted calls).
+- The join carries no `projectId` — tenant is reached transitively through
+  `invocationId -> AiInvocation.projectId`. A consuming endpoint must scope.
+
+---
+
 ## Parameterised Queries — No Raw String Interpolation
 
 Always use Prisma's parameterised API. When `$queryRaw` is unavoidable,
