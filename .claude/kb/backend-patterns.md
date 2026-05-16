@@ -310,6 +310,29 @@ reviewTimestamp        DateTime?
 
 ---
 
+## Baselines (`BaselineRoot`)
+
+`BaselineRoot` is the unified baseline primitive (R-4). A baseline is a
+content-hashed snapshot of a set of artefacts at a point in time.
+
+- `BaselineRoot` — `(projectId, kind, name, status, createdByUserId)`.
+  `kind` is `VER` / `CERT` / `PARAM` / `VALIDATION` / `CM`; `status`
+  transitions `draft -> frozen`.
+- `BaselineRootItem` — one polymorphic, content-hashed row per snapshotted
+  artefact (`linkedEntityType` / `linkedEntityId` / `contentHash`).
+- `baseline.service.ts` — `createBaselineRoot` / `addBaselineItem` (rejects
+  a frozen root) / `freezeBaselineRoot` / `getBaselineRoot` /
+  `listBaselineRoots` / `compareBaselineRoots` (the kind-agnostic
+  added / removed / changed diff).
+
+A baseline is signed by reusing `SignatureEvent` with
+`linkedEntityType='BaselineRoot'` — there is no separate baseline-signature
+table. A consuming endpoint must scope `projectId` from `req.user` and write
+a `baseline:root-create` / `baseline:root-freeze` `AuditLog` row — the
+service writes none.
+
+---
+
 ## Parameterised Queries — No Raw String Interpolation
 
 Always use Prisma's parameterised API. When `$queryRaw` is unavoidable,
