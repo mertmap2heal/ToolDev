@@ -353,3 +353,23 @@ variant for a token colour.
 ESLint `no-restricted-syntax` rule (`warn` level — Phase A; it becomes `error`
 once the per-page migration completes). Deep forest (`accent-primary`) is the
 only accent; blue appears solely via the rare `status-info` slot.
+
+---
+
+## No "Coming Soon" Copy or Dead Affordances
+
+A control whose action is "wait" is not a control (`design-system.md` §2.4);
+a hidden feature must be non-existent, not announced (`kb/feature-flags.md`
+"hidden = non-existent"). R-10 eradicated every "coming soon" string and
+`alert('... coming soon')` stub from the app.
+
+- Do not ship a button, tab, or menu item that only shows a "coming soon"
+  message. Remove the affordance entirely.
+- A region that is genuinely empty gets an engineer-voice empty state
+  (`design-system.md` §5.4): address the reader as an engineer, name a
+  concrete next action, no "coming soon", no emoji.
+- An ESLint `no-restricted-syntax` rule flags the literal `coming soon`
+  (case-insensitive) in JSX text and string literals. It currently shares
+  the `no-restricted-syntax` array's `warn` level (one severity is shared
+  across every selector in the array, including R-9's `blue-*`); it becomes
+  blocking when R-9 Phase C lowers the lint `--max-warnings` ceiling.
