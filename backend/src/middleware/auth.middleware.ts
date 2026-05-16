@@ -30,6 +30,15 @@ export const authenticateToken = (
       return res.status(403).json({ success: false, error: 'Invalid token' })
     }
 
+    // R-2 hardening: a reauth token (purpose: 'reauth', 60s TTL, minted by
+    // POST /auth/reauth) must never be accepted as a session token. Without
+    // this guard a short-lived reauth token would pass as a 7-day session
+    // credential. Session tokens carry no `purpose` claim, so this rejects
+    // only reauth tokens and leaves existing sessions unaffected.
+    if (decoded && typeof decoded === 'object' && (decoded as { purpose?: string }).purpose === 'reauth') {
+      return res.status(403).json({ success: false, error: 'Invalid token' })
+    }
+
     if (decoded && typeof decoded === 'object' && 'userId' in decoded) {
       req.userId = decoded.userId as string
       req.user = { id: decoded.userId as string, userId: decoded.userId as string }
@@ -82,6 +91,73 @@ export const requireAdmin = async (
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: 'Admin access required' })
   }
+  next()
+}
+
+/**
+ * Requires a valid reauthentication token (R-2, CFR 21 Part 11 §11.200(a)(1)).
+ *
+ * Consumer modules attach this AFTER `authenticateToken` to a sign-off
+ * endpoint: the caller must have proved password possession within the last
+ * 60 seconds via `POST /api/v1/auth/reauth`, then present the minted token
+ * in the `X-Reauth-Token` header.
+ *
+ * Each failure mode returns 401 with a distinct message. On success: next().
+ */
+export const requireReauth = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    return res.status(500).json({ success: false, error: 'Server configuration error' })
+  }
+
+  const reauthToken = req.headers['x-reauth-token']
+  const token = Array.isArray(reauthToken) ? reauthToken[0] : reauthToken
+  if (!token) {
+    return res
+      .status(401)
+      .json({ success: false, error: 'Reauthentication required' })
+  }
+
+  let decoded: jwt.JwtPayload
+  try {
+    // Pin HS256 (SEC-3 hardening posture): refuse any other algorithm,
+    // including the `alg: none` downgrade.
+    const verified = jwt.verify(token, secret, { algorithms: ['HS256'] })
+    if (typeof verified !== 'object' || verified === null) {
+      return res
+        .status(401)
+        .json({ success: false, error: 'Invalid reauth token' })
+    }
+    decoded = verified as jwt.JwtPayload
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({
+        success: false,
+        error: 'Reauth token expired - re-enter your password',
+      })
+    }
+    return res
+      .status(401)
+      .json({ success: false, error: 'Invalid reauth token' })
+  }
+
+  if (decoded.purpose !== 'reauth') {
+    return res
+      .status(401)
+      .json({ success: false, error: 'Not a reauth token' })
+  }
+
+  if (decoded.userId !== req.userId) {
+    return res.status(401).json({
+      success: false,
+      error: 'Reauth token does not match the authenticated user',
+    })
+  }
+
   next()
 }
 
