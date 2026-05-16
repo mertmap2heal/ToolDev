@@ -161,3 +161,92 @@ export const requireReauth = (
   next()
 }
 
+/**
+ * Discipline-gated sign-off authorisation chokepoint (R-7).
+ *
+ * A middleware FACTORY: call it with the engineering-role names that may
+ * perform the action, get back an Express middleware. Attach AFTER
+ * `authenticateToken` to a sign-off endpoint so the caller must hold one of
+ * the named disciplines (e.g. `Verification Engineer`) on the route's
+ * project via `ProjectUserEngineeringRole`.
+ *
+ * `EngineeringRole` gates sign-off authorisation; `AdminRole` gates whether
+ * the endpoint can be called at all — they are different primitives.
+ *
+ * Project-id resolution: `req.params[opts.projectIdParam]` if given, else
+ * `req.params.projectId`, else `req.params.id` (the engineering-role routes
+ * in projects.routes.ts use `:id`).
+ *
+ * Bypass policy:
+ *   - Platform admin (SUPERIOR_ADMIN / COMPANY_ADMIN / ADMIN_EMAILS)
+ *     bypasses — break-glass, consistent with the other middleware here.
+ *   - A project OWNER does NOT bypass. Ownership is a management capability,
+ *     not an engineering discipline; a lead who legitimately signs holds the
+ *     discipline role explicitly. This is the CFR 21 Part 11 posture.
+ *
+ * Fails closed: a DB error returns 500 and the request does not proceed.
+ *
+ * R-7 ships this middleware UNUSED. Consumer tickets (V-N1 validation
+ * sign-off, and the certification / CM equivalents) wire it to endpoints.
+ */
+export const requireEngineeringRole =
+  (roleNames: string[], opts?: { projectIdParam?: string }) =>
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const projectId =
+      req.params[opts?.projectIdParam ?? 'projectId'] ?? req.params.id
+    if (!projectId) {
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error: project id not found in route',
+      })
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, role: true },
+      })
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'User not found' })
+      }
+
+      // Platform-admin break-glass bypass (project owner is intentionally not bypassed).
+      const isPlatformAdmin =
+        user.role === 'SUPERIOR_ADMIN' ||
+        user.role === 'COMPANY_ADMIN' ||
+        (await resolveIsAdmin(user.email))
+      if (isPlatformAdmin) {
+        return next()
+      }
+
+      const roles = await prisma.engineeringRole.findMany({
+        where: { name: { in: roleNames } },
+        select: { id: true },
+      })
+      const roleIds = roles.map((r) => r.id)
+
+      const held =
+        roleIds.length > 0 &&
+        (await prisma.projectUserEngineeringRole.findFirst({
+          where: { projectId, userId, roleId: { in: roleIds } },
+          select: { id: true },
+        }))
+      if (held) {
+        return next()
+      }
+
+      return res.status(403).json({
+        success: false,
+        error: 'You do not hold an engineering role permitted to perform this action',
+      })
+    } catch (err) {
+      console.error('requireEngineeringRole:', err)
+      return res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+  }
+

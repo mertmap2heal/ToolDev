@@ -198,6 +198,17 @@ if ($userCount -eq "0") {
 }
 Pop-Location
 
+# --- 3e. Seed engineering roles (idempotent - safe to run every start) ---
+Write-Host "  Seeding engineering roles..."
+Push-Location (Join-Path $ROOT "backend")
+npm run seed:engineering-roles
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  WARNING: seed:engineering-roles failed - run manually: cd backend && npm run seed:engineering-roles"
+} else {
+    Write-Host "  Engineering role catalogue up to date."
+}
+Pop-Location
+
 # ============================================================
 # [4/5] LAUNCH SERVERS
 # ============================================================
