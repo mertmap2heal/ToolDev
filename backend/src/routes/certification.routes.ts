@@ -18,6 +18,10 @@ router.get('/:projectId/export/summary', ctrl.exportSummary)
 router.get('/:projectId/export/review-log', ctrl.exportReviewLog)
 router.get('/:projectId/export/activity-log', ctrl.exportActivityLog)
 router.post('/:projectId/packages/:packageId/generate-bundle', ctrl.generatePackageBundleRoute)
+// N-2.2 (#425): the one-command opinionated audit package (PSAC). Composes
+// live project state — not tied to a stored CertPackage row. projectId is
+// resolved + membership-checked by router.param('projectId') above.
+router.post('/:projectId/audit-package', ctrl.generateAuditPackageRoute)
 
 // Context
 router.get('/:projectId/context', ctrl.getContext)
