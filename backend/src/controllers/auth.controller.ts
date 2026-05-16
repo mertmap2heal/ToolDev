@@ -757,3 +757,153 @@ function generateToken(userId: string): string {
 
   return jwt.sign({ userId }, secret, { expiresIn: expiresIn as any })
 }
+
+/** Reauth token TTL in seconds (R-2, CFR 21 Part 11 §11.200(a)(1)). */
+const REAUTH_TOKEN_TTL_SECONDS = 60
+
+/**
+ * Mint a short-lived reauthentication token (R-2). The `purpose: 'reauth'`
+ * claim makes it non-interchangeable with a session token: `authenticateToken`
+ * rejects it, and `requireReauth` only accepts it.
+ */
+function generateReauthToken(userId: string): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error('JWT_SECRET is not defined')
+  }
+  return jwt.sign({ userId, purpose: 'reauth' }, secret, {
+    expiresIn: `${REAUTH_TOKEN_TTL_SECONDS}s`,
+  })
+}
+
+/**
+ * Write one central-AuditLog row per reauth attempt.
+ *
+ * The `AuditLog.projectId` column is non-null but a reauth event is
+ * user-scoped, not project-scoped. This replicates the SEC-1 anchor-fallback
+ * (see `aiInvocation.controller.ts` `writeAccessAudit`): anchor to the
+ * caller's first-owned project, else any project, else drop the write. The
+ * audit row content only identifies the actor + action + outcome - no
+ * project data is recorded, so the anchor leaks nothing. A project-less
+ * audit surface is the long-term fix (ROADMAP-phase3.md R-8 / AP-N5).
+ *
+ * Deliberately a local helper, not an import of `writeAccessAudit` - that
+ * function's action type is a closed AI-specific union.
+ */
+async function writeReauthAudit(
+  userId: string,
+  action: 'auth:reauth-success' | 'auth:reauth-fail',
+  details: Record<string, unknown>,
+) {
+  let anchorProjectId: string | null = null
+  let fallbackUsed: 'owned' | 'any' | 'none' = 'none'
+  const owned = await prisma.project
+    .findFirst({ where: { userId }, select: { id: true } })
+    .catch(() => null)
+  if (owned?.id) {
+    anchorProjectId = owned.id
+    fallbackUsed = 'owned'
+  } else {
+    const any = await prisma.project
+      .findFirst({ select: { id: true } })
+      .catch(() => null)
+    if (any?.id) {
+      anchorProjectId = any.id
+      fallbackUsed = 'any'
+      console.warn(
+        `[auth.reauth.audit] using project-any fallback anchor for action=${action} userId=${userId} (R-8 / AP-N5 follow-up)`,
+      )
+    }
+  }
+  if (!anchorProjectId) {
+    // Genuinely empty database - no projects exist. Drop the audit row
+    // rather than crash. Cannot happen post-onboarding.
+    console.warn(
+      `[auth.reauth.audit] dropped audit row - no project anchor available for action=${action} userId=${userId}`,
+    )
+    return
+  }
+  await prisma.auditLog
+    .create({
+      data: {
+        projectId: anchorProjectId,
+        userId,
+        action,
+        details: JSON.stringify({ ...details, anchorFallback: fallbackUsed }),
+      },
+    })
+    .catch(() => {
+      // Audit write failure must not block the reauth response.
+    })
+}
+
+/**
+ * Authenticated user: reauthenticate by re-entering the account password
+ * (R-2, CFR 21 Part 11 §11.200(a)(1)).
+ *
+ * The identity is always the authenticated caller (`req.userId`) - never the
+ * request body. On success it mints a 60-second `purpose: 'reauth'` JWT the
+ * caller presents in the `X-Reauth-Token` header to a sign-off endpoint
+ * guarded by `requireReauth`.
+ *
+ * R-2 ships the primitive only. Wiring sign-off endpoints to require the
+ * token, and the "Confirm password" UI step, are the consuming tickets
+ * (V-N1 and the verification / certification / requirements equivalents).
+ */
+export const reauth = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const { password } = req.body
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'password is required',
+      })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    })
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password)
+    if (!isValidPassword) {
+      await writeReauthAudit(userId, 'auth:reauth-fail', {
+        reason: 'wrong-password',
+        ip: req.ip ?? null,
+      })
+      return res.status(401).json({
+        success: false,
+        error: 'Password is incorrect',
+      })
+    }
+
+    const reauthToken = generateReauthToken(userId)
+    const expiresAt = new Date(
+      Date.now() + REAUTH_TOKEN_TTL_SECONDS * 1000,
+    ).toISOString()
+
+    await writeReauthAudit(userId, 'auth:reauth-success', {
+      ip: req.ip ?? null,
+    })
+
+    res.json({
+      success: true,
+      data: { reauthToken, expiresAt },
+    })
+  } catch (error) {
+    const err = error as Error
+    console.error('Reauth error:', err)
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    })
+  }
+}

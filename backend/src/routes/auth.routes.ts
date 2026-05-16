@@ -3,6 +3,7 @@ import {
   register,
   login,
   forgotPassword,
+  reauth,
   getCurrentUser,
   changeMyPassword,
   updateMyProfile,
@@ -40,6 +41,9 @@ const router = Router()
 router.post('/register', credentialLimiter, register)
 router.post('/login', credentialLimiter, login)
 router.post('/forgot-password', credentialLimiter, forgotPassword)
+// R-2: reauthentication primitive. credentialLimiter (it takes a password,
+// like /login) then authenticateToken (identity comes from the session).
+router.post('/reauth', credentialLimiter, authenticateToken, reauth)
 router.get('/me', authenticateToken, getCurrentUser)
 router.patch('/me/password', authenticateToken, changeMyPassword)
 router.patch('/me/profile', authenticateToken, updateMyProfile)
