@@ -1,30 +1,19 @@
 import { Response } from 'express'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
+import { PREDEFINED_ENGINEERING_ROLES } from '../lib/engineeringRoles'
 
-const PREDEFINED_ROLES = [
-  'Systems Engineer',
-  'Requirements Engineer',
-  'Design Engineer',
-  'Integration Engineer',
-  'Test Engineer',
-  'Verification Engineer',
-  'Validation Engineer',
-  'Configuration Manager',
-  'Quality Assurance',
-  'Project Manager',
-  'Safety Engineer',
-  'Software Engineer',
-  'Hardware Engineer',
-  'Systems Architect',
-  'Test Manager',
-  'Compliance Engineer',
-]
-
+/**
+ * Lazy empty-DB fallback for the engineering-role catalogue. Only seeds when
+ * the catalogue is completely empty (the `count > 0` short-circuit) — it is
+ * the safety net for the GET /engineering-roles path on a fresh DB. The
+ * standalone idempotent seed (scripts/seed-engineering-roles.ts) is what
+ * migrates `CCB Member` onto an already-populated DB.
+ */
 async function seedEngineeringRolesIfEmpty(): Promise<void> {
   const count = await prisma.engineeringRole.count()
   if (count > 0) return
-  for (const name of PREDEFINED_ROLES) {
+  for (const name of PREDEFINED_ENGINEERING_ROLES) {
     await prisma.engineeringRole.create({
       data: { name, isSystem: true },
     })
