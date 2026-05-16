@@ -106,6 +106,28 @@ Do not skip `authenticateToken` on any route that accesses project or user data.
 Only intentionally public routes (health check, invite accept, password reset)
 should be unprotected.
 
+### Reauthentication for sign-off endpoints (`requireReauth`)
+
+CFR 21 Part 11 signing events require the user to re-enter their password at
+sign time. R-2 landed the primitive:
+
+- `POST /api/v1/auth/reauth` — the caller (already authenticated) posts
+  `{ password }`; on success it returns `{ reauthToken, expiresAt }`. The
+  `reauthToken` is a 60-second JWT carrying `purpose: 'reauth'`.
+- `requireReauth` middleware — attach it **after** `authenticateToken` on any
+  sign-off / signature endpoint. It validates the `X-Reauth-Token` header
+  against `req.user` (signature, expiry, `purpose`, and `userId` match).
+
+```ts
+import { authenticateToken, requireReauth } from '../middleware/auth.middleware'
+router.post('/:id/sign-off', authenticateToken, requireReauth, ctrl.signOff)
+```
+
+A reauth token cannot be used as a session token, nor a session token as a
+reauth token — the `purpose` claim is enforced in both `authenticateToken`
+and `requireReauth`. The 60-second token is not single-use; an endpoint that
+needs one reauth per signing event must enforce that itself.
+
 ---
 
 ## Tenant Scope — `requireAdmin` Is Not a Tenant Filter
