@@ -128,6 +128,25 @@ reauth token — the `purpose` claim is enforced in both `authenticateToken`
 and `requireReauth`. The 60-second token is not single-use; an endpoint that
 needs one reauth per signing event must enforce that itself.
 
+### Recording a signature (`SignatureEvent`)
+
+The CFR 21 Part 11 sign-off path is `authenticateToken` -> `requireReauth`
+-> `signature.service.ts`. R-3 landed the primitive:
+
+- `SignatureEvent` is the one signature table for every module — polymorphic
+  via `linkedEntityType` / `linkedEntityId`. It is **append-only**: a
+  `prisma.$use` middleware rejects `update` / `delete` on it. A row is never
+  mutated.
+- `createSignature(...)` records a signature — it validates `meaningCode`
+  against the Part 11 vocabulary (`review` / `approval` / `responsibility` /
+  `authorship`) and computes the `contentHash` (sha256) server-side.
+- Revocation is `supersedeSignature(...)` — it appends a new row carrying
+  `supersededById`; the superseded row stays intact.
+
+A sign-off endpoint derives the signer from `req.user` (never the body), runs
+`requireReauth`, then calls `createSignature`. Do not write a per-module
+sign-off table — consume `SignatureEvent` via `linkedEntityType`.
+
 ---
 
 ## Tenant Scope — `requireAdmin` Is Not a Tenant Filter
