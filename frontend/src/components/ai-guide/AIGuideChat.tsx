@@ -66,7 +66,7 @@ export default function AIGuideChat() {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-white text-sm">AI Guide</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Coming soon</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Not connected yet</p>
           </div>
         </div>
         <button
@@ -80,7 +80,7 @@ export default function AIGuideChat() {
       {/* Placeholder body */}
       <div className="flex-1 flex items-center justify-center p-6">
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-          AI integration coming soon
+          The AI guide is not connected yet. To use AI on a project today, open the project's Settings and enable the AI features you need.
         </p>
       </div>
     </div>

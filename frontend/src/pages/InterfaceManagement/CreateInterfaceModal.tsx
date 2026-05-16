@@ -485,10 +485,6 @@ export default function CreateInterfaceModal({
             {errors.sourceTarget && (
               <p className="mt-1 text-sm text-red-500">{errors.sourceTarget}</p>
             )}
-            {/* 7: PBS placeholder */}
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-              PBS integration for element selection coming soon.
-            </p>
           </section>
 
           {/* 8: Owner as select + Other */}

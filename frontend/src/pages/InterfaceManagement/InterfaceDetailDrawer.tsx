@@ -434,8 +434,8 @@ export default function InterfaceDetailDrawer({ isOpen, interfaceItem, onClose, 
       <PlaceholderModal
         isOpen={isComingSoonOpen}
         onClose={() => setIsComingSoonOpen(false)}
-        title="Coming soon"
-        message="This feature will be implemented in a future release."
+        title="Not linked yet"
+        message="This artifact type is not yet connected to interfaces. Link interfaces from the Requirements, Functions, or PBS pages, where the cross-link is live today."
       />
     </>
   )

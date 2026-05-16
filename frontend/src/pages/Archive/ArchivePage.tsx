@@ -29,7 +29,6 @@ const SECTIONS = [
 export default function ArchivePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'requirements' | 'issues'>('requirements')
   const [confirmRestore, setConfirmRestore] = useState<Requirement | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Requirement | null>(null)
   const queryClient = useQueryClient()
@@ -42,7 +41,7 @@ export default function ArchivePage() {
       const response = await requirementService.getRecentlyDeletedRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && activeTab === 'requirements',
+    enabled: !!projectId,
   })
 
   // Restore mutation
@@ -236,31 +235,6 @@ export default function ArchivePage() {
                     {projectId && <SafetyLinkPanel variant="archived" ctaOnly />}
                   </div>
 
-                  <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 mt-5 -mb-px">
-                    <button
-                      onClick={() => setActiveTab('requirements')}
-                      className={clsx(
-                        'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
-                        activeTab === 'requirements'
-                          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                      )}
-                    >
-                      Requirements
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('issues')}
-                      className={clsx(
-                        'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
-                        activeTab === 'issues'
-                          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                      )}
-                    >
-                      Issues (Coming Soon)
-                    </button>
-                  </div>
-
                   <div className="mt-4">
                     <div className="relative max-w-sm">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -268,7 +242,7 @@ export default function ArchivePage() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={`Search deleted ${activeTab}...`}
+                        placeholder="Search deleted requirements..."
                         className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
@@ -276,9 +250,8 @@ export default function ArchivePage() {
                 </div>
 
                 <div className="flex-1 overflow-x-auto flex flex-col min-h-[220px]">
-                  {activeTab === 'requirements' ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[720px]">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px]">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
                           <tr>
                             <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Requirement</th>
@@ -353,12 +326,7 @@ export default function ArchivePage() {
                           )}
                         </tbody>
                       </table>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Issues trash is coming soon.</p>
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </section>
