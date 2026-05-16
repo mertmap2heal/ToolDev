@@ -954,10 +954,10 @@ export const setProjectStrictMode = async (req: AuthRequest, res: Response) => {
           projectId: id,
           userId: req.userId ?? req.user?.userId ?? '',
           action: 'project:strict-mode-set',
-          details: JSON.stringify({
+          detailsJson: {
             strictMode: updated.strictMode,
             previous: project.strictMode,
-          }),
+          },
         },
       })
     } catch (auditError) {

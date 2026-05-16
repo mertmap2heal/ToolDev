@@ -645,7 +645,10 @@ export interface ValidationSettings {
 export interface ValidationActivityRow {
   id: string
   action: string
+  /** Legacy frozen column - populated only on pre-R-8 historical rows. */
   details: string | null
+  /** R-8: structured audit detail. Populated on all rows written after R-8. */
+  detailsJson: Record<string, unknown> | null
   createdAt: string
   user?: { id: string; name: string; email: string }
 }

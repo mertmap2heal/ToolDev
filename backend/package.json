@@ -25,6 +25,7 @@
     "seed:full-demo": "tsx src/scripts/seed-full-demo.ts",
     "seed:scale-params": "tsx src/scripts/seed-scale-params.ts",
     "backfill:parameter-ids": "tsx src/scripts/backfill-parameter-ids.ts",
+    "backfill:audit-details-json": "tsx src/scripts/backfill-audit-details-json.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:gen": "prisma generate",
     "setup-db": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-database.ps1",

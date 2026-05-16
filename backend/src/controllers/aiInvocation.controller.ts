@@ -123,7 +123,7 @@ export async function writeAccessAudit(
         projectId: anchorProjectId,
         userId,
         action,
-        details: JSON.stringify({ ...details, ...(fallbackUsed !== 'none' ? { anchorFallback: fallbackUsed } : {}) }),
+        detailsJson: { ...details, ...(fallbackUsed !== 'none' ? { anchorFallback: fallbackUsed } : {}) },
       },
     })
     .catch(() => {

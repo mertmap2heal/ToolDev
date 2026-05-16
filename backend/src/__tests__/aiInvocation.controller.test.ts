@@ -452,7 +452,7 @@ describe('AI invocation audit - /api/v1/admin/ai/invocations (SEC-1 tenant scope
         orderBy: { createdAt: 'desc' },
       })
       expect(row).not.toBeNull()
-      const details = row?.details ? (JSON.parse(row.details) as Record<string, unknown>) : {}
+      const details = (row?.detailsJson ?? {}) as Record<string, unknown>
       expect(details).toHaveProperty('anchorFallback')
     } finally {
       await prisma.auditLog

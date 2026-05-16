@@ -1,4 +1,5 @@
 import { Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 import { PREDEFINED_ENGINEERING_ROLES } from '../lib/engineeringRoles'
@@ -111,7 +112,7 @@ async function writeAudit(
   projectId: string,
   actorUserId: string,
   action: string,
-  details: Record<string, unknown>
+  details: Prisma.InputJsonObject
 ): Promise<void> {
   try {
     await prisma.auditLog.create({
@@ -119,7 +120,7 @@ async function writeAudit(
         projectId,
         userId: actorUserId,
         action,
-        details: JSON.stringify(details),
+        detailsJson: details,
       },
     })
   } catch (e) {

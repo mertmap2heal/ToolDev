@@ -6,19 +6,27 @@ import { ArrowLeft, Filter, ExternalLink, Calendar } from 'lucide-react'
 import { validationService } from '../../services/validation.service'
 import { summariseActivity } from '../../components/validation/activityLabels'
 
-// Parse the audit details JSON safely; we only need a couple of fields.
-function parseDetails(raw: string | null): { validationItemId?: string; baselineId?: string } {
-  if (!raw) return {}
-  try {
-    const v = JSON.parse(raw)
-    if (typeof v !== 'object' || v === null) return {}
-    const out: { validationItemId?: string; baselineId?: string } = {}
-    if (typeof v.validationItemId === 'string') out.validationItemId = v.validationItemId
-    if (typeof v.baselineId === 'string') out.baselineId = v.baselineId
-    return out
-  } catch {
-    return {}
+// Resolve the audit detail object; we only need a couple of fields.
+// R-8: prefer the structured detailsJson column (already an object); fall back
+// to parsing the legacy details string for pre-R-8 historical rows.
+function resolveDetailRefs(
+  detailsJson: Record<string, unknown> | null,
+  legacy: string | null,
+): { validationItemId?: string; baselineId?: string } {
+  let v: unknown = detailsJson
+  if (!v && legacy) {
+    try {
+      v = JSON.parse(legacy)
+    } catch {
+      v = null
+    }
   }
+  if (typeof v !== 'object' || v === null) return {}
+  const obj = v as Record<string, unknown>
+  const out: { validationItemId?: string; baselineId?: string } = {}
+  if (typeof obj.validationItemId === 'string') out.validationItemId = obj.validationItemId
+  if (typeof obj.baselineId === 'string') out.baselineId = obj.baselineId
+  return out
 }
 
 // Project-wide validation audit feed. The backend already writes a row to
@@ -244,7 +252,7 @@ export default function ActivityPage() {
         >
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {visible.map((r) => {
-              const det = parseDetails(r.details)
+              const det = resolveDetailRefs(r.detailsJson, r.details)
               const target = det.validationItemId
                 ? `/projects/${projectId}/validation?open=${det.validationItemId}`
                 : det.baselineId
@@ -253,8 +261,13 @@ export default function ActivityPage() {
               const summary = summariseActivity({
                 action: r.action,
                 details: r.details,
+                detailsJson: r.detailsJson,
                 actorName: r.user?.name ?? r.user?.email ?? null,
               })
+              // Full payload preserved for power users in the title attribute.
+              const rawDetail = r.detailsJson
+                ? JSON.stringify(r.detailsJson)
+                : r.details
               return (
                 <li
                   key={r.id}
@@ -271,8 +284,8 @@ export default function ActivityPage() {
                   }}
                   className={target ? 'is-clickable' : ''}
                   title={
-                    r.details
-                      ? `${target ? 'Open in drawer — ' : ''}${r.details}`
+                    rawDetail
+                      ? `${target ? 'Open in drawer — ' : ''}${rawDetail}`
                       : target
                       ? 'Open in drawer'
                       : 'No deep-link for this event type'
