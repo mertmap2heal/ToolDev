@@ -381,6 +381,37 @@ prompt produced REQ-1024" (`ai-ready-vision.md` §6.2).
 
 ---
 
+## Regulated Mode (`Project.strictMode`)
+
+`Project.strictMode` (R-6) is the project-wide regulated-mode flag. When
+`true`, regulated modules (CM, Verification, Validation, Certification,
+Safety) enforce audit-grade behaviour — CIs locked by a baseline are
+immutable, baseline approval needs two signers, deviation / waiver
+transitions are append-only, and so on (`kb/configuration-management.md`
+lists the full set). When `false` those constraints degrade to warnings so
+unregulated customers can iterate fast.
+
+- It is **distinct from `strictLifecycleGates`** — that older flag gates only
+  lifecycle-status transitions. `strictMode` is the broad posture switch.
+- The flag has exactly one write path: `PATCH /projects/:id/strict-mode`,
+  guarded by `authenticateToken -> resolveProjectParam ->
+  requireProjectOwnerOrAdmin` and audited (`project:strict-mode-set`). It is
+  deliberately NOT settable via the general `PUT /:id` — one controlled,
+  audited mutation.
+
+A module that **enforces** `strictMode` must:
+
+- **Re-read it server-side** from `Project` — never trust a client-supplied
+  value.
+- **Fail closed** — if the flag cannot be read, treat the project as strict.
+- Read it **in the same transaction** as the gated write, so a concurrent
+  toggle cannot race the enforcement check.
+
+R-6 ships the flag UNUSED — no module enforces it yet; each regulated module
+wires its enforcement in its own ticket.
+
+---
+
 ## Parameterised Queries — No Raw String Interpolation
 
 Always use Prisma's parameterised API. When `$queryRaw` is unavoidable,
