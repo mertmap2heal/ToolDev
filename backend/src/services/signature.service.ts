@@ -10,8 +10,21 @@
 // consumers (Validation / Certification / Requirements sign-off) wire it in
 // their own tickets.
 import { createHash } from 'crypto'
-import type { SignatureEvent } from '@prisma/client'
+import type { Prisma, SignatureEvent } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+
+/**
+ * A Prisma client that can run `signatureEvent` writes. Either the global
+ * singleton or a `$transaction` callback client. Consumers that must record a
+ * signature ATOMICALLY with another write (e.g. the Validation sign-off, which
+ * writes a `ValidationSignOff` row + flips the item status in the SAME
+ * transaction) pass their `tx` here so a signature failure rolls everything
+ * back. Omitting it uses the global client — fine for a standalone signature.
+ */
+export type SignatureWriteClient = Pick<
+  Prisma.TransactionClient,
+  'signatureEvent'
+>
 
 // CFR 21 Part 11 11.200(a)(2): the meaning associated with the signature.
 export const SIGNATURE_MEANINGS = ['review', 'approval', 'responsibility', 'authorship'] as const
@@ -36,19 +49,26 @@ function hashPayload(signedPayload: string): string {
  * signing into a stable string (`signedPayload`); the service computes the
  * canonical sha256 `contentHash` from it — there is one hashing path and a
  * caller cannot pass a forged hash.
+ *
+ * Pass `client` (a `$transaction` callback client) to record the signature
+ * atomically with another write — see `SignatureWriteClient`. Omitted: the
+ * global singleton is used.
  */
-export async function createSignature(input: {
-  linkedEntityType: string
-  linkedEntityId: string
-  signerUserId: string
-  meaningCode: string
-  reauthAt: Date
-  signedPayload: string
-  linkedBaselineId?: string | null
-}): Promise<SignatureEvent> {
+export async function createSignature(
+  input: {
+    linkedEntityType: string
+    linkedEntityId: string
+    signerUserId: string
+    meaningCode: string
+    reauthAt: Date
+    signedPayload: string
+    linkedBaselineId?: string | null
+  },
+  client: SignatureWriteClient = prisma,
+): Promise<SignatureEvent> {
   assertValidMeaning(input.meaningCode)
 
-  return prisma.signatureEvent.create({
+  return client.signatureEvent.create({
     data: {
       linkedEntityType: input.linkedEntityType,
       linkedEntityId: input.linkedEntityId,
@@ -80,24 +100,30 @@ export async function getSignatures(
  * whose supersededById points at the revoked row. The superseded row is never
  * mutated. The new row inherits the revoked row's linked entity so the chain
  * stays queryable via getSignatures().
+ *
+ * Pass `client` to run the revocation atomically with another write — see
+ * `SignatureWriteClient`.
  */
-export async function supersedeSignature(input: {
-  supersededSignatureId: string
-  signerUserId: string
-  meaningCode: string
-  reauthAt: Date
-  signedPayload: string
-}): Promise<SignatureEvent> {
+export async function supersedeSignature(
+  input: {
+    supersededSignatureId: string
+    signerUserId: string
+    meaningCode: string
+    reauthAt: Date
+    signedPayload: string
+  },
+  client: SignatureWriteClient = prisma,
+): Promise<SignatureEvent> {
   assertValidMeaning(input.meaningCode)
 
-  const superseded = await prisma.signatureEvent.findUnique({
+  const superseded = await client.signatureEvent.findUnique({
     where: { id: input.supersededSignatureId },
   })
   if (!superseded) {
     throw new Error(`SignatureEvent ${input.supersededSignatureId} not found`)
   }
 
-  return prisma.signatureEvent.create({
+  return client.signatureEvent.create({
     data: {
       linkedEntityType: superseded.linkedEntityType,
       linkedEntityId: superseded.linkedEntityId,

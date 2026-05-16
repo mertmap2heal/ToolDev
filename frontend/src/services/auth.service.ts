@@ -59,6 +59,20 @@ export const authService = {
     return apiClient.get<User>('/auth/me')
   },
 
+  /**
+   * N-2.1 — CFR 21 Part 11 reauthentication. Re-validates the caller's
+   * password and returns a short-lived (60s) reauth token to be passed in the
+   * `X-Reauth-Token` header on a signing request (sign-off / revoke).
+   */
+  async reauth(
+    password: string,
+  ): Promise<ApiResponse<{ reauthToken: string; expiresAt: string }>> {
+    return apiClient.post<{ reauthToken: string; expiresAt: string }>(
+      '/auth/reauth',
+      { password },
+    )
+  },
+
   logout(): void {
     localStorage.removeItem(TOKEN_KEY)
     sessionStorage.removeItem(TOKEN_KEY)

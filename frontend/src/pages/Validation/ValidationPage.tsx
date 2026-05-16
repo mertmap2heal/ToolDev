@@ -34,7 +34,10 @@ import {
   ValidationDialogHost,
   confirmDialog,
   promptDialog,
+  reauthDialog,
+  type ReauthOutcome,
 } from '../../components/validation/useValidationDialog'
+import { authService } from '../../services/auth.service'
 import {
   METHOD_LABEL,
   METHOD_TOOLTIP,
@@ -2934,6 +2937,7 @@ export default function ValidationPage() {
                 type="button"
                 title={`Sign off ${eligible.length} EXECUTED item${eligible.length === 1 ? '' : 's'} not authored by you`}
                 onClick={async () => {
+                  // Step 1 — collect the signer role.
                   const role = await promptDialog({
                     title: `Sign off ${eligible.length} item${eligible.length === 1 ? '' : 's'}?`,
                     message: `${eligible.length} EXECUTED item${eligible.length === 1 ? '' : 's'} ${eligible.length === 1 ? 'is' : 'are'} eligible. Sign-offs are immutable and recorded on the audit trail. The author of an item cannot sign their own work, so any selected items you authored are skipped.`,
@@ -2943,19 +2947,59 @@ export default function ValidationPage() {
                   })
                   const trimmed = role?.trim()
                   if (!trimmed) return
-                  let ok = 0
-                  let fail = 0
-                  for (const it of eligible) {
-                    const res = await validationService.signOff(projectId, it.id, {
-                      signerRoleLabel: trimmed,
-                    })
-                    if (res.success) ok += 1
-                    else fail += 1
-                  }
+                  // Step 2 — N-2.1 CFR 21 Part 11: re-enter the password. One
+                  // reauth token covers the batch loop (a single user action).
+                  let signResult: { ok: number; fail: number } | null = null
+                  const signed = await reauthDialog({
+                    title: `Sign off ${eligible.length} item${eligible.length === 1 ? '' : 's'}`,
+                    message: `You are signing off ${eligible.length} validation item${eligible.length === 1 ? '' : 's'} as approved. This records a CFR 21 Part 11 electronic signature against your account - it carries the same weight as a handwritten signature and cannot be undone except by an audited revocation.`,
+                    confirmText: `Sign off ${eligible.length}`,
+                    verifyingText: 'Verifying password...',
+                    submittingText: 'Signing off...',
+                    onSubmit: async (password, signalSigning): Promise<ReauthOutcome> => {
+                      const reauth = await authService.reauth(password)
+                      if (!reauth.success || !reauth.data) {
+                        const isWrongPw = /incorrect|password/i.test(reauth.error ?? '')
+                        return {
+                          ok: false,
+                          phase: 'reauth',
+                          message: isWrongPw
+                            ? 'That password is not correct. Re-enter it to sign off.'
+                            : 'Could not verify your password. Check your connection and try again.',
+                        }
+                      }
+                      signalSigning()
+                      let ok = 0
+                      let fail = 0
+                      for (const it of eligible) {
+                        const res = await validationService.signOff(
+                          projectId,
+                          it.id,
+                          { signerRoleLabel: trimmed },
+                          reauth.data.reauthToken,
+                        )
+                        if (res.success) ok += 1
+                        else fail += 1
+                      }
+                      signResult = { ok, fail }
+                      // The batch is reported via toast below; the modal
+                      // closes once at least one sign-off landed. If every
+                      // item failed (e.g. the token lapsed mid-batch) keep
+                      // the modal open so the user can retry with a fresh one.
+                      if (ok === 0 && fail > 0) {
+                        return {
+                          ok: false,
+                          phase: 'action',
+                          message: `Sign-off failed for all ${fail} item${fail === 1 ? '' : 's'}. Re-enter your password to retry.`,
+                        }
+                      }
+                      return { ok: true }
+                    },
+                  })
+                  if (!signed || !signResult) return
+                  const { ok, fail } = signResult
                   if (fail === 0) {
                     toast.success(`Signed off ${ok} item${ok === 1 ? '' : 's'} as "${trimmed}"`)
-                  } else if (ok === 0) {
-                    toast.error(`Sign-off failed for all ${fail} item${fail === 1 ? '' : 's'}`)
                   } else {
                     toast.info(`Signed ${ok}, failed ${fail}. See activity log for details.`)
                   }
@@ -2981,6 +3025,7 @@ export default function ValidationPage() {
                 type="button"
                 title={`Revoke sign-offs on ${revokable.length} VALIDATED item${revokable.length === 1 ? '' : 's'} (demotes back to EXECUTED)`}
                 onClick={async () => {
+                  // Step 1 — collect the optional reason.
                   const reason = await promptDialog({
                     title: `Revoke sign-offs on ${revokable.length} item${revokable.length === 1 ? '' : 's'}?`,
                     message: `All active sign-offs on the selected VALIDATED item${revokable.length === 1 ? '' : 's'} will be superseded by a Revocation record. Items demote back to EXECUTED. The action is captured in the audit log; the original sign-off rows remain visible as superseded.`,
@@ -2990,24 +3035,61 @@ export default function ValidationPage() {
                     allowEmpty: true,
                   })
                   if (reason === null) return
-                  const res = await validationService.bulkRevokeSignOffs(
-                    projectId,
-                    revokable.map((r) => r.id),
-                    reason || null,
-                  )
+                  // Step 2 — N-2.1 CFR 21 Part 11: a revocation is a signing
+                  // event. The reauthentication modal runs the two-phase flow
+                  // (reauth -> bulk-revoke) for the whole batch at once.
+                  let bulkResult:
+                    | { revoked: number; demoted: number; skipped: number }
+                    | null = null
+                  const revoked = await reauthDialog({
+                    title: `Revoke ${revokable.length} sign-off${revokable.length === 1 ? '' : 's'}`,
+                    message: `You are revoking ${revokable.length} sign-off${revokable.length === 1 ? '' : 's'}. This records a CFR 21 Part 11 signature against your account. The original sign-offs stay in the audit trail.`,
+                    confirmText: `Revoke ${revokable.length}`,
+                    verifyingText: 'Verifying password...',
+                    submittingText: 'Revoking...',
+                    onSubmit: async (password, signalSigning): Promise<ReauthOutcome> => {
+                      const reauth = await authService.reauth(password)
+                      if (!reauth.success || !reauth.data) {
+                        const isWrongPw = /incorrect|password/i.test(reauth.error ?? '')
+                        return {
+                          ok: false,
+                          phase: 'reauth',
+                          message: isWrongPw
+                            ? 'That password is not correct. Re-enter it to revoke.'
+                            : 'Could not verify your password. Check your connection and try again.',
+                        }
+                      }
+                      signalSigning()
+                      const res = await validationService.bulkRevokeSignOffs(
+                        projectId,
+                        revokable.map((r) => r.id),
+                        reason || null,
+                        reauth.data.reauthToken,
+                      )
+                      if (res.success && res.data) {
+                        bulkResult = res.data
+                        return { ok: true }
+                      }
+                      const timedOut = /reauth|timed out|expired/i.test(res.error ?? '')
+                      return {
+                        ok: false,
+                        phase: 'action',
+                        message: timedOut
+                          ? 'Your confirmation timed out. Re-enter your password to revoke.'
+                          : `Revoke failed. ${res.error ?? 'Please try again.'}`,
+                      }
+                    },
+                  })
+                  if (!revoked || !bulkResult) return
                   setSelectedIds(new Set())
                   refetchAll()
-                  if (res.success && res.data) {
-                    const { revoked, demoted, skipped } = res.data
-                    if (revoked === 0 && skipped > 0) {
-                      toast.info(`Nothing to revoke (${skipped} item${skipped === 1 ? '' : 's'} had no active sign-offs)`)
-                    } else {
-                      toast.success(
-                        `Revoked ${revoked} sign-off${revoked === 1 ? '' : 's'}, demoted ${demoted} item${demoted === 1 ? '' : 's'} to EXECUTED${skipped ? `, skipped ${skipped}` : ''}`,
-                      )
-                    }
+                  const { revoked: n, demoted, skipped } = bulkResult
+                  if (n === 0 && skipped > 0) {
+                    toast.info(`Nothing to revoke (${skipped} item${skipped === 1 ? '' : 's'} had no active sign-offs)`)
                   } else {
-                    toast.error(res.error ?? 'Bulk-revoke failed')
+                    toast.success(
+                      `Revoked ${n} sign-off${n === 1 ? '' : 's'}, demoted ${demoted} item${demoted === 1 ? '' : 's'} to EXECUTED${skipped ? `, skipped ${skipped}` : ''}`,
+                    )
                   }
                 }}
                 className="b"

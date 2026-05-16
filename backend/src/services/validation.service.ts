@@ -4,6 +4,30 @@ import { randomUUID, createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { isAdminUser } from '../lib/adminAuth'
+import { createSignature, supersedeSignature } from './signature.service'
+
+// N-2.1: the active sign-off SignatureEvent rows for a ValidationItem.
+//
+// SignatureEvent's append-only revocation chain (R-3): a sign-off is a row
+// with `supersededById === null`; revoking it INSERTs a NEW row whose
+// `supersededById` points back at the revoked row. So a row is either:
+//   - a sign-off            (supersededById === null), or
+//   - a revocation of one   (supersededById === <the revoked row's id>).
+// An "active sign-off" is therefore a sign-off row (supersededById === null)
+// whose own id has NOT been pointed at by any revocation row. A bare
+// `supersededById: null` filter is wrong twice over — it matches a revoked
+// sign-off (still null), and excludes nothing for the revocation rows.
+async function activeSignaturesFor(itemId: string) {
+  const all = await prisma.signatureEvent.findMany({
+    where: { linkedEntityType: 'ValidationItem', linkedEntityId: itemId },
+    orderBy: { signedAt: 'asc' },
+  })
+  // Ids that some revocation row supersedes.
+  const revokedIds = new Set(
+    all.map((s) => s.supersededById).filter((v): v is string => v != null),
+  )
+  return all.filter((s) => s.supersededById === null && !revokedIds.has(s.id))
+}
 
 // Method types and statuses (string-typed for DB compatibility, validated at controller boundary)
 export const METHOD_TYPES = [
@@ -659,6 +683,32 @@ export async function updateItem(
   if (!existing) return null
   if (existing.deletedAt) throw new Error('cannot edit a deleted item')
 
+  // N-2.1 (AC #3, CFR 21 Part 11): a validation item with an active
+  // (non-superseded) electronic signature is immutable — the SignatureEvent's
+  // contentHash attests its content, so a silent content edit would invalidate
+  // the signature. Gate on SignatureEvent (not ValidationSignOff) so the lock
+  // and the hash describe the same fact. Only CONTENT fields are frozen; a pure
+  // status change is still allowed so revoke's VALIDATED -> EXECUTED demote
+  // works (revoke supersedes the signature, which lifts the lock anyway).
+  const editsContent =
+    payload.title !== undefined ||
+    payload.description !== undefined ||
+    payload.methodType !== undefined ||
+    payload.targetMilestone !== undefined ||
+    payload.criteria !== undefined ||
+    payload.priority !== undefined ||
+    payload.tags !== undefined ||
+    payload.dueDate !== undefined ||
+    payload.ownerUserId !== undefined
+  if (editsContent) {
+    const activeSigs = await activeSignaturesFor(id)
+    if (activeSigs.length > 0) {
+      throw new Error(
+        'cannot edit a validation item with an active sign-off — revoke the sign-off first',
+      )
+    }
+  }
+
   if (payload.methodType && !METHOD_TYPES.includes(payload.methodType as ValidationMethodType))
     throw new Error('invalid methodType')
   if (
@@ -1283,11 +1333,48 @@ export async function listValidationApprovers(projectId: string) {
     .filter((u): u is { id: string; name: string; email: string } => !!u)
 }
 
+// N-2.1 (CFR 21 Part 11): the canonical, stable serialisation of the
+// ValidationItem content being attested by an electronic signature. Keys are
+// in a FIXED order so re-serialising the item later and re-hashing proves
+// whether the signed content changed — this string is the chain-of-custody
+// anchor that signature.service hashes into `contentHash`. `criteria` is a
+// JSON column; it is included verbatim (the criteria array order is itself
+// stable) so a criterion edit also changes the hash.
+function canonicalSignedPayload(item: {
+  id: string
+  key: string
+  title: string
+  description: string | null
+  methodType: string
+  targetMilestone: string
+  status: string
+  priority: string
+  criteria: unknown
+  signerRoleLabel: string
+}): string {
+  return JSON.stringify({
+    id: item.id,
+    key: item.key,
+    title: item.title,
+    description: item.description,
+    methodType: item.methodType,
+    targetMilestone: item.targetMilestone,
+    status: item.status,
+    priority: item.priority,
+    criteria: item.criteria ?? null,
+    signerRoleLabel: item.signerRoleLabel,
+  })
+}
+
 export async function signOff(
   projectId: string,
   itemId: string,
   signerUserId: string,
   payload: SignOffPayload,
+  // N-2.1: the server-stamped reauthentication timestamp (the controller passes
+  // `new Date()` at sign time — never a client value). Recorded on the
+  // SignatureEvent. Optional so existing internal callers / tests still compile.
+  reauthAt: Date = new Date(),
 ) {
   if (!payload.signerRoleLabel?.trim()) throw new Error('signerRoleLabel is required')
   const item = await prisma.validationItem.findFirst({ where: { id: itemId, projectId } })
@@ -1313,12 +1400,13 @@ export async function signOff(
     }
   }
 
+  const trimmedRole = payload.signerRoleLabel.trim()
   const result = await prisma.$transaction(async (tx) => {
     const signOff = await tx.validationSignOff.create({
       data: {
         validationItemId: itemId,
         signerUserId,
-        signerRoleLabel: payload.signerRoleLabel.trim(),
+        signerRoleLabel: trimmedRole,
         comment: payload.comment ?? null,
       },
       include: { signer: { select: { id: true, name: true, email: true } } },
@@ -1327,6 +1415,24 @@ export async function signOff(
       where: { id: itemId },
       data: { status: 'VALIDATED' },
     })
+    // N-2.1: record the CFR 21 Part 11 SignatureEvent in the SAME transaction
+    // — a signature failure rolls back the ValidationSignOff write + the status
+    // flip (tx-atomicity is non-negotiable). The ValidationSignOff row stays
+    // (dual-record); the full migration to SignatureEvent-only is ticket V-L1.
+    // `meaningCode='approval'` — a sign-off flips status -> VALIDATED, an
+    // approval act. The signer is `signerUserId` (derived from req.user by the
+    // controller), never the request body.
+    await createSignature(
+      {
+        linkedEntityType: 'ValidationItem',
+        linkedEntityId: itemId,
+        signerUserId,
+        meaningCode: 'approval',
+        reauthAt,
+        signedPayload: canonicalSignedPayload({ ...item, signerRoleLabel: trimmedRole }),
+      },
+      tx,
+    )
     return signOff
   })
 
@@ -1342,6 +1448,9 @@ export async function revokeSignOff(
   itemId: string,
   signOffId: string,
   userId: string,
+  // N-2.1: server-stamped reauthentication timestamp for the revocation's
+  // SignatureEvent. The controller passes `new Date()`.
+  reauthAt: Date = new Date(),
 ) {
   const item = await prisma.validationItem.findFirst({ where: { id: itemId, projectId } })
   if (!item) return null
@@ -1350,6 +1459,12 @@ export async function revokeSignOff(
   })
   if (!previous) return null
   if (previous.supersededById) throw new Error('sign-off already superseded')
+
+  // N-2.1: the active (non-revoked) SignatureEvent rows for this item — the
+  // rows recorded at sign time. supersedeSignature appends a superseding row to
+  // each inside the transaction below — dual-record with the ValidationSignOff
+  // supersession. A revocation is itself a Part 11 signing-meaning event.
+  const activeSigs = await activeSignaturesFor(itemId)
 
   const result = await prisma.$transaction(async (tx) => {
     const revocation = await tx.validationSignOff.create({
@@ -1364,6 +1479,21 @@ export async function revokeSignOff(
       where: { id: previous.id },
       data: { supersededById: revocation.id },
     })
+    for (const sig of activeSigs) {
+      await supersedeSignature(
+        {
+          supersededSignatureId: sig.id,
+          signerUserId: userId,
+          meaningCode: 'approval',
+          reauthAt,
+          signedPayload: canonicalSignedPayload({
+            ...item,
+            signerRoleLabel: 'Revocation',
+          }),
+        },
+        tx,
+      )
+    }
     // Demote item back to EXECUTED so a new sign-off can be requested
     const remaining = await tx.validationSignOff.count({
       where: { validationItemId: itemId, supersededById: null, NOT: { id: revocation.id } },
@@ -1390,6 +1520,9 @@ export async function bulkRevokeSignOffs(
   itemIds: string[],
   userId: string,
   reason: string | null,
+  // N-2.1: one server-stamped reauthentication timestamp covers the whole
+  // batch (a single user action). Each superseding SignatureEvent records it.
+  reauthAt: Date = new Date(),
 ) {
   if (!Array.isArray(itemIds) || itemIds.length === 0) {
     return { revoked: 0, demoted: 0, skipped: 0 }
@@ -1405,10 +1538,11 @@ export async function bulkRevokeSignOffs(
       throw e
     }
   }
-  // Lock to items in this project so we never leak across boundaries.
+  // Lock to items in this project so we never leak across boundaries. The full
+  // item content is loaded so the superseding SignatureEvent can carry the
+  // canonical content hash.
   const items = await prisma.validationItem.findMany({
     where: { id: { in: itemIds }, projectId },
-    select: { id: true },
   })
   let revoked = 0
   let demoted = 0
@@ -1422,6 +1556,10 @@ export async function bulkRevokeSignOffs(
       skipped += 1
       continue
     }
+    // N-2.1: the active (non-revoked) SignatureEvent rows for this item —
+    // superseded inside the transaction below, dual-record with the
+    // ValidationSignOff chain.
+    const activeSigs = await activeSignaturesFor(it.id)
     await prisma.$transaction(async (tx) => {
       for (const a of active) {
         const revocation = await tx.validationSignOff.create({
@@ -1444,6 +1582,22 @@ export async function bulkRevokeSignOffs(
           reason: reason ?? null,
           bulk: true,
         })
+      }
+      // N-2.1: append a superseding SignatureEvent for each active signature.
+      for (const sig of activeSigs) {
+        await supersedeSignature(
+          {
+            supersededSignatureId: sig.id,
+            signerUserId: userId,
+            meaningCode: 'approval',
+            reauthAt,
+            signedPayload: canonicalSignedPayload({
+              ...it,
+              signerRoleLabel: 'Revocation',
+            }),
+          },
+          tx,
+        )
       }
       // Demote to EXECUTED if no active sign-offs remain.
       const remaining = await tx.validationSignOff.count({

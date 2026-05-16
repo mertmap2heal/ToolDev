@@ -69,7 +69,21 @@ class ApiClient {
             data.code === 'PROJECT_NOT_FOUND' ||
             data.code === 'AI_MISSING_PROJECT_ID'
           )
-          if (!nonAuthCode) {
+          // N-2.1: a 401 on a CFR 21 Part 11 reauthentication-flow request
+          // means the REAUTH credential failed (a wrong password on
+          // POST /auth/reauth, or a lapsed X-Reauth-Token on a sign-off
+          // request) — NOT that the session expired. Wiping the session token
+          // and bouncing to /login here would close the signing modal on a
+          // simple wrong-password retry. Detect such requests and skip the
+          // token wipe; the calling code surfaces the error inline instead.
+          const cfg = error.config
+          const isReauthFlow =
+            cfg?.url?.includes('/auth/reauth') === true ||
+            (cfg?.headers != null &&
+              Object.keys(cfg.headers).some(
+                (h) => h.toLowerCase() === 'x-reauth-token',
+              ))
+          if (!nonAuthCode && !isReauthFlow) {
             const token = safeReadToken()
             if (token) {
               console.log('Token is invalid or expired, removing from storage')

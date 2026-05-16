@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
-import { authenticateToken } from '../middleware/auth.middleware'
+import { authenticateToken, requireReauth } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrAdmin.middleware'
@@ -140,11 +140,25 @@ router.delete(
   unlinkRequirement,
 )
 
-// Sign-offs
+// Sign-offs.
+// N-2.1 (CFR 21 Part 11): sign-off + revoke + bulk-revoke are all signing-meaning
+// events, so each is gated by `requireReauth` — the caller must have proved
+// password possession in the last 60s via POST /auth/reauth and present the
+// minted token in the X-Reauth-Token header. requireReauth runs after the
+// global authenticateToken + the projectId-scoped requireProjectMember; it is
+// pure header validation with no body coupling.
 router.get('/projects/:projectId/items/:id/sign-offs', listSignOffs)
-router.post('/projects/:projectId/items/:id/sign-off', signOffItem)
-router.post('/projects/:projectId/items/:id/sign-off/:signOffId/revoke', revokeSignOff)
-router.post('/projects/:projectId/sign-offs/bulk-revoke', bulkRevokeSignOffs)
+router.post('/projects/:projectId/items/:id/sign-off', requireReauth, signOffItem)
+router.post(
+  '/projects/:projectId/items/:id/sign-off/:signOffId/revoke',
+  requireReauth,
+  revokeSignOff,
+)
+router.post(
+  '/projects/:projectId/sign-offs/bulk-revoke',
+  requireReauth,
+  bulkRevokeSignOffs,
+)
 
 // Evidence (reuses VerEvidence + VerEvidenceLink with linkedEntityType='ValidationItem')
 router.get('/projects/:projectId/items/:id/evidence', listEvidence)

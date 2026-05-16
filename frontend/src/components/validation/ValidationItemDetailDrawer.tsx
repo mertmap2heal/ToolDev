@@ -17,7 +17,8 @@ import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
 import RequirementHoverCard from './RequirementHoverCard'
 import ValidationCommentsSection from './ValidationCommentsSection'
-import { confirmDialog, promptDialog } from './useValidationDialog'
+import { confirmDialog, promptDialog, reauthDialog, type ReauthOutcome } from './useValidationDialog'
+import { authService } from '../../services/auth.service'
 import {
   validationService,
   CRITERION_OUTCOMES,
@@ -437,18 +438,113 @@ export default function ValidationItemDetailDrawer({
   const submitSignOff = async () => {
     if (!itemId || !roleLabel.trim()) return
     setError(null)
-    const res = await validationService.signOff(projectId, itemId, {
-      signerRoleLabel: roleLabel.trim(),
-      comment: comment.trim() || undefined,
+    const itemKey = draft?.key ?? 'this item'
+    const itemTitle = draft?.title ?? itemKey
+    // N-2.1 — CFR 21 Part 11: a sign-off is an electronic signature. Open the
+    // reauthentication modal; it runs the two-phase flow (reauth -> sign-off)
+    // and stays open on any error.
+    const signed = await reauthDialog({
+      title: `Sign off ${itemKey}`,
+      message: `You are signing off "${itemTitle}" as approved. This records a CFR 21 Part 11 electronic signature against your account - it carries the same weight as a handwritten signature and cannot be undone except by an audited revocation.`,
+      confirmText: 'Sign off',
+      verifyingText: 'Verifying password...',
+      submittingText: 'Signing off...',
+      onSubmit: async (password, signalSigning): Promise<ReauthOutcome> => {
+        // Phase 1 — reauthenticate.
+        const reauth = await authService.reauth(password)
+        if (!reauth.success || !reauth.data) {
+          // A 401 is a wrong password; anything else is a connectivity fault.
+          const isWrongPw = /incorrect|password/i.test(reauth.error ?? '')
+          return {
+            ok: false,
+            phase: 'reauth',
+            message: isWrongPw
+              ? 'That password is not correct. Re-enter it to sign off.'
+              : 'Could not verify your password. Check your connection and try again.',
+          }
+        }
+        // Phase 2 — the gated sign-off request.
+        signalSigning()
+        const res = await validationService.signOff(
+          projectId,
+          itemId,
+          {
+            signerRoleLabel: roleLabel.trim(),
+            comment: comment.trim() || undefined,
+          },
+          reauth.data.reauthToken,
+        )
+        if (res.success) return { ok: true }
+        // A 401 here means the reauth token lapsed (the 60s window); any other
+        // status is a genuine sign-off rejection — surface the server text.
+        const timedOut = /reauth|timed out|expired/i.test(res.error ?? '')
+        return {
+          ok: false,
+          phase: 'action',
+          message: timedOut
+            ? 'Your confirmation timed out. Re-enter your password to sign off.'
+            : `Sign-off failed. ${res.error ?? 'Please try again.'}`,
+        }
+      },
     })
-    if (res.success) {
+    if (signed) {
       setSignOffOpen(false)
       setRoleLabel('')
       setComment('')
       reload()
-    } else {
-      setError(res.error || 'Sign-off failed')
     }
+  }
+
+  // N-2.1 — CFR 21 Part 11: revoking a sign-off is itself a signing-meaning
+  // event. It reuses the SAME reauthentication modal as sign-off (parameterised
+  // for the revoke copy), replacing the old plain confirm dialog.
+  const handleRevokeSignOff = async (signOff: {
+    id: string
+    signerRoleLabel: string
+    signer?: { name: string }
+  }) => {
+    if (!itemId) return
+    setError(null)
+    const itemKey = draft?.key ?? 'this item'
+    const itemTitle = draft?.title ?? itemKey
+    const signerName = signOff.signer?.name ?? 'this signer'
+    const revoked = await reauthDialog({
+      title: `Revoke sign-off on ${itemKey}`,
+      message: `You are revoking ${signerName}'s sign-off on "${itemTitle}". This records a CFR 21 Part 11 signature against your account. The original sign-off stays in the audit trail; if it is the last active sign-off the item returns to Executed.`,
+      confirmText: 'Revoke sign-off',
+      verifyingText: 'Verifying password...',
+      submittingText: 'Revoking...',
+      onSubmit: async (password, signalSigning): Promise<ReauthOutcome> => {
+        const reauth = await authService.reauth(password)
+        if (!reauth.success || !reauth.data) {
+          const isWrongPw = /incorrect|password/i.test(reauth.error ?? '')
+          return {
+            ok: false,
+            phase: 'reauth',
+            message: isWrongPw
+              ? 'That password is not correct. Re-enter it to revoke.'
+              : 'Could not verify your password. Check your connection and try again.',
+          }
+        }
+        signalSigning()
+        const res = await validationService.revokeSignOff(
+          projectId,
+          itemId,
+          signOff.id,
+          reauth.data.reauthToken,
+        )
+        if (res.success) return { ok: true }
+        const timedOut = /reauth|timed out|expired/i.test(res.error ?? '')
+        return {
+          ok: false,
+          phase: 'action',
+          message: timedOut
+            ? 'Your confirmation timed out. Re-enter your password to revoke.'
+            : `Revoke failed. ${res.error ?? 'Please try again.'}`,
+        }
+      },
+    })
+    if (revoked) reload()
   }
 
   const handleDelete = async () => {
@@ -1421,22 +1517,7 @@ export default function ValidationItemDetailDrawer({
                         {!s.supersededById && (
                           <button
                             type="button"
-                            onClick={async () => {
-                              if (!itemId) return
-                              const ok = await confirmDialog({
-                                title: 'Revoke sign-off?',
-                                message: `Revoke ${s.signer?.name ?? 'this'}'s sign-off as ${s.signerRoleLabel}. The original record stays in the audit trail (struck-through). If this is the last active sign-off, the item drops back to EXECUTED so a fresh approval can be requested.`,
-                                confirmText: 'Revoke sign-off',
-                                variant: 'warning',
-                              })
-                              if (!ok) return
-                              const res = await validationService.revokeSignOff(projectId, itemId, s.id)
-                              if (res.success) {
-                                reload()
-                              } else {
-                                setError(res.error ?? 'Revoke failed')
-                              }
-                            }}
+                            onClick={() => handleRevokeSignOff(s)}
                             className="pv-icon-btn"
                             title="Revoke this sign-off"
                             aria-label={`Revoke sign-off by ${s.signer?.name ?? 'unknown'} as ${s.signerRoleLabel}`}
