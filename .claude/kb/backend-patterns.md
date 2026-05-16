@@ -147,6 +147,35 @@ A sign-off endpoint derives the signer from `req.user` (never the body), runs
 `requireReauth`, then calls `createSignature`. Do not write a per-module
 sign-off table — consume `SignatureEvent` via `linkedEntityType`.
 
+### Discipline-gated sign-off authorisation (`requireEngineeringRole`)
+
+`EngineeringRole` (the project-scoped discipline catalogue — Verification
+Engineer, Configuration Manager, CCB Member, ...) gates **who may sign an
+artefact**. `AdminRole` gates **whether the endpoint can be called at all**.
+Different primitives — do not conflate them. R-7 landed the discipline gate:
+
+- `requireEngineeringRole(roleNames: string[], opts?: { projectIdParam?: string })`
+  is a middleware **factory**. Attach it after `authenticateToken` (and after
+  `requireReauth` on a signing endpoint). It resolves the project id from the
+  route (`opts.projectIdParam`, else `:projectId`, else `:id`) and admits the
+  caller only if they hold one of `roleNames` via `ProjectUserEngineeringRole`
+  on that project.
+- A platform admin (`SUPERIOR_ADMIN` / `COMPANY_ADMIN` / `ADMIN_EMAILS`)
+  bypasses — break-glass. A project **owner** does **not** bypass: ownership
+  is a management capability, not an engineering discipline.
+- Fails closed — DB error returns 500, empty `roleNames` returns 403, a
+  missing project id returns 500. No path reaches `next()` without a positive
+  decision.
+- It is a *discipline* gate, not a *membership* gate. A consumer must compose
+  a current-membership check ahead of it — a stale `ProjectUserEngineeringRole`
+  row could otherwise authorise a signature after the user left the project.
+
+The role catalogue is one shared constant — `PREDEFINED_ENGINEERING_ROLES` in
+`lib/engineeringRoles.ts` — seeded by `npm run seed:engineering-roles`
+(idempotent, upsert-by-name; wired into `start.ps1`). The full signing chain
+is `authenticateToken` -> `requireReauth` -> `requireEngineeringRole([...])`
+-> `createSignature`.
+
 ---
 
 ## Tenant Scope — `requireAdmin` Is Not a Tenant Filter
