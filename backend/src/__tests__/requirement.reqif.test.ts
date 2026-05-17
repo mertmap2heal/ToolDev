@@ -2,10 +2,14 @@
  * ReqIF import integration tests (#99).
  *
  * POST /api/v1/requirements/:projectId/import/reqif parses a ReqIF XML
- * string, creates Requirements and TraceLinks. Before this suite no
- * vitest existed for either the controller or the underlying parser
- * (services/reqifParser.ts). A broken import is a launch blocker for
- * customers onboarding from DOORS / PTC Integrity / DOORS Next.
+ * string, creates Requirements and TraceLinks. A broken import is a launch
+ * blocker for customers onboarding from DOORS / PTC Integrity / DOORS Next.
+ *
+ * NX-1 (#437): the controller now routes through the converged
+ * `services/reqif/` module (was `services/reqifParser.ts`). This suite guards
+ * the route contract — its fixtures use the legacy `<DEFINITION><IDENTIFIER>`
+ * attribute shape, which the new parser still supports. Full dialect coverage
+ * lives in `reqif.conformance.test.ts`.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
@@ -13,11 +17,10 @@ import jwt from 'jsonwebtoken'
 import { app } from '../server'
 import { prisma } from '../lib/prisma'
 
-// The in-tree parser (services/reqifParser.ts) reads the attribute
-// DEFINITION via a direct <IDENTIFIER> child rather than the standard
-// ATTRIBUTE-DEFINITION-*-REF wrapping. Tests use that same shape so we
-// exercise the controller path against behaviour that actually works
-// today — full-spec DOORS/OSLC compatibility is a separate concern.
+// These fixtures use the legacy DEFINITION-via-direct-<IDENTIFIER> shape.
+// The NX-1 parser (services/reqif/parser.ts) supports both that shape and
+// the standard ATTRIBUTE-DEFINITION-*-REF wrapping; full-spec DOORS / Polarion
+// / Jama dialect coverage lives in reqif.conformance.test.ts.
 const MINIMAL_REQIF = (identifier: string, longName: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <REQ-IF>
   <SPEC-OBJECT>
@@ -125,9 +128,13 @@ describe('ReqIF import endpoint (#99)', () => {
     expect(persisted?.description).toMatch(/Imported description/)
   })
 
-  it('skips a requirement whose identifier already exists in the project', async () => {
+  it('updates a requirement whose identifier already exists in the project', async () => {
+    // NX-1 (#437): the converged importer matches an existing requirement by
+    // requirementId and UPDATES it (the legacy parser silently skipped it).
+    // An update is the correct round-trip behaviour — re-importing an export
+    // must not duplicate, and a changed upstream requirement must propagate.
     const identifier = `REQ-EXISTS-${stamp}`
-    await prisma.requirement.create({
+    const before = await prisma.requirement.create({
       data: {
         projectId,
         requirementId: identifier,
@@ -142,15 +149,19 @@ describe('ReqIF import endpoint (#99)', () => {
     const res = await request(app)
       .post(`/api/v1/requirements/${projectId}/import/reqif`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ content: MINIMAL_REQIF(identifier, 'Should be skipped') })
+      .send({ content: MINIMAL_REQIF(identifier, 'Updated via ReqIF') })
     expect(res.status).toBe(200)
-    expect(res.body.data.skipped).toBeGreaterThanOrEqual(1)
+    expect(res.body.data.updated).toBeGreaterThanOrEqual(1)
+    expect(res.body.data.created).toBe(0)
 
-    const still = await prisma.requirement.findFirst({
+    // The same row was updated in place — no duplicate created.
+    const rows = await prisma.requirement.findMany({
       where: { projectId, requirementId: identifier, deletedAt: null },
-      select: { title: true },
+      select: { id: true, title: true },
     })
-    expect(still?.title).toBe('Pre-existing')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe(before.id)
+    expect(rows[0].title).toBe('Updated via ReqIF')
   })
 
   it('creates a TraceLink from a SPEC-RELATION element', async () => {

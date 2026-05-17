@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Representative Jama Connect ReqIF export fixture (NX-1 conformance corpus).
+  Exercises: the `reqif:` prefix, TWO distinct SPEC-OBJECT-TYPEs (a "Functional
+  Requirement" type and a "Test Case" type) in one document, and a "Verifies"
+  typed SPEC-RELATION across the two types. Faithful representative fixture,
+  not a real licensed-tool export.
+-->
+<reqif:REQ-IF xmlns:reqif="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
+              xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <reqif:THE-HEADER>
+    <reqif:REQ-IF-HEADER IDENTIFIER="hdr-jama-1">
+      <reqif:CREATION-TIME>2026-02-03T11:00:00.000Z</reqif:CREATION-TIME>
+      <reqif:REQ-IF-VERSION>1.2</reqif:REQ-IF-VERSION>
+      <reqif:SOURCE-TOOL-ID>Jama Connect</reqif:SOURCE-TOOL-ID>
+      <reqif:TITLE>Landing Gear V&amp;V</reqif:TITLE>
+    </reqif:REQ-IF-HEADER>
+  </reqif:THE-HEADER>
+  <reqif:CORE-CONTENT>
+    <reqif:REQ-IF-CONTENT>
+      <reqif:DATATYPES>
+        <reqif:DATATYPE-DEFINITION-STRING IDENTIFIER="jdt-str" LONG-NAME="String" MAX-LENGTH="16000"/>
+        <reqif:DATATYPE-DEFINITION-XHTML IDENTIFIER="jdt-xhtml" LONG-NAME="XHTML"/>
+      </reqif:DATATYPES>
+      <reqif:SPEC-TYPES>
+        <reqif:SPEC-OBJECT-TYPE IDENTIFIER="jsot-req" LONG-NAME="Functional Requirement">
+          <reqif:SPEC-ATTRIBUTES>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="jad-r-id" LONG-NAME="Name">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>jdt-str</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="jad-r-desc" LONG-NAME="Description">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-XHTML-REF>jdt-xhtml</reqif:DATATYPE-DEFINITION-XHTML-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-XHTML>
+          </reqif:SPEC-ATTRIBUTES>
+        </reqif:SPEC-OBJECT-TYPE>
+        <reqif:SPEC-OBJECT-TYPE IDENTIFIER="jsot-tc" LONG-NAME="Test Case">
+          <reqif:SPEC-ATTRIBUTES>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="jad-tc-id" LONG-NAME="Name">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>jdt-str</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="jad-tc-steps" LONG-NAME="Description">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-XHTML-REF>jdt-xhtml</reqif:DATATYPE-DEFINITION-XHTML-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-XHTML>
+          </reqif:SPEC-ATTRIBUTES>
+        </reqif:SPEC-OBJECT-TYPE>
+        <reqif:SPEC-RELATION-TYPE IDENTIFIER="jsrt-verifies" LONG-NAME="Verifies"/>
+        <reqif:SPECIFICATION-TYPE IDENTIFIER="jspectype" LONG-NAME="Item Set"/>
+      </reqif:SPEC-TYPES>
+      <reqif:SPEC-OBJECTS>
+        <reqif:SPEC-OBJECT IDENTIFIER="jso-req-1" LONG-NAME="Landing gear deploy time">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>jsot-req</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="JAMA-FR-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>jad-r-id</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>jad-r-desc</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>The landing gear shall fully deploy within <xhtml:b>10 seconds</xhtml:b>.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+        <reqif:SPEC-OBJECT IDENTIFIER="jso-tc-1" LONG-NAME="Deploy timing test">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>jsot-tc</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="JAMA-TC-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>jad-tc-id</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>jad-tc-steps</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>Measure gear deploy time with a calibrated stopwatch.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+      </reqif:SPEC-OBJECTS>
+      <reqif:SPEC-RELATIONS>
+        <reqif:SPEC-RELATION IDENTIFIER="jsr-1">
+          <reqif:TYPE><reqif:SPEC-RELATION-TYPE-REF>jsrt-verifies</reqif:SPEC-RELATION-TYPE-REF></reqif:TYPE>
+          <reqif:SOURCE><reqif:SPEC-OBJECT-REF>jso-tc-1</reqif:SPEC-OBJECT-REF></reqif:SOURCE>
+          <reqif:TARGET><reqif:SPEC-OBJECT-REF>jso-req-1</reqif:SPEC-OBJECT-REF></reqif:TARGET>
+        </reqif:SPEC-RELATION>
+      </reqif:SPEC-RELATIONS>
+      <reqif:SPECIFICATIONS>
+        <reqif:SPECIFICATION IDENTIFIER="jspec-1" LONG-NAME="Landing Gear V&amp;V">
+          <reqif:TYPE><reqif:SPECIFICATION-TYPE-REF>jspectype</reqif:SPECIFICATION-TYPE-REF></reqif:TYPE>
+          <reqif:CHILDREN>
+            <reqif:SPEC-HIERARCHY IDENTIFIER="jsh-1">
+              <reqif:OBJECT><reqif:SPEC-OBJECT-REF>jso-req-1</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+            </reqif:SPEC-HIERARCHY>
+            <reqif:SPEC-HIERARCHY IDENTIFIER="jsh-2">
+              <reqif:OBJECT><reqif:SPEC-OBJECT-REF>jso-tc-1</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+            </reqif:SPEC-HIERARCHY>
+          </reqif:CHILDREN>
+        </reqif:SPECIFICATION>
+      </reqif:SPECIFICATIONS>
+    </reqif:REQ-IF-CONTENT>
+  </reqif:CORE-CONTENT>
+</reqif:REQ-IF>

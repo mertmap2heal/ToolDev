@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Representative IBM DOORS Next ReqIF export fixture (NX-1 conformance corpus).
+  Authored to exercise the DOORS dialect quirks: the `reqif:` namespace prefix
+  on every element, a nested SPEC-HIERARCHY tree, an ENUMERATION datatype,
+  and a typed SPEC-RELATION ("Satisfies").
+  NOTE: this is a faithful representative fixture, not a real export from a
+  licensed DOORS Next instance — real vendor corpora should be added later.
+-->
+<reqif:REQ-IF xmlns:reqif="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
+              xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <reqif:THE-HEADER>
+    <reqif:REQ-IF-HEADER IDENTIFIER="_hdr-doors-1">
+      <reqif:CREATION-TIME>2026-02-01T09:00:00.000Z</reqif:CREATION-TIME>
+      <reqif:REQ-IF-VERSION>1.2</reqif:REQ-IF-VERSION>
+      <reqif:SOURCE-TOOL-ID>IBM DOORS Next</reqif:SOURCE-TOOL-ID>
+      <reqif:TITLE>Flight Control Requirements</reqif:TITLE>
+    </reqif:REQ-IF-HEADER>
+  </reqif:THE-HEADER>
+  <reqif:CORE-CONTENT>
+    <reqif:REQ-IF-CONTENT>
+      <reqif:DATATYPES>
+        <reqif:DATATYPE-DEFINITION-STRING IDENTIFIER="_dt-string" LONG-NAME="String" MAX-LENGTH="32000"/>
+        <reqif:DATATYPE-DEFINITION-XHTML IDENTIFIER="_dt-xhtml" LONG-NAME="XHTML"/>
+        <reqif:DATATYPE-DEFINITION-ENUMERATION IDENTIFIER="_dt-priority" LONG-NAME="Priority">
+          <reqif:SPECIFIED-VALUES>
+            <reqif:ENUM-VALUE IDENTIFIER="_ev-low" LONG-NAME="low">
+              <reqif:PROPERTIES><reqif:EMBEDDED-VALUE KEY="0" OTHER-CONTENT=""/></reqif:PROPERTIES>
+            </reqif:ENUM-VALUE>
+            <reqif:ENUM-VALUE IDENTIFIER="_ev-high" LONG-NAME="high">
+              <reqif:PROPERTIES><reqif:EMBEDDED-VALUE KEY="1" OTHER-CONTENT=""/></reqif:PROPERTIES>
+            </reqif:ENUM-VALUE>
+          </reqif:SPECIFIED-VALUES>
+        </reqif:DATATYPE-DEFINITION-ENUMERATION>
+      </reqif:DATATYPES>
+      <reqif:SPEC-TYPES>
+        <reqif:SPEC-OBJECT-TYPE IDENTIFIER="_sot-req" LONG-NAME="Requirement">
+          <reqif:SPEC-ATTRIBUTES>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_ad-foreignid" LONG-NAME="ReqIF.ForeignID">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>_dt-string</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_ad-name" LONG-NAME="ReqIF.Name">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>_dt-string</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_ad-text" LONG-NAME="ReqIF.Text">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-XHTML-REF>_dt-xhtml</reqif:DATATYPE-DEFINITION-XHTML-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-XHTML>
+            <reqif:ATTRIBUTE-DEFINITION-ENUMERATION IDENTIFIER="_ad-priority" LONG-NAME="Priority">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-ENUMERATION-REF>_dt-priority</reqif:DATATYPE-DEFINITION-ENUMERATION-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-ENUMERATION>
+          </reqif:SPEC-ATTRIBUTES>
+        </reqif:SPEC-OBJECT-TYPE>
+        <reqif:SPEC-RELATION-TYPE IDENTIFIER="_srt-satisfies" LONG-NAME="Satisfies"/>
+        <reqif:SPECIFICATION-TYPE IDENTIFIER="_spectype" LONG-NAME="Requirements Module"/>
+      </reqif:SPEC-TYPES>
+      <reqif:SPEC-OBJECTS>
+        <reqif:SPEC-OBJECT IDENTIFIER="_so-sys-1" LONG-NAME="System parent requirement">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>_sot-req</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="DOORS-SYS-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>_ad-foreignid</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="System parent requirement">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>_ad-name</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>_ad-text</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>The aircraft <xhtml:b>shall</xhtml:b> maintain controlled flight.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+            <reqif:ATTRIBUTE-VALUE-ENUMERATION>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-ENUMERATION-REF>_ad-priority</reqif:ATTRIBUTE-DEFINITION-ENUMERATION-REF></reqif:DEFINITION>
+              <reqif:VALUES><reqif:ENUM-VALUE-REF>_ev-high</reqif:ENUM-VALUE-REF></reqif:VALUES>
+            </reqif:ATTRIBUTE-VALUE-ENUMERATION>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+        <reqif:SPEC-OBJECT IDENTIFIER="_so-sub-1" LONG-NAME="Child requirement A">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>_sot-req</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="DOORS-SUB-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>_ad-foreignid</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="Child requirement A">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>_ad-name</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>_ad-text</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>The flight control surfaces <xhtml:i>shall</xhtml:i> respond within 50 ms.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+            <reqif:ATTRIBUTE-VALUE-ENUMERATION>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-ENUMERATION-REF>_ad-priority</reqif:ATTRIBUTE-DEFINITION-ENUMERATION-REF></reqif:DEFINITION>
+              <reqif:VALUES><reqif:ENUM-VALUE-REF>_ev-low</reqif:ENUM-VALUE-REF></reqif:VALUES>
+            </reqif:ATTRIBUTE-VALUE-ENUMERATION>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+        <reqif:SPEC-OBJECT IDENTIFIER="_so-sub-2" LONG-NAME="Child requirement B">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>_sot-req</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="DOORS-SUB-2">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>_ad-foreignid</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="Child requirement B">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>_ad-name</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>_ad-text</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>The system <xhtml:strong>shall</xhtml:strong> log all control inputs.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+      </reqif:SPEC-OBJECTS>
+      <reqif:SPEC-RELATIONS>
+        <reqif:SPEC-RELATION IDENTIFIER="_sr-1">
+          <reqif:TYPE><reqif:SPEC-RELATION-TYPE-REF>_srt-satisfies</reqif:SPEC-RELATION-TYPE-REF></reqif:TYPE>
+          <reqif:SOURCE><reqif:SPEC-OBJECT-REF>_so-sub-1</reqif:SPEC-OBJECT-REF></reqif:SOURCE>
+          <reqif:TARGET><reqif:SPEC-OBJECT-REF>_so-sys-1</reqif:SPEC-OBJECT-REF></reqif:TARGET>
+        </reqif:SPEC-RELATION>
+        <reqif:SPEC-RELATION IDENTIFIER="_sr-2">
+          <reqif:TYPE><reqif:SPEC-RELATION-TYPE-REF>_srt-satisfies</reqif:SPEC-RELATION-TYPE-REF></reqif:TYPE>
+          <reqif:SOURCE><reqif:SPEC-OBJECT-REF>_so-sub-2</reqif:SPEC-OBJECT-REF></reqif:SOURCE>
+          <reqif:TARGET><reqif:SPEC-OBJECT-REF>_so-sys-1</reqif:SPEC-OBJECT-REF></reqif:TARGET>
+        </reqif:SPEC-RELATION>
+      </reqif:SPEC-RELATIONS>
+      <reqif:SPECIFICATIONS>
+        <reqif:SPECIFICATION IDENTIFIER="_spec-1" LONG-NAME="Flight Control Module">
+          <reqif:TYPE><reqif:SPECIFICATION-TYPE-REF>_spectype</reqif:SPECIFICATION-TYPE-REF></reqif:TYPE>
+          <reqif:CHILDREN>
+            <reqif:SPEC-HIERARCHY IDENTIFIER="_sh-1">
+              <reqif:OBJECT><reqif:SPEC-OBJECT-REF>_so-sys-1</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+              <reqif:CHILDREN>
+                <reqif:SPEC-HIERARCHY IDENTIFIER="_sh-2">
+                  <reqif:OBJECT><reqif:SPEC-OBJECT-REF>_so-sub-1</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+                </reqif:SPEC-HIERARCHY>
+                <reqif:SPEC-HIERARCHY IDENTIFIER="_sh-3">
+                  <reqif:OBJECT><reqif:SPEC-OBJECT-REF>_so-sub-2</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+                </reqif:SPEC-HIERARCHY>
+              </reqif:CHILDREN>
+            </reqif:SPEC-HIERARCHY>
+          </reqif:CHILDREN>
+        </reqif:SPECIFICATION>
+      </reqif:SPECIFICATIONS>
+    </reqif:REQ-IF-CONTENT>
+  </reqif:CORE-CONTENT>
+</reqif:REQ-IF>

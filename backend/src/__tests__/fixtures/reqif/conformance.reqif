@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ReqIF Academy "Reference Implementation Conformance Test Suite"-style fixture
+  (NX-1 conformance corpus). Exercises edge cases beyond the three vendor docs:
+    - a 3-level deep SPEC-HIERARCHY (grandparent -> parent -> child),
+    - an UNMAPPED SPEC-RELATION-TYPE ("Constrains") that must fall back to the
+      generic 'trace' link type AND raise an importer warning,
+    - a SPEC-OBJECT whose attribute (Rationale) has no dedicated Requirement
+      column and must round-trip via customAttributes.
+  Faithful representative fixture, not the actual ReqIF Academy corpus — the
+  real public conformance suite should be vendored in later.
+-->
+<reqif:REQ-IF xmlns:reqif="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
+              xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <reqif:THE-HEADER>
+    <reqif:REQ-IF-HEADER IDENTIFIER="hdr-conf-1">
+      <reqif:CREATION-TIME>2026-02-04T12:00:00.000Z</reqif:CREATION-TIME>
+      <reqif:REQ-IF-VERSION>1.2</reqif:REQ-IF-VERSION>
+      <reqif:SOURCE-TOOL-ID>ReqIF Academy Reference</reqif:SOURCE-TOOL-ID>
+      <reqif:TITLE>Conformance Edge Cases</reqif:TITLE>
+    </reqif:REQ-IF-HEADER>
+  </reqif:THE-HEADER>
+  <reqif:CORE-CONTENT>
+    <reqif:REQ-IF-CONTENT>
+      <reqif:DATATYPES>
+        <reqif:DATATYPE-DEFINITION-STRING IDENTIFIER="cdt-str" LONG-NAME="String" MAX-LENGTH="8000"/>
+        <reqif:DATATYPE-DEFINITION-XHTML IDENTIFIER="cdt-xhtml" LONG-NAME="XHTML"/>
+      </reqif:DATATYPES>
+      <reqif:SPEC-TYPES>
+        <reqif:SPEC-OBJECT-TYPE IDENTIFIER="csot" LONG-NAME="Requirement">
+          <reqif:SPEC-ATTRIBUTES>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="cad-id" LONG-NAME="ReqIF.ForeignID">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>cdt-str</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="cad-name" LONG-NAME="ReqIF.Name">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>cdt-str</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="cad-text" LONG-NAME="ReqIF.Text">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-XHTML-REF>cdt-xhtml</reqif:DATATYPE-DEFINITION-XHTML-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-XHTML>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="cad-rationale" LONG-NAME="Rationale">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>cdt-str</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+            <reqif:ATTRIBUTE-DEFINITION-STRING IDENTIFIER="cad-vendor" LONG-NAME="Vendor Tracking Code">
+              <reqif:TYPE><reqif:DATATYPE-DEFINITION-STRING-REF>cdt-str</reqif:DATATYPE-DEFINITION-STRING-REF></reqif:TYPE>
+            </reqif:ATTRIBUTE-DEFINITION-STRING>
+          </reqif:SPEC-ATTRIBUTES>
+        </reqif:SPEC-OBJECT-TYPE>
+        <reqif:SPEC-RELATION-TYPE IDENTIFIER="csrt-refines" LONG-NAME="Refines"/>
+        <reqif:SPEC-RELATION-TYPE IDENTIFIER="csrt-constrains" LONG-NAME="Constrains"/>
+        <reqif:SPECIFICATION-TYPE IDENTIFIER="cspectype" LONG-NAME="Specification"/>
+      </reqif:SPEC-TYPES>
+      <reqif:SPEC-OBJECTS>
+        <reqif:SPEC-OBJECT IDENTIFIER="cso-gp" LONG-NAME="Grandparent requirement">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>csot</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="CONF-GP-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-id</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="Grandparent requirement">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-name</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>cad-text</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>Top-level system goal.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="VENDOR-XYZ-001">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-vendor</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+        <reqif:SPEC-OBJECT IDENTIFIER="cso-p" LONG-NAME="Parent requirement">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>csot</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="CONF-P-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-id</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="Parent requirement">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-name</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>cad-text</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>Mid-level decomposition.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="Derived to bound interface scope.">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-rationale</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+        <reqif:SPEC-OBJECT IDENTIFIER="cso-c" LONG-NAME="Child requirement">
+          <reqif:TYPE><reqif:SPEC-OBJECT-TYPE-REF>csot</reqif:SPEC-OBJECT-TYPE-REF></reqif:TYPE>
+          <reqif:VALUES>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="CONF-C-1">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-id</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-STRING THE-VALUE="Child requirement">
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-STRING-REF>cad-name</reqif:ATTRIBUTE-DEFINITION-STRING-REF></reqif:DEFINITION>
+            </reqif:ATTRIBUTE-VALUE-STRING>
+            <reqif:ATTRIBUTE-VALUE-XHTML>
+              <reqif:DEFINITION><reqif:ATTRIBUTE-DEFINITION-XHTML-REF>cad-text</reqif:ATTRIBUTE-DEFINITION-XHTML-REF></reqif:DEFINITION>
+              <reqif:THE-VALUE><xhtml:div>Leaf-level implementable requirement with an <xhtml:em>ampersand &amp; entity</xhtml:em>.</xhtml:div></reqif:THE-VALUE>
+            </reqif:ATTRIBUTE-VALUE-XHTML>
+          </reqif:VALUES>
+        </reqif:SPEC-OBJECT>
+      </reqif:SPEC-OBJECTS>
+      <reqif:SPEC-RELATIONS>
+        <reqif:SPEC-RELATION IDENTIFIER="csr-1">
+          <reqif:TYPE><reqif:SPEC-RELATION-TYPE-REF>csrt-refines</reqif:SPEC-RELATION-TYPE-REF></reqif:TYPE>
+          <reqif:SOURCE><reqif:SPEC-OBJECT-REF>cso-p</reqif:SPEC-OBJECT-REF></reqif:SOURCE>
+          <reqif:TARGET><reqif:SPEC-OBJECT-REF>cso-gp</reqif:SPEC-OBJECT-REF></reqif:TARGET>
+        </reqif:SPEC-RELATION>
+        <reqif:SPEC-RELATION IDENTIFIER="csr-2">
+          <reqif:TYPE><reqif:SPEC-RELATION-TYPE-REF>csrt-constrains</reqif:SPEC-RELATION-TYPE-REF></reqif:TYPE>
+          <reqif:SOURCE><reqif:SPEC-OBJECT-REF>cso-c</reqif:SPEC-OBJECT-REF></reqif:SOURCE>
+          <reqif:TARGET><reqif:SPEC-OBJECT-REF>cso-p</reqif:SPEC-OBJECT-REF></reqif:TARGET>
+        </reqif:SPEC-RELATION>
+      </reqif:SPEC-RELATIONS>
+      <reqif:SPECIFICATIONS>
+        <reqif:SPECIFICATION IDENTIFIER="cspec-1" LONG-NAME="Conformance Edge Cases">
+          <reqif:TYPE><reqif:SPECIFICATION-TYPE-REF>cspectype</reqif:SPECIFICATION-TYPE-REF></reqif:TYPE>
+          <reqif:CHILDREN>
+            <reqif:SPEC-HIERARCHY IDENTIFIER="csh-1">
+              <reqif:OBJECT><reqif:SPEC-OBJECT-REF>cso-gp</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+              <reqif:CHILDREN>
+                <reqif:SPEC-HIERARCHY IDENTIFIER="csh-2">
+                  <reqif:OBJECT><reqif:SPEC-OBJECT-REF>cso-p</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+                  <reqif:CHILDREN>
+                    <reqif:SPEC-HIERARCHY IDENTIFIER="csh-3">
+                      <reqif:OBJECT><reqif:SPEC-OBJECT-REF>cso-c</reqif:SPEC-OBJECT-REF></reqif:OBJECT>
+                    </reqif:SPEC-HIERARCHY>
+                  </reqif:CHILDREN>
+                </reqif:SPEC-HIERARCHY>
+              </reqif:CHILDREN>
+            </reqif:SPEC-HIERARCHY>
+          </reqif:CHILDREN>
+        </reqif:SPECIFICATION>
+      </reqif:SPECIFICATIONS>
+    </reqif:REQ-IF-CONTENT>
+  </reqif:CORE-CONTENT>
+</reqif:REQ-IF>
