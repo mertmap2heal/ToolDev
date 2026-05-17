@@ -1,105 +1,13 @@
-import type {
-  ConfigurationItem,
-  Baseline,
-  ChangeRequest,
-  ReleasePackage,
-  DeviationWaiver,
-  AuditEvent,
-} from './types'
+import type { Baseline, ReleasePackage, AuditEvent } from './types'
+
+// NX-3 (#443): MOCK_CONFIGURATION_ITEMS / MOCK_CHANGE_REQUESTS /
+// MOCK_DEVIATIONS_WAIVERS were removed — the Configuration Items, Changes
+// (CCB), and Deviations & Waivers tabs are backed by real APIs now. The
+// seeds below remain for the not-yet-migrated Baselines / Releases / Audit
+// Trail tabs until their own tickets (CM-N4 / CM-N7 / CM-L6) land.
 
 const now = new Date()
 const iso = (d: Date) => d.toISOString()
-
-export const MOCK_CONFIGURATION_ITEMS: ConfigurationItem[] = [
-  {
-    ciId: 'CI-REQ-014',
-    name: 'Flight control requirements',
-    type: 'Requirement',
-    owner: 'J. Smith',
-    status: 'Released',
-    version: '2.1.0',
-    revision: 'Rev C',
-    safetyCritical: true,
-    dal: 'B',
-    lastModified: iso(new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)),
-    tags: ['flight-control', 'pdr'],
-    linkedArtifacts: { requirementsCount: 3, testsCount: 5, safetyCount: 2, docsCount: 1 },
-    lockState: 'Unlocked',
-  },
-  {
-    ciId: 'CI-SW-002',
-    name: 'Autopilot control module',
-    type: 'Software',
-    owner: 'A. Lee',
-    status: 'InReview',
-    version: '1.4.0',
-    revision: 'Rev B',
-    safetyCritical: true,
-    dal: 'A',
-    lastModified: iso(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)),
-    tags: ['autopilot', 'software'],
-    linkedArtifacts: { requirementsCount: 8, testsCount: 12, safetyCount: 4, docsCount: 2 },
-    lockState: 'Unlocked',
-  },
-  {
-    ciId: 'CI-DOC-101',
-    name: 'System design document',
-    type: 'Document',
-    owner: 'M. Chen',
-    status: 'Released',
-    version: '1.0.0',
-    revision: 'Rev A',
-    safetyCritical: false,
-    lastModified: iso(new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)),
-    tags: ['design', 'cdr'],
-    linkedArtifacts: { requirementsCount: 0, testsCount: 0, safetyCount: 0, docsCount: 0 },
-    lockState: 'FrozenByBaseline',
-  },
-  {
-    ciId: 'CI-INT-003',
-    name: 'FCC to actuator interface',
-    type: 'Interface',
-    owner: 'K. Park',
-    status: 'Draft',
-    version: '0.2.0',
-    revision: 'Rev 0',
-    safetyCritical: true,
-    dal: 'C',
-    lastModified: iso(now),
-    tags: ['interface', 'fcc'],
-    linkedArtifacts: { requirementsCount: 2, testsCount: 0, safetyCount: 1, docsCount: 0 },
-    lockState: 'Unlocked',
-  },
-  {
-    ciId: 'CI-PAR-007',
-    name: 'Max flap deflection parameter',
-    type: 'Parameter',
-    owner: 'J. Smith',
-    status: 'Released',
-    version: '1.0.0',
-    revision: 'Rev A',
-    safetyCritical: false,
-    lastModified: iso(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)),
-    tags: ['parameters'],
-    linkedArtifacts: { requirementsCount: 1, testsCount: 2, safetyCount: 0, docsCount: 0 },
-    lockState: 'Unlocked',
-  },
-  {
-    ciId: 'CI-TC-022',
-    name: 'Autopilot integration test case',
-    type: 'TestCase',
-    owner: 'T. Wilson',
-    status: 'Released',
-    version: '1.1.0',
-    revision: 'Rev B',
-    safetyCritical: true,
-    dal: 'B',
-    lastModified: iso(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)),
-    tags: ['verification', 'integration'],
-    linkedArtifacts: { requirementsCount: 2, testsCount: 1, safetyCount: 1, docsCount: 0 },
-    lockState: 'Unlocked',
-  },
-]
 
 export const MOCK_BASELINES: Baseline[] = [
   {
@@ -157,49 +65,6 @@ export const MOCK_BASELINES: Baseline[] = [
   },
 ]
 
-export const MOCK_CHANGE_REQUESTS: ChangeRequest[] = [
-  {
-    crId: 'CR-045',
-    title: 'Extend flap deflection limits for crosswind',
-    priority: 'Normal',
-    status: 'UnderReview',
-    impactedCIs: ['CI-REQ-014', 'CI-PAR-007'],
-    safetyImpact: true,
-    ccbLevel: 'SystemCCB',
-    submittedBy: 'K. Park',
-    submittedAt: iso(new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)),
-    justification: 'Customer request for extended crosswind envelope.',
-  },
-  {
-    crId: 'CR-044',
-    title: 'Update autopilot gain parameters',
-    priority: 'Urgent',
-    status: 'Approved',
-    impactedCIs: ['CI-SW-002'],
-    safetyImpact: true,
-    ccbLevel: 'SoftwareCCB',
-    submittedBy: 'A. Lee',
-    submittedAt: iso(new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)),
-    decisionBy: 'L. Davis',
-    decisionAt: iso(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)),
-    justification: 'Stability margin improvement from V&V.',
-  },
-  {
-    crId: 'CR-043',
-    title: 'Documentation typo corrections',
-    priority: 'Normal',
-    status: 'Implemented',
-    impactedCIs: ['CI-DOC-101'],
-    safetyImpact: false,
-    ccbLevel: 'SystemCCB',
-    submittedBy: 'M. Chen',
-    submittedAt: iso(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)),
-    decisionBy: 'J. Smith',
-    decisionAt: iso(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)),
-    justification: 'Editorial only.',
-  },
-]
-
 export const MOCK_RELEASES: ReleasePackage[] = [
   {
     releaseId: 'REL-2026.04',
@@ -212,10 +77,19 @@ export const MOCK_RELEASES: ReleasePackage[] = [
       { ciId: 'CI-DOC-101', version: '1.0.0', revision: 'Rev A' },
       { ciId: 'CI-PAR-007', version: '1.0.0', revision: 'Rev A' },
     ],
-    releaseNotes: 'PDR baseline release for internal testing.\n\n- Flight control requirements v2.0\n- System design document v1.0\n- Parameter set v1.0',
+    releaseNotes:
+      'PDR baseline release for internal testing.\n\n- Flight control requirements v2.0\n- System design document v1.0\n- Parameter set v1.0',
     approvals: [
-      { role: 'Config Manager', name: 'L. Davis', signedAt: iso(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)) },
-      { role: 'CCB Chair', name: 'J. Smith', signedAt: iso(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)) },
+      {
+        role: 'Config Manager',
+        name: 'L. Davis',
+        signedAt: iso(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)),
+      },
+      {
+        role: 'CCB Chair',
+        name: 'J. Smith',
+        signedAt: iso(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)),
+      },
     ],
   },
   {
@@ -230,48 +104,7 @@ export const MOCK_RELEASES: ReleasePackage[] = [
   },
 ]
 
-export const MOCK_DEVIATIONS_WAIVERS: DeviationWaiver[] = [
-  {
-    dwId: 'DW-012',
-    type: 'Waiver',
-    title: 'Temporary waiver for test harness delay',
-    linkedCIs: ['CI-TC-022'],
-    riskLevel: 'Low',
-    validUntil: iso(new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)),
-    status: 'Approved',
-    authorityInvolved: false,
-    decisionNotes: 'Accepted by CCB; test harness will be available within 2 weeks.',
-  },
-  {
-    dwId: 'DW-011',
-    type: 'Deviation',
-    title: 'Deviation from ICD timing for legacy actuator',
-    linkedCIs: ['CI-INT-003'],
-    riskLevel: 'Medium',
-    validUntil: null,
-    status: 'Submitted',
-    authorityInvolved: true,
-    decisionNotes: '',
-  },
-]
-
 export const MOCK_AUDIT_EVENTS: AuditEvent[] = [
-  {
-    eventId: 'EV-101',
-    timestamp: iso(new Date(now.getTime() - 1 * 60 * 60 * 1000)),
-    actor: 'A. Lee',
-    action: 'UPDATE_CI',
-    objectRef: 'CI-SW-002',
-    details: 'Version updated to 1.4.0',
-  },
-  {
-    eventId: 'EV-100',
-    timestamp: iso(new Date(now.getTime() - 2 * 60 * 60 * 1000)),
-    actor: 'K. Park',
-    action: 'SUBMIT_CR',
-    objectRef: 'CR-045',
-    details: 'Change request submitted for review',
-  },
   {
     eventId: 'EV-099',
     timestamp: iso(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)),
@@ -279,14 +112,6 @@ export const MOCK_AUDIT_EVENTS: AuditEvent[] = [
     action: 'APPROVE_RELEASE',
     objectRef: 'REL-2026.04',
     details: 'Release approved for internal delivery',
-  },
-  {
-    eventId: 'EV-098',
-    timestamp: iso(new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)),
-    actor: 'L. Davis',
-    action: 'APPROVE_CR',
-    objectRef: 'CR-044',
-    details: 'CR approved; version update to be applied',
   },
   {
     eventId: 'EV-097',

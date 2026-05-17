@@ -161,19 +161,26 @@ if (process.env.NODE_ENV !== 'test') {
     logger.info('server_ready', { port: PORT })
 
     // Schedule cleanup job (daily)
-    import('./services/cleanup.service.js').then(({ cleanupSoftDeletedRequirements }) => {
-      const runCleanup = (trigger: string) => {
-        cleanupSoftDeletedRequirements().catch((err: Error) => {
-          logger.error('cleanup_job_failed', { trigger, error: err.message })
-        })
-      }
+    import('./services/cleanup.service.js').then(
+      ({ cleanupSoftDeletedRequirements, runCmDailyMaintenance }) => {
+        const runCleanup = (trigger: string) => {
+          cleanupSoftDeletedRequirements().catch((err: Error) => {
+            logger.error('cleanup_job_failed', { trigger, error: err.message })
+          })
+          // NX-3 (#443): CM daily maintenance (deviation-expiry Issue generator)
+          // runs on the same daily cycle — no separate scheduler.
+          runCmDailyMaintenance().catch((err: Error) => {
+            logger.error('cm_daily_maintenance_failed', { trigger, error: err.message })
+          })
+        }
 
-      // Run immediately on startup (for dev/demo purposes)
-      runCleanup('startup')
+        // Run immediately on startup (for dev/demo purposes)
+        runCleanup('startup')
 
-      // Schedule daily (86400000 ms)
-      cleanupIntervalHandle = setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
-    })
+        // Schedule daily (86400000 ms)
+        cleanupIntervalHandle = setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
+      },
+    )
 
     // Start the parameters bulk-ops job worker (singleton — safe to
     // call repeatedly).

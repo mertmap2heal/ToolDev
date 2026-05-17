@@ -1,41 +1,43 @@
+// NX-3 (#443) — Create Configuration Item modal. Single-screen modal
+// (design-system §2.4 one decision per screen). Opinionated defaults (§2.1):
+// the backend sets status Draft / lockState Unlocked / version 0.1.0.
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import type { ConfigurationItem, CIType, DAL } from './types'
-import { CI_TYPES } from './constants'
-import { useNextIds } from './store'
+import { CI_TYPES, type CreateConfigItemPayload } from '../../services/configItem.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateCIModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (item: ConfigurationItem) => void
+  submitting?: boolean
+  onCreate: (payload: CreateConfigItemPayload) => Promise<void> | void
 }
 
-const defaultLinked = {
-  requirementsCount: 0,
-  testsCount: 0,
-  safetyCount: 0,
-  docsCount: 0,
-}
+const DAL_OPTIONS = ['A', 'B', 'C', 'D', 'E'] as const
 
-export default function CreateCIModal({ isOpen, onClose, onCreate }: CreateCIModalProps) {
+export default function CreateCIModal({ isOpen, onClose, submitting, onCreate }: CreateCIModalProps) {
   const onDiscardRef = useRef<() => void>()
-  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const { nextCiId } = useNextIds()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(
+    onClose,
+    isOpen,
+    () => onDiscardRef.current?.(),
+  )
   const [name, setName] = useState('')
-  const [type, setType] = useState<CIType>('Requirement')
-  const [owner, setOwner] = useState('')
+  const [type, setType] = useState<string>('Requirement')
+  const [ownerName, setOwnerName] = useState('')
   const [safetyCritical, setSafetyCritical] = useState(false)
-  const [dal, setDal] = useState<DAL | ''>('')
+  const [dal, setDal] = useState<string>('')
   const [tagsText, setTagsText] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   onDiscardRef.current = () => {
     setName('')
     setType('Requirement')
-    setOwner('')
+    setOwnerName('')
     setSafetyCritical(false)
     setDal('')
     setTagsText('')
+    setError(null)
   }
 
   useEffect(() => {
@@ -46,88 +48,86 @@ export default function CreateCIModal({ isOpen, onClose, onCreate }: CreateCIMod
       document.addEventListener('keydown', handleEsc)
       return () => document.removeEventListener('keydown', handleEsc)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, guardClose])
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const ciId = nextCiId()
-    const now = new Date().toISOString()
-    const tags = tagsText
-      .split(/[\s,]+/)
-      .map((t) => t.trim())
-      .filter(Boolean)
-    const item: ConfigurationItem = {
-      ciId,
-      name: name.trim() || 'Unnamed CI',
-      type,
-      owner: owner.trim() || '—',
-      status: 'Draft',
-      version: '0.1.0',
-      revision: 'Rev 0',
-      safetyCritical,
-      dal: dal || undefined,
-      lastModified: now,
-      tags,
-      linkedArtifacts: { ...defaultLinked },
-      lockState: 'Unlocked',
+    setError(null)
+    const tags = tagsText.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean)
+    try {
+      await onCreate({
+        name: name.trim(),
+        type,
+        ownerName: ownerName.trim() || null,
+        safetyCritical,
+        dal: dal || null,
+        tags,
+      })
+      onDiscardRef.current?.()
+      resetDirty()
+    } catch (err) {
+      setError((err as Error).message)
     }
-    onCreate(item)
-    setName('')
-    setOwner('')
-    setTagsText('')
-    setSafetyCritical(false)
-    setDal('')
-    resetDirty()
-    onClose()
   }
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) guardClose()
+      }}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4"
+        className="mx-4 w-full max-w-md rounded-md border border-default bg-surface-raised"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Configuration Item</h2>
+        <div className="flex items-center justify-between border-b border-default p-6">
+          <h2 className="text-xl font-semibold text-ink-primary">Create Configuration Item</h2>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button
               type="button"
               onClick={guardClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              aria-label="Close"
+              className="rounded p-2 text-ink-muted hover:bg-surface-inset"
             >
               <X size={20} />
             </button>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="ci-name" className="mb-1 block text-sm font-medium text-ink-primary">
               Name *
             </label>
             <input
+              id="ci-name"
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setName(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="ci-type" className="mb-1 block text-sm font-medium text-ink-primary">
               Type
             </label>
             <select
+              id="ci-type"
               value={type}
-              onChange={(e) => { setType(e.target.value as CIType); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setType(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             >
               {CI_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -137,72 +137,90 @@ export default function CreateCIModal({ isOpen, onClose, onCreate }: CreateCIMod
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="ci-owner" className="mb-1 block text-sm font-medium text-ink-primary">
               Owner
             </label>
             <input
+              id="ci-owner"
               type="text"
-              value={owner}
-              onChange={(e) => { setOwner(e.target.value); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              value={ownerName}
+              onChange={(e) => {
+                setOwnerName(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             />
           </div>
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
-              id="safety-critical"
+              id="ci-safety-critical"
               checked={safetyCritical}
-              onChange={(e) => { setSafetyCritical(e.target.checked); markDirty() }}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
+              onChange={(e) => {
+                setSafetyCritical(e.target.checked)
+                markDirty()
+              }}
+              className="rounded border-default accent-accent-primary"
             />
-            <label htmlFor="safety-critical" className="text-sm text-gray-700 dark:text-gray-300">
+            <label htmlFor="ci-safety-critical" className="text-sm text-ink-primary">
               Safety-critical
             </label>
           </div>
           {safetyCritical && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="ci-dal" className="mb-1 block text-sm font-medium text-ink-primary">
                 DAL
               </label>
               <select
+                id="ci-dal"
                 value={dal}
-                onChange={(e) => setDal(e.target.value as DAL | '')}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                onChange={(e) => setDal(e.target.value)}
+                className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
               >
                 <option value="">—</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-                <option value="E">E</option>
+                {DAL_OPTIONS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
               </select>
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="ci-tags" className="mb-1 block text-sm font-medium text-ink-primary">
               Tags (comma or space separated)
             </label>
             <input
+              id="ci-tags"
               type="text"
               value={tagsText}
-              onChange={(e) => { setTagsText(e.target.value); markDirty() }}
+              onChange={(e) => {
+                setTagsText(e.target.value)
+                markDirty()
+              }}
               placeholder="e.g. flight-control, pdr"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             />
           </div>
+          {error && (
+            <p role="alert" className="text-sm text-status-danger">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={guardClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="rounded-sm border border-default px-4 py-2 text-ink-primary hover:bg-surface-inset"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              disabled={submitting}
+              className="rounded-sm bg-accent-primary px-4 py-2 text-white hover:bg-accent-primary-hover disabled:opacity-50"
             >
-              Create
+              {submitting ? 'Creating...' : 'Create CI'}
             </button>
           </div>
         </form>

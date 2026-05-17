@@ -6,7 +6,7 @@ import type { AuditAction } from './types'
 
 const AUDIT_ACTIONS: AuditAction[] = [
   'CREATE_CI', 'UPDATE_CI', 'FREEZE_BASELINE', 'APPROVE_BASELINE', 'CREATE_RELEASE',
-  'LOCK_CI', 'UNLOCK_CI', 'CREATE_DW', 'APPROVE_DW', 'SUBMIT_CR', 'APPROVE_CR', 'REJECT_CR', 'APPLY_CR_VERSIONS',
+  'LOCK_CI', 'UNLOCK_CI', 'CREATE_DW', 'APPROVE_DW', 'SUBMIT_CR', 'APPROVE_CR', 'REJECT_CR',
 ]
 
 export default function AuditTrailTab() {

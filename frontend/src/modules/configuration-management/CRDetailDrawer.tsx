@@ -1,28 +1,56 @@
-import { useEffect } from 'react'
-import { X, AlertTriangle } from 'lucide-react'
+// NX-3 (#443) — Change Request detail drawer. Renders the CR plus its CCB
+// decision ledger, and hosts the CCB decision ceremony: pick a decision +
+// level + impacted CIs, then re-enter the password (reauthDialog) -> the
+// service writes the CcbDecision, bumps every impacted CI version, and records
+// a SignatureEvent — all in one transaction.
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { X, AlertTriangle, ShieldAlert } from 'lucide-react'
 import clsx from 'clsx'
-import type { ChangeRequest } from './types'
-import { getCRStatusColor, getCRPriorityColor, canPerform } from './constants'
-import { useCMStore } from './store'
+import type { ChangeRequest } from 'shared/types/engineering.types'
+import { authService } from '../../services/auth.service'
+import {
+  ccbDecisionService,
+  CCB_LEVELS,
+  CCB_DECISIONS,
+  type CcbDecision,
+} from '../../services/ccbDecision.service'
+import { configItemService } from '../../services/configItem.service'
+import { getCRStatusColor, getCcbDecisionColor } from './constants'
+import { cmReauthDialog, type CmReauthOutcome } from './useCmReauthDialog'
 
 interface CRDetailDrawerProps {
+  projectId: string
   cr: ChangeRequest | null
+  decisions: CcbDecision[]
   isOpen: boolean
   onClose: () => void
-  onApprove: (crId: string) => void
-  onReject: (crId: string) => void
-  onApplyVersions: (crId: string) => void
+  onCeremonyComplete: () => void
 }
 
 export default function CRDetailDrawer({
+  projectId,
   cr,
+  decisions,
   isOpen,
   onClose,
-  onApprove,
-  onReject,
-  onApplyVersions,
+  onCeremonyComplete,
 }: CRDetailDrawerProps) {
-  const { state } = useCMStore()
+  const [ceremonyOpen, setCeremonyOpen] = useState(false)
+  const [ccbLevel, setCcbLevel] = useState<string>('SystemCCB')
+  const [decision, setDecision] = useState<string>('Approved')
+  const [safetyImpact, setSafetyImpact] = useState(false)
+  const [rationale, setRationale] = useState('')
+  const [impactedCiIds, setImpactedCiIds] = useState<Set<string>>(new Set())
+  const [error, setError] = useState<string | null>(null)
+
+  // The project's CIs feed the impacted-CI picker (only when the ceremony is open).
+  const { data: ciData } = useQuery({
+    queryKey: ['cm', 'config-items', projectId],
+    queryFn: async () => (await configItemService.list(projectId)).data ?? [],
+    enabled: !!projectId && ceremonyOpen,
+  })
+  const cis = ciData ?? []
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -34,165 +62,287 @@ export default function CRDetailDrawer({
     }
   }, [isOpen, onClose])
 
+  useEffect(() => {
+    setCeremonyOpen(false)
+    setError(null)
+    setImpactedCiIds(new Set())
+    setRationale('')
+    setSafetyImpact(false)
+  }, [cr?.id])
+
   if (!cr) return null
 
-  const canApprove = canPerform(state.currentRole, 'approve_cr')
-  const canReject = canPerform(state.currentRole, 'reject_cr')
-  const canApply = canPerform(state.currentRole, 'apply_cr_versions')
-  const showApply =
-    cr.status === 'Approved' &&
-    state.configurationItems.some((c) => cr.impactedCIs.includes(c.ciId))
+  const toggleCi = (id: string) => {
+    setImpactedCiIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const runCeremony = async () => {
+    setError(null)
+    const ok = await cmReauthDialog({
+      title: 'Record CCB decision',
+      message:
+        'Recording a CCB decision is a signed engineering act under CFR 21 Part 11. ' +
+        'An approval bumps every impacted CI version. Re-enter your password to sign.',
+      confirmText: 'Record CCB decision',
+      verifyingText: 'Verifying password...',
+      submittingText: 'Recording decision...',
+      onSubmit: async (password, signalSigning): Promise<CmReauthOutcome> => {
+        const reauth = await authService.reauth(password)
+        if (!reauth.success || !reauth.data) {
+          return { ok: false, phase: 'reauth', message: reauth.error || 'Password verification failed.' }
+        }
+        signalSigning()
+        const res = await ccbDecisionService.sign(
+          projectId,
+          {
+            changeRequestId: cr.id,
+            ccbLevel,
+            decision,
+            safetyImpact,
+            decisionRationale: rationale.trim(),
+            impactedConfigItemIds: Array.from(impactedCiIds).map((id) => ({
+              itemType: 'configItem',
+              itemId: id,
+            })),
+          },
+          reauth.data.reauthToken,
+        )
+        if (!res.success) {
+          return { ok: false, phase: 'action', message: res.error || 'Failed to record the CCB decision.' }
+        }
+        return { ok: true }
+      },
+    })
+    if (ok) {
+      setCeremonyOpen(false)
+      setImpactedCiIds(new Set())
+      setRationale('')
+      onCeremonyComplete()
+    }
+  }
 
   return (
     <div
       className={clsx(
-        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden fixed right-0 top-0 z-40',
-        isOpen ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+        'fixed right-0 top-0 z-40 flex h-full flex-col overflow-hidden transition-all duration-200 ease-out',
+        isOpen ? 'w-full min-w-[32rem] max-w-2xl' : 'w-0 min-w-0',
       )}
       style={{ height: 'calc(100vh - 4rem)', top: '4rem' }}
       role="region"
       aria-label="Change request details"
     >
-      <div className="flex flex-col h-full overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <div className="m-3 flex h-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-default bg-surface-raised shadow-2xl">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-default bg-surface-inset px-6 py-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{cr.crId}</span>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-sm text-ink-muted">{cr.crId ?? '—'}</span>
               <span
                 className={clsx(
-                  'px-2 py-0.5 rounded text-xs font-medium',
-                  getCRStatusColor(cr.status)
+                  'rounded-xs px-2 py-0.5 text-xs font-medium capitalize',
+                  getCRStatusColor(
+                    cr.status === 'in-review'
+                      ? 'UnderReview'
+                      : cr.status.charAt(0).toUpperCase() + cr.status.slice(1),
+                  ),
                 )}
               >
                 {cr.status}
               </span>
-              <span
-                className={clsx(
-                  'px-2 py-0.5 rounded text-xs font-medium',
-                  getCRPriorityColor(cr.priority)
-                )}
-              >
-                {cr.priority}
-              </span>
-              {cr.safetyImpact && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs">
-                  <AlertTriangle size={12} />
-                  Safety impact
-                </span>
-              )}
             </div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{cr.title}</h2>
+            <h2 className="text-xl font-semibold text-ink-primary">{cr.title}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            aria-label="Close"
+            className="rounded p-2 text-ink-muted hover:bg-surface-base"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="px-6 py-4 space-y-6 flex-1">
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              Impacted CIs
-            </h3>
-            <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300">
-              {cr.impactedCIs.map((ciId) => (
-                <li key={ciId} className="font-mono">
-                  {ciId}
-                </li>
-              ))}
-            </ul>
+            <h3 className="mb-2 text-sm font-semibold text-ink-primary">Description</h3>
+            <p className="whitespace-pre-wrap text-sm text-ink-muted">{cr.description}</p>
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              Impact analysis (placeholder)
-            </h3>
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Placeholder: Verification evidence linked? Safety review completed?
+            <h3 className="mb-2 text-sm font-semibold text-ink-primary">CCB decision ledger</h3>
+            {decisions.length === 0 ? (
+              <p className="text-sm text-ink-muted">
+                No CCB decisions recorded yet. Record one below to route this change through the board.
               </p>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                <li className="flex items-center gap-2">
-                  <input type="checkbox" defaultChecked className="rounded" readOnly />
-                  Requirements impact assessed
-                </li>
-                <li className="flex items-center gap-2">
-                  <input type="checkbox" defaultChecked className="rounded" readOnly />
-                  Test coverage reviewed
-                </li>
-                <li className="flex items-center gap-2">
-                  <input type="checkbox" defaultChecked={cr.safetyImpact} className="rounded" readOnly />
-                  Safety impact considered
-                </li>
+            ) : (
+              <ul className="space-y-2">
+                {decisions.map((d) => (
+                  <li
+                    key={d.id}
+                    className="rounded-sm border border-default bg-surface-base px-3 py-2 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={clsx(
+                          'rounded-xs px-2 py-0.5 text-xs font-medium',
+                          getCcbDecisionColor(d.decision),
+                        )}
+                      >
+                        {d.decision}
+                      </span>
+                      <span className="text-ink-muted">{d.ccbLevel}</span>
+                      {d.safetyImpact && (
+                        <span
+                          className="inline-flex items-center gap-1 text-status-warning"
+                          aria-label="Safety impact"
+                        >
+                          <ShieldAlert size={14} />
+                          Safety impact
+                        </span>
+                      )}
+                      {d.meaningCode && <span className="text-ink-faint">· {d.meaningCode}</span>}
+                    </div>
+                    {d.decisionRationale && (
+                      <p className="mt-1 text-ink-muted">{d.decisionRationale}</p>
+                    )}
+                    {d.signedAt && (
+                      <p className="mt-1 text-xs text-ink-faint">
+                        Signed {new Date(d.signedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </li>
+                ))}
               </ul>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              CCB timeline
-            </h3>
-            <dl className="text-sm space-y-1">
-              <dt className="text-gray-500 dark:text-gray-400">Submitted</dt>
-              <dd className="text-gray-900 dark:text-white">
-                {cr.submittedBy} — {new Date(cr.submittedAt).toLocaleString()}
-              </dd>
-              {cr.decisionBy && cr.decisionAt && (
-                <>
-                  <dt className="text-gray-500 dark:text-gray-400 mt-2">Decision</dt>
-                  <dd className="text-gray-900 dark:text-white">
-                    {cr.decisionBy} — {new Date(cr.decisionAt).toLocaleString()}
-                  </dd>
-                </>
-              )}
-            </dl>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              Justification
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{cr.justification}</p>
-          </section>
-
-          <section className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-            {cr.status === 'UnderReview' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onApprove(cr.crId)}
-                  disabled={!canApprove}
-                  title={!canApprove ? 'Requires ConfigManager, CCBMember, or SafetyEngineer' : undefined}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm disabled:opacity-50"
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onReject(cr.crId)}
-                  disabled={!canReject}
-                  title={!canReject ? 'Requires ConfigManager or CCBMember' : undefined}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm disabled:opacity-50"
-                >
-                  Reject
-                </button>
-              </>
             )}
-            {showApply && (
+          </section>
+
+          {ceremonyOpen && (
+            <section className="rounded-md border border-default bg-surface-base p-4">
+              <h3 className="mb-3 text-sm font-semibold text-ink-primary">Record a CCB decision</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="ccb-level" className="mb-1 block text-xs font-medium text-ink-muted">
+                    CCB level
+                  </label>
+                  <select
+                    id="ccb-level"
+                    value={ccbLevel}
+                    onChange={(e) => setCcbLevel(e.target.value)}
+                    className="w-full rounded-sm border border-default bg-surface-raised px-2 py-1.5 text-sm text-ink-primary"
+                  >
+                    {CCB_LEVELS.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="ccb-decision" className="mb-1 block text-xs font-medium text-ink-muted">
+                    Decision
+                  </label>
+                  <select
+                    id="ccb-decision"
+                    value={decision}
+                    onChange={(e) => setDecision(e.target.value)}
+                    className="w-full rounded-sm border border-default bg-surface-raised px-2 py-1.5 text-sm text-ink-primary"
+                  >
+                    {CCB_DECISIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-ink-primary">
+                <input
+                  type="checkbox"
+                  checked={safetyImpact}
+                  onChange={(e) => setSafetyImpact(e.target.checked)}
+                  className="rounded border-default accent-accent-primary"
+                />
+                Safety-impacting change
+              </label>
+              <div className="mt-3">
+                <label htmlFor="ccb-rationale" className="mb-1 block text-xs font-medium text-ink-muted">
+                  Decision rationale
+                </label>
+                <textarea
+                  id="ccb-rationale"
+                  value={rationale}
+                  onChange={(e) => setRationale(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-sm border border-default bg-surface-raised px-2 py-1.5 text-sm text-ink-primary"
+                />
+              </div>
+              <div className="mt-3">
+                <span className="mb-1 block text-xs font-medium text-ink-muted">
+                  Impacted configuration items (an approval bumps each one&apos;s version)
+                </span>
+                <div className="max-h-32 overflow-y-auto rounded-sm border border-default p-2">
+                  {cis.length === 0 ? (
+                    <p className="text-sm text-ink-faint">No configuration items in this project.</p>
+                  ) : (
+                    cis.map((c) => (
+                      <label
+                        key={c.id}
+                        className="flex cursor-pointer items-center gap-2 py-1 text-sm text-ink-primary"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={impactedCiIds.has(c.id)}
+                          onChange={() => toggleCi(c.id)}
+                          className="rounded border-default accent-accent-primary"
+                        />
+                        <span className="font-mono">{c.ciKey}</span>
+                        <span className="truncate text-ink-muted">{c.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              {error && (
+                <p role="alert" className="mt-2 flex items-center gap-1.5 text-sm text-status-danger">
+                  <AlertTriangle size={14} />
+                  {error}
+                </p>
+              )}
+            </section>
+          )}
+        </div>
+
+        <div className="flex flex-shrink-0 flex-wrap gap-2 border-t border-default px-6 py-4">
+          {ceremonyOpen ? (
+            <>
               <button
                 type="button"
-                onClick={() => onApplyVersions(cr.crId)}
-                disabled={!canApply}
-                title={!canApply ? 'Requires ConfigManager or SystemEngineer' : undefined}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm disabled:opacity-50"
+                onClick={runCeremony}
+                className="rounded-sm bg-accent-primary px-4 py-2 text-sm text-white hover:bg-accent-primary-hover"
               >
-                Apply version updates (mock)
+                Record CCB decision
               </button>
-            )}
-          </section>
+              <button
+                type="button"
+                onClick={() => setCeremonyOpen(false)}
+                className="rounded-sm border border-default px-4 py-2 text-sm text-ink-primary hover:bg-surface-inset"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCeremonyOpen(true)}
+              className="rounded-sm bg-accent-primary px-4 py-2 text-sm text-white hover:bg-accent-primary-hover"
+            >
+              Record CCB decision
+            </button>
+          )}
         </div>
       </div>
     </div>

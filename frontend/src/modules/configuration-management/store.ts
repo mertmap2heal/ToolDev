@@ -15,14 +15,14 @@ import type {
   AuditEvent,
   CMRole,
 } from './types'
-import {
-  MOCK_CONFIGURATION_ITEMS,
-  MOCK_BASELINES,
-  MOCK_CHANGE_REQUESTS,
-  MOCK_RELEASES,
-  MOCK_DEVIATIONS_WAIVERS,
-  MOCK_AUDIT_EVENTS,
-} from './mockData'
+import { MOCK_BASELINES, MOCK_RELEASES, MOCK_AUDIT_EVENTS } from './mockData'
+
+// NX-3 (#443): the Configuration Items, Changes (CCB), and Deviations &
+// Waivers tabs are now backed by real APIs (configItem / ccbDecision /
+// deviationWaiver services + React Query). They no longer read these store
+// arrays. The arrays stay (empty) only so the not-yet-migrated Baselines /
+// Releases / Compare / Overview tabs still compile until their own tickets
+// (CM-N4 / CM-N7) land.
 
 export interface CMState {
   configurationItems: ConfigurationItem[]
@@ -49,7 +49,6 @@ type CMAction =
   | { type: 'UPDATE_CR'; payload: ChangeRequest }
   | { type: 'APPROVE_CR'; payload: { crId: string; decisionBy: string } }
   | { type: 'REJECT_CR'; payload: { crId: string; decisionBy: string } }
-  | { type: 'APPLY_CR_VERSIONS'; payload: string }
   | { type: 'ADD_RELEASE'; payload: ReleasePackage }
   | { type: 'UPDATE_RELEASE'; payload: ReleasePackage }
   | { type: 'APPROVE_RELEASE'; payload: { releaseId: string } }
@@ -231,55 +230,6 @@ function reducer(state: CMState, action: CMAction): CMState {
         auditLog: audit,
       }
     }
-    case 'APPLY_CR_VERSIONS': {
-      const cr = state.changeRequests.find((r) => r.crId === action.payload)
-      if (!cr || cr.status !== 'Approved') return state
-      const nextVersion = (v: string): string => {
-        const parts = v.split('.')
-        if (parts.length >= 2) {
-          const minor = parseInt(parts[parts.length - 1], 10)
-          if (!Number.isNaN(minor)) {
-            parts[parts.length - 1] = String(minor + 1)
-            return parts.join('.')
-          }
-        }
-        return `${v}.1`
-      }
-      const nextRevision = (rev: string): string => {
-        const m = rev.match(/Rev\s*([A-Z])/i)
-        if (m) {
-          const letter = m[1].toUpperCase()
-          const code = letter.charCodeAt(0)
-          return code >= 90 ? 'Rev A' : `Rev ${String.fromCharCode(code + 1)}`
-        }
-        return 'Rev A'
-      }
-      const now = new Date().toISOString()
-      const updatedCIs = state.configurationItems.map((c) => {
-        if (!cr.impactedCIs.includes(c.ciId)) return c
-        return {
-          ...c,
-          version: nextVersion(c.version),
-          revision: nextRevision(c.revision),
-          lastModified: now,
-        }
-      })
-      const audit = addAudit({
-        timestamp: now,
-        actor: state.currentRole,
-        action: 'APPLY_CR_VERSIONS',
-        objectRef: action.payload,
-        details: 'Version updates applied to impacted CIs',
-      })
-      return {
-        ...state,
-        configurationItems: updatedCIs,
-        changeRequests: state.changeRequests.map((r) =>
-          r.crId === action.payload ? { ...r, status: 'Implemented' as const } : r
-        ),
-        auditLog: audit,
-      }
-    }
     case 'ADD_RELEASE':
       return { ...state, releases: [action.payload, ...state.releases] }
     case 'UPDATE_RELEASE':
@@ -368,11 +318,12 @@ function reducer(state: CMState, action: CMAction): CMState {
 }
 
 const initialState: CMState = {
-  configurationItems: [...MOCK_CONFIGURATION_ITEMS],
+  // NX-3: CIs / CRs / DWs are persisted via API now — these arrays start empty.
+  configurationItems: [],
   baselines: [...MOCK_BASELINES],
-  changeRequests: [...MOCK_CHANGE_REQUESTS],
+  changeRequests: [],
   releases: [...MOCK_RELEASES],
-  deviationsWaivers: [...MOCK_DEVIATIONS_WAIVERS],
+  deviationsWaivers: [],
   auditLog: [...MOCK_AUDIT_EVENTS],
   currentRole: 'ConfigManager',
   strictMode: false,
