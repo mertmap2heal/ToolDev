@@ -246,3 +246,17 @@ await page.getByRole('button', { name: /csv.*\.csv/i }).click()
 ```ts
 await page.getByRole('button', { name: /Delete Parameter/i }).click()
 ```
+
+---
+
+## TypeScript: a type-only import as a value import crashes the `tsx` dev server
+
+**Symptom:**
+```
+SyntaxError: The requested module './types' does not provide an export named 'NormalisedResult'
+```
+The backend server crashes the instant it starts under `npm run dev` / `start.ps1` — yet `npx tsc --noEmit`, `npm run build`, and the full Vitest suite all pass green. The husky pre-push gate is green while the dev server is dead.
+
+**Root cause:** An `interface` / `type` (a type-only name) was imported or re-exported with a plain `import { X }` / `export { X }` instead of `import type { X }` / `export type { X }`. `tsc` and Vitest have full cross-file type information, so they silently elide the type-only name and pass. `tsx` (the dev runtime, esbuild) transpiles each file in isolation with no cross-file type info — it keeps the value import, and the Node ESM loader throws at startup because the named export does not exist at runtime (a type produces no runtime binding).
+
+**Rule:** Import and re-export every type-only name with `import type` / `export type`. A `class` is a value (plain `import`); an `interface` / `type` is type-only. `backend/tsconfig.json` now sets `"isolatedModules": true` (added by N-2.4), so `tsc` itself fails on a value-import of a type — the husky gate now catches this class. And when a gate-green change still might not *run*, **boot the actual `tsx` server and hit `/api/health`** — `tsc` + `build` + Vitest cannot see a `tsx`-runtime-only break.
