@@ -160,6 +160,7 @@ Grouped by horizon. Effort: S = ≤1 day, M = 2-5 days, L = 1-2 weeks, XL = 2-4 
 ### V-NT-10 — Pilot OpenAPI annotation on verification routes
 **Effort:** L
 **Closes:** Gap #10 in `gap-summary.md`.
+**Superseded by:** ROADMAP NX-5 (`admin-platform/tickets.md` AP-NX5, GitHub issue #451) — the program-wide OpenAPI ticket serving every endpoint at `/api/v1/docs`. A single `/api/v1/docs` makes a separate verification-only `/api/v1/docs/verification` pilot route redundant. Fold this work into NX-5: the verification routes are simply one (large) slice of the program-wide annotation effort. Do not run V-NT-10 as an independent ticket — the Architect on NX-5 reconciles.
 **Why:** Largest single route file, ideal pilot for `zod-openapi`. Once verification compiles to a spec, the rest follows.
 **Tasks:**
 - Adopt `zod-openapi` (cost: one new dev dependency — requires user approval per Rule 2).
