@@ -33,7 +33,7 @@ function ObjectiveMiniMatrix() {
       {OBJECTIVES.map((r) => {
         const complete = r.reqs === r.verif
         return (
-          <div key={r.code} className="pl-matrix-row" style={{ gridTemplateColumns: '72px 1fr 110px 80px' }}>
+          <div key={r.code} className="pl-matrix-row pl-matrix-row--objective">
             <div className="pl-matrix-row__code">{r.code}</div>
             <div className="pl-matrix-row__label">{r.label}</div>
             <div className="pl-matrix-row__count">{r.verif}/{r.reqs} verified</div>

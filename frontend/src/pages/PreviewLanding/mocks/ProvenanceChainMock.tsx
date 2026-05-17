@@ -10,7 +10,7 @@ export default function ProvenanceChainMock() {
       <div className="pl-provenance-header">
         <div>
           <div className="pl-caption">Provenance record</div>
-          <div className="pl-provenance-id" style={{ marginTop: 4 }}>REQ-1024.title</div>
+          <div className="pl-provenance-id pl-provenance__id-spacing">REQ-1024.title</div>
         </div>
         <span className="pl-pill">Signed off</span>
       </div>
