@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink, Archive, Link2, Lock, Unlock, MessageSquare, Layers } from 'lucide-react'
+import { X, History, ChevronDown, ChevronRight, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink, Archive, Link2, Lock, Unlock, MessageSquare, Layers } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { versionService, VersionComparison, AuditEvent } from '../../services/version.service'
+import { versionService, VersionComparison, FieldDiffEntry, AuditEvent } from '../../services/version.service'
 import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 import { htmlToPlainText } from '../../utils/htmlToPlainText'
+import VersionDiff from '../common/VersionDiff'
 
 /** Compare picker: saved snapshot number or live requirement state */
 type ComparePick = number | 'current'
@@ -32,26 +33,84 @@ function requirementToPseudoVersion(req: Requirement): RequirementVersion {
   }
 }
 
+// Fields diffed by RequirementVersionHistory; which carry a line-level diff.
+const RVH_DIFF_FIELDS = [
+  'title', 'description', 'priority', 'status', 'stage', 'owner',
+  'category', 'source', 'verificationMethod', 'acceptanceCriteria', 'tags',
+] as const
+const RVH_MULTILINE_FIELDS = ['description', 'acceptanceCriteria', 'verificationMethod']
+
+const RVH_RICHTEXT_FIELDS = ['description', 'acceptanceCriteria', 'verificationMethod']
+
+/** Normalise a version field to a plaintext string for diffing. */
+function fieldToStr(field: string, v: RequirementVersion): string {
+  if (field === 'tags') return (v.tags ?? []).join(', ')
+  const raw = (v as unknown as Record<string, unknown>)[field]
+  const str = raw == null ? '' : String(raw)
+  return RVH_RICHTEXT_FIELDS.includes(field) ? htmlToPlainText(str) : str
+}
+
+/**
+ * Client-side structured field-level diff — used only for the snapshot-vs-
+ * current path (the server endpoint covers snapshot-vs-snapshot). Produces the
+ * same { fields } shape as the backend so <VersionDiff> renders uniformly.
+ */
 function computeComparison(versionA: RequirementVersion, versionB: RequirementVersion): VersionComparison {
-  const diff = {
-    title: versionA.title !== versionB.title,
-    description: versionA.description !== versionB.description,
-    priority: versionA.priority !== versionB.priority,
-    status: versionA.status !== versionB.status,
-    stage: (versionA.stage ?? '') !== (versionB.stage ?? ''),
-    owner: (versionA.owner ?? '') !== (versionB.owner ?? ''),
-    category: (versionA.category ?? '') !== (versionB.category ?? ''),
-    source: (versionA.source ?? '') !== (versionB.source ?? ''),
-    verificationMethod: (versionA.verificationMethod ?? '') !== (versionB.verificationMethod ?? ''),
-    acceptanceCriteria: (versionA.acceptanceCriteria ?? '') !== (versionB.acceptanceCriteria ?? ''),
-    tags: JSON.stringify(versionA.tags ?? []) !== JSON.stringify(versionB.tags ?? []),
-  }
+  const multiLine = new Set(RVH_MULTILINE_FIELDS)
+  const fields: FieldDiffEntry[] = RVH_DIFF_FIELDS.map((name) => {
+    const before = fieldToStr(name, versionA)
+    const after = fieldToStr(name, versionB)
+    let changeType: FieldDiffEntry['changeType']
+    if (before === after) changeType = 'unchanged'
+    else if (before === '' && after !== '') changeType = 'added'
+    else if (before !== '' && after === '') changeType = 'removed'
+    else changeType = 'changed'
+    const entry: FieldDiffEntry = { name, changeType, before, after }
+    if (changeType === 'changed' && multiLine.has(name)) {
+      entry.lineDiff = lineDiffClient(before, after)
+    }
+    return entry
+  })
   return {
     versionA,
     versionB,
-    diff,
-    changedFields: Object.entries(diff).filter(([, c]) => c).map(([f]) => f),
+    fields,
+    addedLinks: [],
+    removedLinks: [],
+    diff: Object.fromEntries(fields.map((f) => [f.name, f.changeType !== 'unchanged'])),
+    changedFields: fields.filter((f) => f.changeType !== 'unchanged').map((f) => f.name),
   }
+}
+
+/** Line-level LCS — mirrors backend diffService.lineDiff for the local path. */
+function lineDiffClient(before: string, after: string): { op: 'eq' | 'add' | 'del'; text: string }[] {
+  const a = before.split('\n')
+  const b = after.split('\n')
+  const n = a.length
+  const m = b.length
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const ops: { op: 'eq' | 'add' | 'del'; text: string }[] = []
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ op: 'eq', text: a[i] }); i++; j++ }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ op: 'del', text: a[i] }); i++ }
+    else { ops.push({ op: 'add', text: b[j] }); j++ }
+  }
+  while (i < n) { ops.push({ op: 'del', text: a[i] }); i++ }
+  while (j < m) { ops.push({ op: 'add', text: b[j] }); j++ }
+  return ops
+}
+
+const RVH_FIELD_LABELS: Record<string, string> = {
+  title: 'Title', description: 'Description', priority: 'Priority', status: 'Status',
+  stage: 'Stage', owner: 'Owner', category: 'Category', source: 'Source',
+  verificationMethod: 'Verification Method', acceptanceCriteria: 'Acceptance Criteria', tags: 'Tags',
 }
 
 function compareVersionLabel(v: RequirementVersion): string {
@@ -142,24 +201,6 @@ export default function RequirementVersionHistory({
     setExpandedVersion((prev) => (prev === version ? null : version))
   }
 
-  // Get field display name
-  const getFieldLabel = (field: string): string => {
-    const labels: Record<string, string> = {
-      title: 'Title',
-      description: 'Description',
-      priority: 'Priority',
-      status: 'Status',
-      stage: 'Stage',
-      owner: 'Owner',
-      category: 'Category',
-      source: 'Source',
-      verificationMethod: 'Verification Method',
-      acceptanceCriteria: 'Acceptance Criteria',
-      tags: 'Tags',
-    }
-    return labels[field] || field
-  }
-
   // Get icon and label for audit action
   const getActionDisplay = (action: string) => {
     switch (action) {
@@ -206,79 +247,30 @@ export default function RequirementVersionHistory({
     }
   }
 
-  const richTextFields: (keyof RequirementVersion)[] = ['description', 'acceptanceCriteria', 'verificationMethod']
-
-  const formatFieldForDiff = (field: keyof RequirementVersion, version: RequirementVersion): string => {
-    if (field === 'tags') return (version.tags || []).join(', ') || '—'
-    const raw = version[field] as string | null | undefined
-    if (richTextFields.includes(field)) return htmlToPlainText(raw ?? '') || '—'
-    return raw || '—'
-  }
-
-  // Render diff view for two versions
+  // NX-2 (#440) — render the diff via the shared <VersionDiff> primitive.
+  // For description fields the server may return rich-text HTML; <VersionDiff>
+  // renders plaintext lines, so HTML fields are flattened before display.
   const renderDiff = (comparison: VersionComparison) => {
-    const { versionA, versionB, changedFields } = comparison
-
-    const fields: (keyof RequirementVersion)[] = [
-      'title',
-      'description',
-      'priority',
-      'status',
-      'stage',
-      'owner',
-      'category',
-      'source',
-      'verificationMethod',
-      'acceptanceCriteria',
-      'tags',
-    ]
-
+    const flatFields = comparison.fields.map((f) => {
+      if (!RVH_RICHTEXT_FIELDS.includes(f.name)) return f
+      const before = htmlToPlainText(f.before)
+      const after = htmlToPlainText(f.after)
+      return {
+        ...f,
+        before,
+        after,
+        lineDiff: f.changeType === 'changed' ? lineDiffClient(before, after) : f.lineDiff,
+      }
+    })
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <span>{compareVersionLabel(versionA)}</span>
-          <ArrowLeftRight size={16} />
-          <span>{compareVersionLabel(versionB)}</span>
-        </div>
-
-        {changedFields.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-            No differences found between these versions.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {fields.map((field) => {
-              const isChanged = changedFields.includes(field)
-              if (!isChanged) return null
-
-              const valueA = formatFieldForDiff(field, versionA)
-              const valueB = formatFieldForDiff(field, versionB)
-
-              return (
-                <div key={field} className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
-                  <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300 mb-2">
-                    {getFieldLabel(field)}
-                  </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2">
-                      <p className="text-xs text-red-500 dark:text-red-400 mb-1">Before ({compareVersionLabel(versionA)})</p>
-                      <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">
-                        {valueA}
-                      </p>
-                    </div>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2">
-                      <p className="text-xs text-green-500 dark:text-green-400 mb-1">After ({compareVersionLabel(versionB)})</p>
-                      <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">
-                        {valueB}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+      <VersionDiff
+        fields={flatFields}
+        addedLinks={comparison.addedLinks}
+        removedLinks={comparison.removedLinks}
+        labelA={compareVersionLabel(comparison.versionA)}
+        labelB={compareVersionLabel(comparison.versionB)}
+        fieldLabels={RVH_FIELD_LABELS}
+      />
     )
   }
 

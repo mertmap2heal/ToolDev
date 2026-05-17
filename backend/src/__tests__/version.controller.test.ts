@@ -170,6 +170,84 @@ describe('Requirement versions — /api/v1/versions', () => {
     expect(res.body.data.changedFields).toContain('priority')
   })
 
+  // NX-2 (#440) — the structured field-level diff shape.
+  it('GET compare returns structured field-level diff entries (NX-2)', async () => {
+    const res = await request(app)
+      .get(`/api/v1/versions/${projectId}/requirements/${requirementDbId}/compare`)
+      .query({ versionA: '1', versionB: '2' })
+      .set('Authorization', `Bearer ${tokenOwner}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data.fields)).toBe(true)
+
+    const byName: Record<string, { changeType: string; before: string; after: string }> =
+      Object.fromEntries(res.body.data.fields.map((f: any) => [f.name, f]))
+
+    // title changed v1 -> v2 (the test bumped it).
+    expect(byName.title.changeType).toBe('changed')
+    expect(byName.title.before).toBe(`Versioned ${stamp}`)
+    expect(byName.title.after).toBe(`Versioned ${stamp} v2`)
+    // priority changed medium -> high.
+    expect(byName.priority.changeType).toBe('changed')
+    // description was never touched -> unchanged.
+    expect(byName.description.changeType).toBe('unchanged')
+
+    // The contract keys are always present.
+    expect(Array.isArray(res.body.data.addedLinks)).toBe(true)
+    expect(Array.isArray(res.body.data.removedLinks)).toBe(true)
+  })
+
+  // NX-2 (#440) — the /diff path is an alias of /compare.
+  it('GET /diff is an alias of /compare and returns the same field shape', async () => {
+    const res = await request(app)
+      .get(`/api/v1/versions/${projectId}/requirements/${requirementDbId}/diff`)
+      .query({ versionA: '1', versionB: '2' })
+      .set('Authorization', `Bearer ${tokenOwner}`)
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.body.data.fields)).toBe(true)
+    const titleField = res.body.data.fields.find((f: any) => f.name === 'title')
+    expect(titleField.changeType).toBe('changed')
+  })
+
+  // NX-2 (#440) — a multi-line description change carries a line-level diff.
+  it('GET compare attaches a lineDiff to a changed multi-line description', async () => {
+    // Snapshot v3 (current description), then change the description and
+    // snapshot v4 — produces a description field change across two versions.
+    await prisma.requirement.update({
+      where: { id: requirementDbId },
+      data: { description: 'first line\nsecond line' },
+    })
+    const v3 = await request(app)
+      .post(`/api/v1/versions/${projectId}/requirements/${requirementDbId}`)
+      .set('Authorization', `Bearer ${tokenOwner}`)
+      .send({ changeReason: 'desc v3' })
+    expect(v3.status).toBe(201)
+
+    await prisma.requirement.update({
+      where: { id: requirementDbId },
+      data: { description: 'first line\nSECOND line' },
+    })
+    const v4 = await request(app)
+      .post(`/api/v1/versions/${projectId}/requirements/${requirementDbId}`)
+      .set('Authorization', `Bearer ${tokenOwner}`)
+      .send({ changeReason: 'desc v4' })
+    expect(v4.status).toBe(201)
+
+    const res = await request(app)
+      .get(`/api/v1/versions/${projectId}/requirements/${requirementDbId}/diff`)
+      .query({ versionA: String(v3.body.data.version), versionB: String(v4.body.data.version) })
+      .set('Authorization', `Bearer ${tokenOwner}`)
+    expect(res.status).toBe(200)
+
+    const descField = res.body.data.fields.find((f: any) => f.name === 'description')
+    expect(descField.changeType).toBe('changed')
+    expect(Array.isArray(descField.lineDiff)).toBe(true)
+    // 'first line' unchanged; 'second line' -> 'SECOND line' is a del then add.
+    const ops = descField.lineDiff.map((o: any) => o.op)
+    expect(ops).toEqual(['eq', 'del', 'add'])
+    expect(descField.lineDiff).toContainEqual({ op: 'del', text: 'second line' })
+    expect(descField.lineDiff).toContainEqual({ op: 'add', text: 'SECOND line' })
+  })
+
   it('GET compare without versionA/versionB returns 400', async () => {
     const res = await request(app)
       .get(`/api/v1/versions/${projectId}/requirements/${requirementDbId}/compare`)

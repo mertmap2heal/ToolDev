@@ -2,6 +2,28 @@ import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import type { Prisma } from '@prisma/client'
+import { fieldLevelDiff } from '../services/diffService'
+
+// NX-2 (#440) — fields diffed by the version-compare endpoint, and which of
+// them carry a line-level diff (the long-form / multi-line fields).
+const REQUIREMENT_DIFF_FIELDS = [
+  'title',
+  'description',
+  'priority',
+  'status',
+  'stage',
+  'owner',
+  'category',
+  'source',
+  'verificationMethod',
+  'acceptanceCriteria',
+  'tags',
+] as const
+const REQUIREMENT_MULTILINE_FIELDS = [
+  'description',
+  'acceptanceCriteria',
+  'verificationMethod',
+] as const
 
 
 /**
@@ -267,28 +289,36 @@ export const compareVersions = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Calculate diff for key fields
-    const diff = {
-      title: versionAData.title !== versionBData.title,
-      description: versionAData.description !== versionBData.description,
-      priority: versionAData.priority !== versionBData.priority,
-      status: versionAData.status !== versionBData.status,
-      stage: versionAData.stage !== versionBData.stage,
-      owner: versionAData.owner !== versionBData.owner,
-      category: versionAData.category !== versionBData.category,
-      source: versionAData.source !== versionBData.source,
-      verificationMethod: versionAData.verificationMethod !== versionBData.verificationMethod,
-      acceptanceCriteria: versionAData.acceptanceCriteria !== versionBData.acceptanceCriteria,
-      tags: JSON.stringify(versionAData.tags) !== JSON.stringify(versionBData.tags),
-    }
+    // NX-2 (#440) — structured field-level + line-level diff via diffService.
+    const fields = fieldLevelDiff(
+      versionAData as unknown as Record<string, unknown>,
+      versionBData as unknown as Record<string, unknown>,
+      REQUIREMENT_DIFF_FIELDS,
+      REQUIREMENT_MULTILINE_FIELDS,
+    )
 
+    // RequirementVersion carries no per-version trace-link snapshot, so the
+    // version-compare endpoint cannot report link-set changes — the AC's
+    // added/removed link sets are populated by the baseline-diff endpoint
+    // (which diffs BaselineRootItem snapshots). The keys are present so the
+    // shared <VersionDiff> contract is uniform across both endpoints.
     res.json({
       success: true,
       data: {
         versionA: versionAData,
         versionB: versionBData,
-        diff,
-        changedFields: Object.entries(diff).filter(([, changed]) => changed).map(([field]) => field),
+        fields,
+        addedLinks: [],
+        removedLinks: [],
+        // Back-compat: the legacy boolean-per-field `diff` map + `changedFields`
+        // list, kept so any current caller is not broken (per Architecture
+        // comment "keep /compare as an alias to avoid breaking callers").
+        diff: Object.fromEntries(
+          fields.map((f) => [f.name, f.changeType !== 'unchanged']),
+        ),
+        changedFields: fields
+          .filter((f) => f.changeType !== 'unchanged')
+          .map((f) => f.name),
       },
     })
   } catch (error) {

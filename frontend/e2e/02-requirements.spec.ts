@@ -920,6 +920,74 @@ test.describe('Requirements', () => {
     expect(boxAfter?.width).toBeTruthy()
     expect(Math.abs((boxAfter?.width ?? 0) - (boxBefore?.width ?? 0))).toBeGreaterThan(10)
   })
+
+  // NX-2 (#440) — the shared <VersionDiff> primitive in the Version History
+  // modal: open a requirement, snapshot two versions, compare them, see the
+  // diff, and toggle the side-by-side ⇄ unified layout.
+  test('version diff: compare two versions and toggle layout', async ({ page, projectId }) => {
+    const reqId = await ensureFirstRequirementId(page, projectId)
+    if (!reqId) {
+      test.skip(true, 'No requirement id available for version diff')
+      return
+    }
+
+    const token = await readAuthToken(page)
+    const hdr = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+    // Snapshot v1, change the title, snapshot v2 — two comparable versions.
+    const v1 = await page.request.post(
+      `${E2E_API_V1}/versions/${projectId}/requirements/${reqId}`,
+      { headers: hdr, data: { changeReason: 'e2e diff v1' } },
+    )
+    expect(v1.ok()).toBeTruthy()
+    await page.request.put(`${E2E_API_V1}/requirements/${projectId}/${reqId}`, {
+      headers: hdr,
+      data: { title: `E2E version diff ${Date.now()}` },
+    })
+    const v2 = await page.request.post(
+      `${E2E_API_V1}/versions/${projectId}/requirements/${reqId}`,
+      { headers: hdr, data: { changeReason: 'e2e diff v2' } },
+    )
+    expect(v2.ok()).toBeTruthy()
+
+    await page.goto(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: 'Requirement Details' })).toBeVisible({
+      timeout: 15_000,
+    })
+
+    // Open the Version History modal.
+    await page.locator('button[title="Version History"]').click()
+    await expect(page.getByRole('heading', { name: /Version History/i })).toBeVisible({
+      timeout: 10_000,
+    })
+
+    // Switch to Compare mode and pick the two snapshots.
+    await page.getByRole('button', { name: /^Compare$/ }).click()
+    const versionTiles = page.getByRole('button').filter({ hasText: /^[0-9]/ })
+    // Pick the two highest-numbered snapshot tiles.
+    const tileCount = await versionTiles.count()
+    if (tileCount < 2) {
+      test.skip(true, 'Fewer than two snapshot tiles rendered')
+      return
+    }
+    await versionTiles.nth(0).click()
+    await versionTiles.nth(1).click()
+
+    // The shared <VersionDiff> renders its layout toggle.
+    const sideBySide = page.getByRole('button', { name: /Side-by-side layout/i })
+    const unified = page.getByRole('button', { name: /Unified layout/i })
+    await expect(sideBySide).toBeVisible({ timeout: 10_000 })
+    await expect(sideBySide).toHaveAttribute('aria-pressed', 'true')
+
+    // Toggle to unified.
+    await unified.click()
+    await expect(unified).toHaveAttribute('aria-pressed', 'true')
+    await expect(sideBySide).toHaveAttribute('aria-pressed', 'false')
+
+    // No page error surfaced.
+    await expect(page.getByText(/diff failed/i)).not.toBeVisible({ timeout: 2_000 })
+  })
 })
 
 /**
