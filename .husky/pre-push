@@ -24,6 +24,15 @@ echo "[pre-push] frontend unit tests"
 echo "[pre-push] backend build"
 ( cd backend && npm run build ) || exit 1
 
+# NX-5 (#451): OpenAPI spec freshness gate. Regenerates the spec from the
+# route-file @openapi annotations and fails if it differs from the
+# committed backend/openapi.json - so a route change without a spec regen
+# cannot reach the remote. Mirrors the shared/incoseEars/_compiled
+# drift-guard pattern (N-2.3). Fix on failure: cd backend && npm run
+# openapi:generate, then commit backend/openapi.json.
+echo "[pre-push] guard: openapi.json is up to date (#451)"
+( cd backend && npm run openapi:check ) || exit 1
+
 # Repo-policy grep guards copied verbatim from .github/workflows/ci.yml.
 # Kept inline so the hook is self-contained.
 

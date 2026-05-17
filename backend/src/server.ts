@@ -8,6 +8,7 @@ import { prisma } from './lib/prisma'
 import { logger, setRequestId } from './lib/logger.js'
 import routes from './routes/index.js'
 import feedbackRoutes from './routes/feedback.routes.js'
+import docsRoutes from './routes/docs.routes.js'
 import http from 'http'
 import { setupRealtime } from './realtime/realtime.js'
 
@@ -121,6 +122,12 @@ app.get('/api/v1', (req, res) => {
     },
   })
 })
+
+// NX-5 (#451): the OpenAPI docs UI + raw spec. Mounted PUBLIC and BEFORE
+// the `authenticateToken`-gated `/api/v1` aggregate router below — the spec
+// describes endpoint shapes, not data, so it needs no auth. Kept adjacent
+// to the other unauthenticated surfaces (`/api/health`, `/api/v1`).
+app.use('/api/v1/docs', docsRoutes)
 
 app.use('/api/v1', routes)
 app.use('/api/v1/feedback', feedbackRoutes)
