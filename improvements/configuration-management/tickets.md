@@ -87,7 +87,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N1 · Schema migration — `ConfigItem` table with provenance
 **Priority:** P0 · **Effort:** L
-**Status:** Shipped — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema
+**Status:** Shipped — NX-3 / Issue #443 / PR #444 / merge commit `d261330` (code commit `513aa69`)
 
 **Problem.** The Configuration Item is the foundational primitive of IEEE 828-2012 §6.2 (Configuration identification). The frontend models 11 typed kinds (`types.ts:2-14`) with full schema design (`status`, `lockState`, `safetyCritical`, `dal`, `version`, `revision`, `tags`, polymorphic `linkedArtifacts`). The Prisma schema has zero of it. The Configuration Items tab (448 lines, the most polished tab) is 100% mock.
 
@@ -107,7 +107,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N2 · Schema migration — `Deviation` and `Waiver` tables
 **Priority:** P0 · **Effort:** M
-**Status:** Shipped — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema
+**Status:** Shipped — NX-3 / Issue #443 / PR #444 / merge commit `d261330` (code commit `513aa69`)
 
 **Problem.** Deviations and Waivers are first-class CM authorisations (per IEEE 828 + EIA-649-C §7.5 + ARP4754A §5.3) and have zero backend persistence. Approving a deviation against a safety-critical CI is currently a one-click affordance with no signer, no expiry, no audit trail beyond a session-local log entry.
 
@@ -126,7 +126,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N3 · Schema migration — `CcbDecision` table joined to existing `ChangeRequest`
 **Priority:** P0 · **Effort:** M
-**Status:** Shipped — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema
+**Status:** Shipped — NX-3 / Issue #443 / PR #444 / merge commit `d261330` (code commit `513aa69`)
 
 **Problem.** The frontend Changes tab models a CCB-aware change request (`safetyImpact`, `ccbLevel`, `impactedCIs[]`, `decisionBy`, `decisionAt`). The Prisma `ChangeRequest` model — designed for the Requirements module's CR flow — has none of those columns. Today the CM tab maintains a parallel mock CR concept.
 
@@ -160,6 +160,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N5 · Seed CCB roles into `AdminRole` on first boot
 **Priority:** P0 · **Effort:** S
+**Status:** Closed — superseded by R-7 (`requireEngineeringRole` + the `CCB Member` engineering role). R-7 confirmed `AdminRole` is the wrong primitive for CCB-role gating: five of the six roles already exist in the `EngineeringRole` discipline catalogue, R-7 added the one missing `CCB Member` role and shipped the `seed-engineering-roles.ts` script + the `requireEngineeringRole(roleNames)` discipline gate (`AuditLog` 2026-05-16 closure). NX-3's CM sign-off ceremonies consume `requireEngineeringRole(['Configuration Manager', 'CCB Member', 'Safety Engineer'])` directly — there is no `seedCcbAdminRoles.ts`. `AdminRole` continues to gate API-call capability; `EngineeringRole` gates sign-off authorisation.
 
 **Problem.** `kb/configuration-management.md` mandates six CCB roles (ConfigManager, SystemEngineer, VerificationEngineer, SafetyEngineer, CCBMember, Auditor). Today the frontend has a string-union enum (`CMRole` in `types.ts:174-180`) and a client-side permissions matrix (`constants.ts:179-195`). Neither is enforced.
 
