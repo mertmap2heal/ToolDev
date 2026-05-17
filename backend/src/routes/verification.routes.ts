@@ -1,4 +1,5 @@
-import { Router } from 'express'
+import { Router, NextFunction } from 'express'
+import multer from 'multer'
 import { authenticateToken, requireAdmin } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as mocController from '../controllers/verification/moc.controller'
@@ -30,6 +31,42 @@ const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+
+/**
+ * multer instance for the test-result file-ingest endpoint (N-2.4).
+ * memoryStorage keeps the file in a Buffer (no disk write); the 8 MB cap
+ * matches the ReqIF import cap (#298) and bounds the XML-parser workload.
+ */
+const testResultUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+})
+
+/**
+ * Wrap multer's single-file middleware so a multer error (e.g. the file
+ * exceeding the 8 MB cap) becomes a clean 400 instead of Express's default
+ * 500. A successful parse passes control to the controller.
+ */
+function uploadTestResultFile(req: AuthRequest, res: Response, next: NextFunction): void {
+  testResultUpload.single('file')(req, res, (err: unknown) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        const msg =
+          err.code === 'LIMIT_FILE_SIZE'
+            ? 'Uploaded file exceeds the 8 MB limit'
+            : `Upload error: ${err.message}`
+        res.status(400).json({ success: false, error: msg })
+        return
+      }
+      res.status(400).json({
+        success: false,
+        error: `Upload error: ${(err as Error)?.message || 'invalid upload'}`,
+      })
+      return
+    }
+    next()
+  })
+}
 
 // A) MoC Endpoints
 // MoC rows are system-wide compliance definitions; only admins may mutate them (#132).
@@ -207,6 +244,14 @@ router.get('/test-results/:projectId/:id/download', testResultController.downloa
 
 // N.1) Test Runs (Automated Ingestion + Manual)
 router.post('/runs/ingest/:projectId', runIngestionController.ingestAutomatedResult)
+// File upload variant — accepts a raw CI-tool output file (JUnit/xUnit/NUnit/
+// Robot/TAP/pytest) and parses it before ingestion. projectId is membership-
+// scoped by router.param above; the 8 MB cap is enforced by multer.
+router.post(
+  '/runs/ingest/:projectId/file',
+  uploadTestResultFile,
+  runIngestionController.ingestFileResult
+)
 router.get('/test-runs/:projectId', runIngestionController.getTestRuns)
 router.get('/test-runs/:projectId/:runId', runIngestionController.getTestRun)
 router.post('/test-runs/:projectId', testRunController.createTestRun)
