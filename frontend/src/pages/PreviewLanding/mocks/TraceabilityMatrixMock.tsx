@@ -45,7 +45,7 @@ export default function TraceabilityMatrixMock() {
       <div className="pl-matrix-row pl-matrix-row--head">
         <div>Objective</div>
         <div>Description</div>
-        <div style={{ textAlign: 'right' }}>Requirements</div>
+        <div className="pl-matrix-cell--right">Requirements</div>
         <div>Status</div>
       </div>
       {ROWS.map((r) => (

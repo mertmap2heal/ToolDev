@@ -491,52 +491,23 @@
   border-top: 1px solid var(--border-default);
   background-color: var(--surface-base);
 }
-.preview-landing .pl-footer-grid {
-  display: grid;
-  grid-template-columns: 1.4fr repeat(3, 1fr);
-  gap: 48px;
-  margin-bottom: 48px;
-}
-@media (max-width: 768px) {
-  .preview-landing .pl-footer-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
-  }
-}
-.preview-landing .pl-footer-col h4 {
-  font-family: var(--font-mono);
-  font-size: var(--caption);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
-  margin: 0 0 16px 0;
-  font-weight: 500;
-}
-.preview-landing .pl-footer-col ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.preview-landing .pl-footer-col a {
-  color: var(--ink-primary);
-  text-decoration: none;
-  font-size: var(--body-sm);
-  transition: color 80ms ease-out;
-}
-.preview-landing .pl-footer-col a:hover {
-  color: var(--accent-primary);
-}
 .preview-landing .pl-footer-bottom {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
   padding-top: 32px;
   border-top: 1px solid var(--border-default);
   font-size: var(--body-sm);
   color: var(--ink-muted);
+}
+.preview-landing .pl-footer-bottom a {
+  color: var(--ink-primary);
+  font-size: var(--body-sm);
+}
+.preview-landing .pl-footer-bottom a:hover {
+  color: var(--accent-primary);
 }
 
 /* --- Focus rings --- */
@@ -667,4 +638,204 @@
 @media (max-width: 900px) {
   .preview-landing .pl-pair--reverse .pl-pair__text { order: 1; }
   .preview-landing .pl-pair--reverse .pl-pair__media { order: 2; }
+}
+
+/* ============================================================
+   NX-6 — named classes absorbing former inline style={{}} blocks.
+   Each class below carries the identical declarations the inline
+   style held; the migration is a pure refactor with no visual
+   change. All spacing is on the 8px grid (design-system.md §3.4).
+   ============================================================ */
+
+/* Navbar — flex bar (was inline on .pl-container) */
+.preview-landing .pl-nav__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 32px;
+}
+/* Navbar — compact Start free CTA (was inline on the Link) */
+.preview-landing .pl-nav__cta {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* Hero — matrix media wrapper (was marginTop:64) */
+.preview-landing .pl-hero__media {
+  margin-top: 64px;
+}
+
+/* StandardsStrip / TrustStrip — shared strip section padding
+   (was inline padding:'48px 0'; borderBottom on each <section>) */
+.preview-landing .pl-strip {
+  padding: 48px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+/* StandardsStrip — caption spacing (was marginBottom:16) */
+.preview-landing .pl-strip__caption {
+  margin-bottom: 16px;
+}
+
+/* TrustStrip — one compliance item (was inline display:inline-flex) */
+.preview-landing .pl-trust-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+}
+
+/* ObjectiveFirst — the Table A-3 matrix row column template
+   (was inline gridTemplateColumns on .pl-matrix-row) */
+.preview-landing .pl-matrix-row--objective {
+  grid-template-columns: 72px 1fr 110px 80px;
+}
+
+/* IntegrationHub / Numbers — section lede column (was maxWidth:720) */
+.preview-landing .pl-section__lede {
+  max-width: 720px;
+}
+/* Numbers — lede column with bottom spacing (was maxWidth:720; marginBottom:64) */
+.preview-landing .pl-section__lede--spaced {
+  max-width: 720px;
+  margin-bottom: 64px;
+}
+/* IntegrationHub — narrower body copy (was maxWidth:640) */
+.preview-landing .pl-section__body--narrow {
+  max-width: 640px;
+}
+/* IntegrationHub — MCP diagram media wrapper (was marginTop:64) */
+.preview-landing .pl-integration__media {
+  margin-top: 64px;
+}
+
+/* Footer — brand block (replaces the former 1.4fr grid cell) */
+.preview-landing .pl-footer-brand {
+  margin-bottom: 48px;
+}
+/* Footer — wordmark sizing (was fontSize:28; display:inline-block) */
+.preview-landing .pl-footer__wordmark {
+  font-size: 28px;
+  display: inline-block;
+}
+/* Footer — tagline (was marginTop:16; maxWidth:320; color) */
+.preview-landing .pl-footer__tagline {
+  margin-top: 16px;
+  max-width: 320px;
+  color: var(--ink-muted);
+}
+/* Footer — slim single legal row (replaces the former 3-column grid) */
+.preview-landing .pl-footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+}
+
+/* MCPDiagramMock — 4-column node/connector grid (was inline) */
+.preview-landing .pl-mcp__flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+/* MCPDiagramMock — tool-name pill row (was inline) */
+.preview-landing .pl-mcp__tools {
+  margin-top: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* MCPDiagramMock — footnote caption (was inline overrides on .pl-caption) */
+.preview-landing .pl-mcp__note {
+  margin-top: 16px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* MCPDiagramMock — SVG connector (was inline on <svg>) */
+.preview-landing .pl-mcp__connector {
+  width: 100%;
+  height: 16px;
+  display: block;
+}
+/* MCPDiagramMock — connector stroke colours (token-driven; was hardcoded hex) */
+.preview-landing .pl-mcp__connector-line {
+  stroke: var(--border-strong);
+}
+.preview-landing .pl-mcp__connector-arrow {
+  stroke: var(--accent-primary);
+}
+
+/* TraceabilityMatrixMock — right-aligned header cell (was textAlign:right) */
+.preview-landing .pl-matrix-cell--right {
+  text-align: right;
+}
+
+/* ProvenanceChainMock — record id spacing (was marginTop:4) */
+.preview-landing .pl-provenance__id-spacing {
+  margin-top: 4px;
+}
+
+/* ============================================================
+   NX-6 — FAQ accordion (landing-local section, not a shared
+   primitive). Aerospace-buyer Q&A. Tokens only.
+   ============================================================ */
+.preview-landing .pl-faq__list {
+  margin-top: 48px;
+  border-top: 1px solid var(--border-default);
+}
+.preview-landing .pl-faq__item {
+  border-bottom: 1px solid var(--border-default);
+}
+.preview-landing .pl-faq__question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 24px 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--title-sm);
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.preview-landing .pl-faq__icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  position: relative;
+}
+.preview-landing .pl-faq__icon::before,
+.preview-landing .pl-faq__icon::after {
+  content: '';
+  position: absolute;
+  background-color: var(--accent-primary);
+}
+.preview-landing .pl-faq__icon::before {
+  top: 7px;
+  left: 0;
+  width: 16px;
+  height: 2px;
+}
+.preview-landing .pl-faq__icon::after {
+  top: 0;
+  left: 7px;
+  width: 2px;
+  height: 16px;
+  transition: opacity 80ms ease-out;
+}
+.preview-landing .pl-faq__question[aria-expanded='true'] .pl-faq__icon::after {
+  opacity: 0;
+}
+.preview-landing .pl-faq__answer {
+  padding: 0 0 24px 0;
+  font-size: var(--body-lg);
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 760px;
 }

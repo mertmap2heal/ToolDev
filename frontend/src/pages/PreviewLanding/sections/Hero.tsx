@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom'
+import { authService } from '../../../services/auth.service'
 import TraceabilityMatrixMock from '../mocks/TraceabilityMatrixMock'
 
 export default function Hero() {
+  // Auth-aware CTA: the landing only renders when unauthenticated (LandingOrApp
+  // gates on the token), so this is near-moot today — but it satisfies the AC
+  // literally and stays correct if that gate ever changes.
+  const isAuthed = Boolean(authService.getToken())
+
   return (
     <section id="top" className="pl-hero">
       <div className="pl-container">
@@ -14,11 +20,16 @@ export default function Hero() {
             not around ALM. Built for human-AI teams, not AI autonomy.
           </p>
           <div className="pl-hero-cta-row">
-            <Link to="/login" className="pl-cta-primary">Start free</Link>
-            <a href="#contact" className="pl-cta-secondary">Talk to an engineer</a>
+            <Link to={isAuthed ? '/' : '/login'} className="pl-cta-primary">
+              {isAuthed ? 'Open app' : 'Start free'}
+            </Link>
+            {/* TODO: real contact address pending founder decision */}
+            <a href="mailto:hello@example.com" className="pl-cta-secondary">
+              Talk to an engineer
+            </a>
           </div>
         </div>
-        <div style={{ marginTop: 64 }}>
+        <div className="pl-hero__media">
           <TraceabilityMatrixMock />
         </div>
       </div>

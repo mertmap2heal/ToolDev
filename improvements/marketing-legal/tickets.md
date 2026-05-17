@@ -4,6 +4,8 @@ One ticket per `roadmap.md` Phase 2 "Concrete replacements" sub-item, plus the t
 
 Each ticket carries: a one-line goal, files touched, acceptance criteria, and a `roadmap.md` reference.
 
+> **Scoping note (2026-05-18, PM).** `ROADMAP-phase3.md` §3 NX-6 ("Real landing page + brand migration completion") is an epic. It has been scoped to **one** shippable agentic-workflow ticket — the **landing-page per-section rebuild** — tracked as **Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454)**. That issue aggregates Tickets 1, 2, 3, 5, 6, 7 below plus Cross-cutting Ticket B (landing scope). Ticket 0 already shipped (N-1c). Cross-cutting Ticket A is the R-9 design-token foundation — already shipped (merge `30ee279`). Ticket 4 (PricingSection) is a founder decision folded into the #454 scope and may be deferred. **State-on-the-ground caveat:** Tickets 1-7 below were written against the now-deleted `frontend/src/components/landing/` directory; the canonical landing is now `frontend/src/pages/PreviewLanding/` with a different section set (`Navbar` / `Hero` / `StandardsStrip` / `ObjectiveFirst` / `HumanAITeaming` / `IntegrationHub` / `Numbers` / `TrustStrip` / `Footer`). The Architect restates the per-section rebuild against the actual `sections/` files — see #454 body.
+
 ---
 
 ## Ticket 0 — Promote `/preview/landing` to the canonical `/` route
@@ -21,6 +23,8 @@ Each ticket carries: a one-line goal, files touched, acceptance criteria, and a 
 ---
 
 ## Ticket 1 — Rebuild `LandingHero.tsx` with the elevator-pitch copy and a real product screenshot
+
+**Status:** Shipped — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. Restated against the actual `PreviewLanding/sections/Hero.tsx`: Hero is already token-clean with the `vision-and-usp.md` §12 pitch verbatim — NX-6 migrated its inline `marginTop` style to `pl-hero__media`, resolved the `#contact` CTA to a `mailto:`, and made `Start free` auth-aware. Per the approved Architecture/Design comments the hero keeps `TraceabilityMatrixMock` (a token-clean, product-truthful Table A-5 render) — a real screenshot swap is a follow-on once NX-7 ships the objective-completion matrix.
 
 **Goal.** Replace the placeholder gradient hero with the three-second elevator pitch from `vision-and-usp.md` §12 and a real product screenshot of the objective-completion matrix.
 
@@ -53,6 +57,8 @@ Each ticket carries: a one-line goal, files touched, acceptance criteria, and a 
 ---
 
 ## Ticket 2 — Replace `FeaturesSection` with editorial alternating layout
+
+**Status:** Shipped — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. Restated against the actual page: no `FeaturesSection` exists — `ObjectiveFirst` and `HumanAITeaming` are already the editorial alternating two-column layout `design-system.md` §6 prescribes. NX-6 migrated their residual inline styles to `pl-*` classes; no structural change needed.
 
 **Goal.** Replace the 3-column icon-and-paragraph grid with five full-width sections, alternating image-left / image-right, each naming an artefact and a standard.
 
@@ -87,6 +93,8 @@ Each ticket carries: a one-line goal, files touched, acceptance criteria, and a 
 
 ## Ticket 3 — Replace `ModulesSection` with a narrative certification-loop walkthrough
 
+**Status:** Shipped (no-op) — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. Restated against the actual page: no `ModulesSection` / 20-card grid exists — the `PreviewLanding` page is already a narrative walkthrough (objective-first -> human-AI -> integrate -> numbers) with no feature-count grid to invite the `competitor-matrix.md` §10 comparison. Nothing to delete or rebuild.
+
 **Goal.** Stop inviting a feature-matrix fight we lose. Replace the 20-card grid with a single narrative of one complete certification loop.
 
 **Files.**
@@ -114,6 +122,8 @@ If Ticket 2 already walks the five-step loop, this section becomes redundant —
 ---
 
 ## Ticket 4 — `PricingSection` real-or-remove decision
+
+**Status:** Folded into Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454) (NX-6) scope as a founder decision — may be deferred. The Designer states the call in the #454 design comment.
 
 **Goal.** Decide between real pricing and removal. Either is acceptable; "Contact us" placeholder is not.
 
@@ -152,6 +162,8 @@ Cleaner, but loses the self-serve "I see the price, I buy" motion `vision-and-us
 
 ## Ticket 5 — `SecuritySection` replaced with compliance-badge strip
 
+**Status:** Shipped — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. Restated against the actual page: `StandardsStrip` + `TrustStrip` are the token-clean badge-strip equivalents. NX-6 migrated their inline styles to a shared `pl-strip` class and replaced the bare/false `TrustStrip` claims (`SOC 2 Type II`, `ISO/IEC 42001 aligned`, `EU AI Act Article 9 ready`) with honest pre-launch qualifiers (`readiness in progress`, `alignment in progress`, `risk process designed`) per `vision-and-usp.md` §13 — no "certified", no fake badge. The full `/trust` page stays out of scope (Phase 8).
+
 **Goal.** Replace four-card RBAC/Audit/Trace/Export grid with a named compliance-badge strip and a `/trust` link.
 
 **Files.**
@@ -185,6 +197,8 @@ Cleaner, but loses the self-serve "I see the price, I buy" motion `vision-and-us
 
 ## Ticket 6 — `FAQAccordion` rewrite for aerospace buyers
 
+**Status:** Shipped — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. The Designer ruled INCLUDE. NX-6 added a new landing-local `sections/Faq.tsx` — an accessible accordion (`<button aria-expanded>` / `aria-controls`, native Enter/Space, visible focus ring) with the six aerospace-buyer questions (standards, is-the-tool-certified, AI-sign-off, replace-vs-integrate, ITAR data residency, cancel/export) whose answers echo `vision-and-usp.md` positioning. It is a landing-local section, not a shared primitive (Phase-3 follow-on).
+
 **Goal.** Replace the generic SaaS FAQ with the questions an aerospace chief engineer actually asks.
 
 **Files.**
@@ -212,6 +226,8 @@ Cleaner, but loses the self-serve "I see the price, I buy" motion `vision-and-us
 ---
 
 ## Ticket 7 — `LandingFooter` minimal with trust/status/changelog slots
+
+**Status:** Shipped — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. Restated against the actual `PreviewLanding/sections/Footer.tsx`: the dead `#`-anchor Product / Docs / Trust columns (12 anchors at routes behind auth or unbuilt Phase-8 surfaces) were removed — a link to a non-existent page is the dead affordance `design-system.md` §2.4 forbids. Net footer = wordmark + tagline + one slim legal row (`/privacy`, `/terms`, a `mailto:`, copyright). Inline styles migrated to `pl-footer__*` classes. Phase-8 `/status` and `/changelog` slots are NOT stubbed — they are omitted until those pages exist.
 
 **Goal.** Footer follows `roadmap.md` Phase 2 doctrine: *"Sitemap, trust page, status page, contact. No marketing flourish."*
 
@@ -255,6 +271,8 @@ Cleaner, but loses the self-serve "I see the price, I buy" motion `vision-and-us
 ---
 
 ## Cross-cutting Ticket B — Copy kill-list sweep (Phase 6 partial)
+
+**Status:** Landing scope Shipped — NX-6 / Issue [#454](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/454), branch `feat/NX-6-landing-rebuild`. The `PreviewLanding/` page was already kill-list-clean on arrival (per the approved Architecture comment); NX-6's edits — the honest `TrustStrip` qualifiers and the new `Faq.tsx` copy — were verified to introduce zero `design-system.md` §5.1 kill-list words. The wider codebase-wide Phase 6 sweep stays out of #454 and is a separate follow-on ticket.
 
 **Goal.** Per `roadmap.md` Phase 6, grep the kill-list across the codebase and fix every hit. The marketing-legal rebuild fixes the landing surface; this cross-cutting ticket continues the sweep into the rest of the product.
 

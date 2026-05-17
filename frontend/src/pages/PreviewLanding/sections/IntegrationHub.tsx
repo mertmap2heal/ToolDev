@@ -24,12 +24,12 @@ export default function IntegrationHub() {
   return (
     <section className="pl-section">
       <div className="pl-container">
-        <div style={{ maxWidth: 720 }}>
+        <div className="pl-section__lede">
           <div className="pl-eyebrow">API-first &middot; MCP-native</div>
           <h2 className="pl-display pl-display-lg pl-section-head__heading">
             Integrate, don&rsquo;t replace.
           </h2>
-          <p className="pl-section-head__body" style={{ maxWidth: 640 }}>
+          <p className="pl-section-head__body pl-section__body--narrow">
             Keep Azure DevOps. Keep Jira. Keep Git. Keep MATLAB. Keep Cameo.
             Verum is the hub that connects them &mdash; bidirectional, provenance-aware,
             MCP-native. Any agent your team operates can drive the tool through
@@ -42,7 +42,7 @@ export default function IntegrationHub() {
           </div>
         </div>
 
-        <div style={{ marginTop: 64 }}>
+        <div className="pl-integration__media">
           <MCPDiagramMock />
         </div>
       </div>

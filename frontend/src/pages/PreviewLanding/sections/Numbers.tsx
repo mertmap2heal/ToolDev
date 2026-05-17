@@ -14,7 +14,7 @@ export default function Numbers() {
   return (
     <section className="pl-section">
       <div className="pl-container">
-        <div style={{ maxWidth: 720, marginBottom: 64 }}>
+        <div className="pl-section__lede--spaced">
           <div className="pl-eyebrow">The numbers</div>
           <h2 className="pl-display pl-display-lg pl-section-head__heading">
             Measured where it matters.
