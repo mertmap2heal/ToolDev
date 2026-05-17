@@ -10,11 +10,13 @@ import {
 } from '../controllers/component.controller'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 
 const router = express.Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
 
 /**
  * Component Routes (PBS - Product Breakdown Structure)

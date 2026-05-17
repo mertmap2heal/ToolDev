@@ -16,6 +16,7 @@ Tickets reference `gap-summary.md` items and `cross-cutting.md` refactors by nam
 ### ISS-1 (N) — Add `requireProjectMember` to issues.routes.ts
 Today `authenticateToken` is the only middleware. Any authenticated user can issue requests against any project's issues. Same gap fixed in `changeRequests.routes.ts:20`. Mirror the pattern.
 **Acceptance:** A user who is not a member of project X receives 403 on `GET /api/v1/issues/X`. Existing test suite still passes.
+**Status: Shipped — 5d75f76 (N-3, Issue #434)**
 
 ### ISS-2 (Q) — "Convert to Change Request" button on IssueDetailPage
 The IssuesPage list view has the action (`CreateChangeRequestModal` with `sourceType=issue`); the detail page does not. Add the action to the detail page's `MoreMenu`. Same modal opens; passing the current issue's `id`.
@@ -74,6 +75,7 @@ Today `SystemFunction.verificationMethod: String?` overlaps `VerMoc` (a typed Mo
 
 ### FN-4 (Q) — Add `requireProjectMember` to functions.routes.ts
 Same authorization hardening as ISS-1.
+**Status: Shipped — 5d75f76 (N-3, Issue #434)**
 
 ---
 
@@ -254,6 +256,7 @@ Customer scenarios: a 200-row Excel sheet listing the planned breakdown. Add `PO
 
 ### PBS-3 (Q) — `requireProjectMember` on components.routes.ts
 Same auth hardening as ISS-1.
+**Status: Shipped — 5d75f76 (N-3, Issue #434)**
 
 ### PBS-4 (N) — Allocation rollups in tree view
 For each component, compute "N functions, M requirements, P parameters allocated to or below this node." Useful in demos. Compute lazily or via materialised view.
@@ -275,6 +278,7 @@ Per `backend.md` §13. String-array linkage is the wrong pattern; the project al
 
 ### UC-3 (Q) — `requireProjectMember` on usecases.routes.ts
 Same auth hardening.
+**Status: Shipped — 5d75f76 (N-3, Issue #434)**
 
 ---
 
