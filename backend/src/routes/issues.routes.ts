@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import {
   createIssue,
   getIssues,
@@ -26,6 +27,7 @@ const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
 
 // Labels — MUST come before `/:id` routes; otherwise Express matches
 // the literal string "labels" as a `:id` value and getIssue 404s.

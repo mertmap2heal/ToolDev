@@ -1,12 +1,14 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import * as useCaseController from '../controllers/usecase.controller'
 
 const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
 
 // Actors — MUST come before `/:useCaseId` routes; otherwise Express
 // matches the literal string "actors" as a `:useCaseId` and the

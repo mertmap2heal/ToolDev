@@ -106,6 +106,36 @@ Do not skip `authenticateToken` on any route that accesses project or user data.
 Only intentionally public routes (health check, invite accept, password reset)
 should be unprotected.
 
+### Project-scoped routes — `projectIdParam` + `requireProjectMember`
+
+Any route file whose paths carry a `:projectId` segment must, after
+`authenticateToken`, apply **both** of these in order:
+
+1. `router.param('projectId', projectIdParam)` — resolves slug/UUID **and**
+   access-checks the caller (returns 403 for non-members; #281 tenant-scopes
+   the `COMPANY_ADMIN` bypass). This is the load-bearing gate.
+2. `router.use('/:projectId', requireProjectMember)` — explicit
+   defence-in-depth gate, so the protection survives a future edit that
+   removes the param handler or adds a non-`:projectId` route.
+
+```ts
+import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
+
+router.use(authenticateToken)
+router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
+```
+
+`changeRequests.routes.ts` is the canonical reference. The two lines are
+deliberately redundant — do not "tidy up" by deleting either; the
+`tenantScope.test.ts` smoke suite asserts a real 403 for a non-member against
+each project-scoped route file and would fail if a gate is removed.
+`requireProjectMember` is not a tenant *filter* — it admits accepted members,
+the legacy owner, and (tenant-scoped) platform admins; the controller must
+still scope its own queries by the resolved `projectId`.
+
 ### Reauthentication for sign-off endpoints (`requireReauth`)
 
 CFR 21 Part 11 signing events require the user to re-enter their password at
