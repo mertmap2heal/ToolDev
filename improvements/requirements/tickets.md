@@ -188,7 +188,7 @@ Tests:
 
 ### REQ-M3. Unified bulk-edit drawer + endpoint
 
-**Status: Shipped — feat/NX-4-unified-bulk-edit (PR against dev), Issue [#447](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/447) (NX-4).**
+**Status: Shipped — PR [#448](https://github.com/chriertcafdle-beep/ToolDevelopment/pull/448) (merge commit `cf9afd6`), Issue [#447](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/447) (NX-4).**
 The hardened generic `/bulk-update` convention + a new shared `<BulkEditDrawer>`. NO schema
 change, NO new npm dependency (`crypto.randomUUID()` is a Node built-in). Per the approved
 #447 Architecture comment, Excel round-trip was split to a separate co-ticket (Option A) —

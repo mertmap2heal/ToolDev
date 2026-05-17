@@ -260,6 +260,22 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 
 ---
 
+### How to bulk-edit requirements
+
+Change the same field on many requirements at once — for example, reassign 20 requirements to a new owner, or set a batch to High priority.
+
+1. Select two or more requirements using the row checkboxes. Hold **Shift** and click a second checkbox to select a continuous range; use the header checkbox to select every row on the page.
+2. Click **Edit fields…** in the selection bar.
+3. **Fields step** — tick the field(s) you want to change.
+4. **Values step** — enter the new value for each selected field.
+5. **Review step** — check the count of affected requirements, then click **Apply**.
+
+**Result:** A confirmation toast reports how many requirements were updated, and separately how many were skipped because they are locked by a baseline or were changed by someone else since you opened the page. The toast links to the audit log, where every requirement in the batch is recorded under one shared batch reference.
+
+> **Note:** Locked requirements are skipped, not failed — the rest of the batch still applies. Some fields (such as lifecycle status) can only be bulk-edited by a Project Admin.
+
+---
+
 ### How to view the traceability matrix
 
 1. Open **Traceability → Traceability Matrix** in the toolbar.
