@@ -2,7 +2,7 @@
  * NX-4 (#447) — shared <BulkEditDrawer> (SHR-class).
  *
  * The generic bulk-edit wizard for the `/bulk-update` convention
- * (.claude/kb/backend-patterns.md "Bulk-edit convention"). Built polymorphic
+ * (.claude/kb/backend-patterns.md "Bulk-update convention"). Built polymorphic
  * from day one — parameterised by `entityType`, an `editableFields` descriptor,
  * and an `onApply` callback. Requirements is the reference consumer; the named
  * follow-on adopters (Verification / Validation / Tasks / Issues / Change
@@ -21,7 +21,7 @@
  * BEFORE confirm (step ③) and after (the result panel).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X, Check, AlertTriangle, ChevronDown } from 'lucide-react'
+import { X, Check, AlertTriangle, ChevronDown, ExternalLink } from 'lucide-react'
 import clsx from 'clsx'
 
 // ---------------------------------------------------------------------------
@@ -95,6 +95,13 @@ export interface BulkEditDrawerProps {
     updates: Record<string, unknown>,
     optimisticVersions: Record<string, number>,
   ) => Promise<BulkEditResult>
+  /**
+   * Optional — navigate to the audit log filtered by the result `batchId`.
+   * When provided, the result panel renders a "View this batch in the audit
+   * log" link (the consumer owns routing — the drawer stays generic). When
+   * omitted, the panel still shows the copyable batch id.
+   */
+  onViewBatchInAuditLog?: (batchId: string) => void
 }
 
 type WizardStep = 1 | 2 | 3
@@ -105,6 +112,10 @@ const STEP_LABELS: Record<WizardStep, string> = {
   2: '2 · Values',
   3: '3 · Review',
 }
+
+/** Focus-trap target selector — the established codebase pattern (useFocusTrap.ts). */
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 // ---------------------------------------------------------------------------
 // Component.
@@ -118,6 +129,7 @@ export default function BulkEditDrawer({
   canEditPrivileged,
   onClose,
   onApply,
+  onViewBatchInAuditLog,
 }: BulkEditDrawerProps) {
   const [step, setStep] = useState<WizardStep>(1)
   const [pickedKeys, setPickedKeys] = useState<Set<string>>(new Set())
@@ -148,6 +160,55 @@ export default function BulkEditDrawer({
     if (isOpen) headingRef.current?.focus()
   }, [isOpen, step, phase])
 
+  // F-3 (#447) / §9: trap focus within the drawer and restore it to the
+  // trigger on close. Reuses the established focus-trap pattern in the
+  // codebase (modules/certification/useFocusTrap.ts) inline — same FOCUSABLE
+  // selector, same Tab-wrap, same previous-focus restore — kept local rather
+  // than imported so a components/common/ file does not depend on a module.
+  useEffect(() => {
+    if (!isOpen) return
+    const panel = panelRef.current
+    if (!panel) return
+    const triggerEl = document.activeElement as HTMLElement | null
+    const getFocusables = () =>
+      Array.from(
+        panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter((el) => el.offsetParent !== null)
+
+    const onTabKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const focusables = getFocusables()
+      if (focusables.length === 0) {
+        // Nothing focusable — keep focus on the panel itself.
+        e.preventDefault()
+        panel.focus()
+        return
+      }
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const current = document.activeElement as HTMLElement | null
+      if (e.shiftKey) {
+        if (current === first || !panel.contains(current)) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (current === last || !panel.contains(current)) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    panel.addEventListener('keydown', onTabKey)
+    return () => {
+      panel.removeEventListener('keydown', onTabKey)
+      // Restore focus to whatever opened the drawer (the Bulk-actions trigger).
+      if (triggerEl && typeof triggerEl.focus === 'function') {
+        triggerEl.focus()
+      }
+    }
+  }, [isOpen])
+
   const selectionCount = rows.length
   const lockedCount = useMemo(() => rows.filter((r) => r.isLocked).length, [rows])
 
@@ -156,6 +217,13 @@ export default function BulkEditDrawer({
   // and the backend remains the authority (it re-checks inside the $transaction).
   const willUpdateCount = useMemo(
     () => rows.filter((r) => !r.isLocked).length,
+    [rows],
+  )
+
+  // Whether any non-locked row carries a version — i.e. whether the
+  // `skippedDueToConflict` disposition is in play for this batch (F-4).
+  const anyConflictChecked = useMemo(
+    () => rows.some((r) => !r.isLocked && typeof r.version === 'number'),
     [rows],
   )
 
@@ -256,7 +324,8 @@ export default function BulkEditDrawer({
       {/* Panel — translate-only 200ms ease-out entry, radius.lg. */}
       <div
         ref={panelRef}
-        className="relative h-full w-full max-w-md bg-surface-base flex flex-col rounded-l-2xl overflow-hidden animate-[slideIn_200ms_ease-out]"
+        tabIndex={-1}
+        className="relative h-full w-full max-w-md bg-surface-base flex flex-col rounded-l-2xl overflow-hidden animate-[slideIn_200ms_ease-out] outline-none"
         style={{ animationName: 'slideIn' }}
       >
         <style>{`@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
@@ -314,7 +383,11 @@ export default function BulkEditDrawer({
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {/* ------- DONE / ERROR ------- */}
           {phase === 'done' && result && (
-            <ResultPanel result={result} entityType={entityType} />
+            <ResultPanel
+              result={result}
+              entityType={entityType}
+              onViewBatchInAuditLog={onViewBatchInAuditLog}
+            />
           )}
           {phase === 'error' && (
             <div
@@ -412,14 +485,30 @@ export default function BulkEditDrawer({
               <h3 className="text-sm font-semibold text-ink-primary mb-3">
                 Review and confirm
               </h3>
-              <p className="text-sm text-ink-muted mb-3">
+              <p className="text-sm text-ink-muted mb-1">
                 {willUpdateCount} of {selectionCount} will update
-                {lockedCount > 0 && ` — ${lockedCount} locked`}
-                {lockedCount > 0
-                  ? ', some may be skipped if changed since you loaded them'
-                  : ' — some may be skipped if changed since you loaded them'}
-                .
+                {lockedCount > 0 && ` — ${lockedCount} locked, skipped`}.
               </p>
+              {/*
+                F-4 (#447): the full disposition set. `Locked` is determinable
+                client-side (shown per row below). A `changed since loaded`
+                conflict is NOT determinable here — the server re-checks each
+                version inside the transaction and reports skippedDueToConflict
+                in the result panel. Rows carrying a version are conflict-
+                protected; rows without one get no conflict check.
+              */}
+              {anyConflictChecked && (
+                <p className="text-xs text-ink-faint mb-3">
+                  Version-tracked rows are also skipped if changed since you
+                  loaded them — that is reported after you confirm.
+                </p>
+              )}
+              {!anyConflictChecked && (
+                <p className="text-xs text-ink-faint mb-3">
+                  These rows have no version check — a concurrent edit will not
+                  block the update.
+                </p>
+              )}
               <div className="rounded-md border border-default overflow-hidden">
                 <table className="w-full text-sm">
                   <tbody>
@@ -431,7 +520,11 @@ export default function BulkEditDrawer({
                         <td className="px-3 py-2 text-right">
                           {r.isLocked ? (
                             <span className="text-xs font-medium text-status-warning">
-                              Locked — skipped
+                              Locked — will skip
+                            </span>
+                          ) : typeof r.version === 'number' ? (
+                            <span className="text-xs font-medium text-status-success">
+                              Will update — version checked
                             </span>
                           ) : (
                             <span className="text-xs font-medium text-status-success">
@@ -627,9 +720,11 @@ function ValueInput({
 function ResultPanel({
   result,
   entityType,
+  onViewBatchInAuditLog,
 }: {
   result: BulkEditResult
   entityType: string
+  onViewBatchInAuditLog?: (batchId: string) => void
 }) {
   const { updated, skippedDueToLock, skippedDueToConflict, batchId } = result
   const noneUpdated = updated === 0
@@ -640,6 +735,12 @@ function ResultPanel({
     : allUpdated
       ? `${updated} ${entityType}${updated === 1 ? '' : 's'} updated`
       : `${updated} updated · ${skippedDueToLock} skipped (locked) · ${skippedDueToConflict} skipped (changed since you loaded them)`
+
+  // F-4 (#447): each disposition the endpoint returned, named separately —
+  // locked and stale rows are different problems with different fixes, never
+  // merged into one "skipped" number. The breakdown shows only when there is
+  // more than one disposition (an all-success result needs no breakdown).
+  const showBreakdown = !allUpdated
 
   return (
     <div aria-live="polite">
@@ -667,9 +768,40 @@ function ResultPanel({
         <p className="text-sm text-ink-primary">{summary}</p>
       </div>
 
-      <div className="mt-4 text-xs text-ink-muted">
-        <span className="text-ink-faint">Audit batch id</span>
-        <span className="ml-2 font-mono text-ink-primary select-all">{batchId}</span>
+      {showBreakdown && (
+        <dl className="mt-4 space-y-1.5 text-sm">
+          <div className="flex items-center justify-between">
+            <dt className="text-ink-muted">Updated</dt>
+            <dd className="font-medium text-status-success">{updated}</dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <dt className="text-ink-muted">Skipped — locked</dt>
+            <dd className="font-medium text-status-warning">{skippedDueToLock}</dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <dt className="text-ink-muted">Skipped — changed since you loaded them</dt>
+            <dd className="font-medium text-status-warning">{skippedDueToConflict}</dd>
+          </div>
+        </dl>
+      )}
+
+      {/* F-1 (#447): link the batch to the audit log. The batch id stays
+          copyable below the link. */}
+      <div className="mt-4 pt-4 border-t border-default">
+        {onViewBatchInAuditLog && (
+          <button
+            type="button"
+            onClick={() => onViewBatchInAuditLog(batchId)}
+            className="flex items-center gap-1.5 text-sm font-medium text-accent-primary hover:text-accent-primary-hover transition-colors"
+          >
+            <ExternalLink size={14} strokeWidth={1.75} />
+            View this batch in the audit log
+          </button>
+        )}
+        <div className="mt-2 text-xs text-ink-muted">
+          <span className="text-ink-faint">Audit batch id</span>
+          <span className="ml-2 font-mono text-ink-primary select-all">{batchId}</span>
+        </div>
       </div>
     </div>
   )

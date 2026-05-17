@@ -1,7 +1,7 @@
 // NX-4 (#447) — shared bulk-edit audit helper.
 //
 // The generic `/bulk-update` convention (see .claude/kb/backend-patterns.md
-// "Bulk-edit convention") has exactly one genuinely-shared mechanic: writing
+// "Bulk-update convention") has exactly one genuinely-shared mechanic: writing
 // one `AuditLog` row per touched row, every row sharing a single `batchId` so
 // the audit log can correlate a bulk edit. This file is that mechanic — a
 // ~30-line loop, NOT a new audit service. The canonical single-write audit

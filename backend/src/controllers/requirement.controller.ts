@@ -2816,7 +2816,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
 
 /**
  * NX-4 (#447) — the requirements reference implementation of the generic
- * `/bulk-update` convention (.claude/kb/backend-patterns.md "Bulk-edit
+ * `/bulk-update` convention (.claude/kb/backend-patterns.md "Bulk-update
  * convention").
  *
  * `BULK_EDITABLE_FIELDS` is the whitelist of scalar / array `Requirement`
@@ -2915,14 +2915,39 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
   try {
     const { projectId } = req.params
     const userId = req.userId
-    const { requirementIds, updates, optimisticVersions } = req.body as {
+    const { requirementIds, updates, optimisticVersions: rawOptimisticVersions } = req.body as {
       requirementIds?: unknown
       updates?: Record<string, unknown>
-      optimisticVersions?: Record<string, number>
+      optimisticVersions?: unknown
     }
 
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    // Security NB-1 (#447): `optimisticVersions` is attacker-controlled body
+    // input — validate its shape before use. It must be a plain object map of
+    // id -> number; anything else (an array, a string, a number) is rejected
+    // 400 with nothing written. Per-id entries that are not finite numbers are
+    // dropped (a row with no echoed version simply gets no conflict check).
+    let optimisticVersions: Record<string, number> | undefined
+    if (rawOptimisticVersions !== undefined) {
+      if (
+        typeof rawOptimisticVersions !== 'object' ||
+        rawOptimisticVersions === null ||
+        Array.isArray(rawOptimisticVersions)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'optimisticVersions must be an object mapping id to version number',
+        })
+      }
+      optimisticVersions = {}
+      for (const [id, value] of Object.entries(rawOptimisticVersions)) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          optimisticVersions[id] = value
+        }
+      }
     }
 
     if (!requirementIds || !Array.isArray(requirementIds) || requirementIds.length === 0) {
@@ -2969,6 +2994,20 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       })
     }
 
+    // F-2 (#447): write-path parity with the single-row `updateRequirement`.
+    // The single-row path sets `statusChangedAt` / `statusChangedBy` when (and
+    // only when) `statusId` changes. The bulk path replicates that, computed
+    // per row inside the transaction (the new value is the same for the whole
+    // batch; whether it is a *change* is per row). The single-row path does
+    // NOT touch `provenanceReviewStatus` / `reviewTimestamp` on an edit — so
+    // for true parity the bulk path does not either (`authorType` stays at the
+    // `"human"` column default for a human-driven bulk edit; bumping the
+    // provenance-review fields here would itself be a divergence).
+    const statusIdApplied = appliedFields.includes('statusId')
+    const newStatusId = statusIdApplied
+      ? ((updateData as Record<string, unknown>).statusId as string | null | undefined)
+      : undefined
+
     // Field-level RBAC — checked BEFORE the transaction opens; if the request
     // touches a privileged field and the caller is not owner/admin, 403 with
     // nothing written.
@@ -2976,6 +3015,28 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
     if (touchesPrivileged) {
       const privileged = await isProjectOwnerOrAdmin(userId, projectId)
       if (!privileged) {
+        // Security NB-3 (#447): record the denied privileged-field attempt —
+        // the SEC-1 / SEC-3 denial-audit pattern (an RBAC denial writes one
+        // `<module>:<kebab-verb>-denied` AuditLog row). The audit write must
+        // not break the response if it fails.
+        try {
+          await prisma.auditLog.create({
+            data: {
+              projectId,
+              userId,
+              action: 'requirements:bulk-update-denied',
+              detailsJson: {
+                reason: 'privileged-field-without-owner-or-admin',
+                privilegedFields: appliedFields.filter((f) =>
+                  BULK_PRIVILEGED_FIELDS.has(f),
+                ),
+                requirementCount: requirementIds.length,
+              },
+            },
+          })
+        } catch (auditErr) {
+          console.error('Bulk-update privileged-denial audit write error:', auditErr)
+        }
         return res.status(403).json({
           success: false,
           error:
@@ -3017,6 +3078,13 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       for (const row of accepted) {
         const echoed = optimisticVersions?.[row.id]
         try {
+          // F-2 (#447): per-row status-change tracking, parity with the
+          // single-row path — `statusChangedAt` / `statusChangedBy` are set
+          // only on a row whose `statusId` actually changes.
+          const statusChange: Prisma.RequirementUpdateInput =
+            statusIdApplied && (newStatusId ?? null) !== (row.statusId ?? null)
+              ? { statusChangedAt: new Date(), statusChangedBy: userId }
+              : {}
           // The `where` re-asserts isLocked AND the echoed version (when
           // supplied) so a concurrent write between findMany and update loses
           // the row — Prisma throws P2025, caught and counted as a conflict
@@ -3027,7 +3095,7 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
               isLocked: false,
               ...(typeof echoed === 'number' ? { version: echoed } : {}),
             },
-            data: { ...updateData, version: { increment: 1 } },
+            data: { ...updateData, ...statusChange, version: { increment: 1 } },
           })
           updatedRows.push(updated)
 

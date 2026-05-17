@@ -501,6 +501,13 @@ describe('Requirement bulk-update — NX-4 hardened convention (#447)', () => {
     const before = await prisma.requirement.findMany({
       where: { id: { in: [reqIds[0], reqIds[1]] } },
     })
+    // F-5 (#447): capture the audit-row count BEFORE the failing request so
+    // the post-failure assertion is real — the failed batch must write ZERO
+    // AuditLog rows (the `applyBulkAudit` writes run inside the same
+    // $transaction and roll back with the update).
+    const auditCountBefore = await prisma.auditLog.count({
+      where: { projectId, action: 'requirements:bulk-update' },
+    })
     const res = await request(app)
       .post(`/api/v1/requirements/${projectId}/bulk-update`)
       .set('Authorization', `Bearer ${ownerToken}`)
@@ -520,13 +527,13 @@ describe('Requirement bulk-update — NX-4 hardened convention (#447)', () => {
       expect(row.category).toBe(beforeById.get(row.id)?.category ?? null)
       expect(row.version).toBe(beforeById.get(row.id)?.version)
     }
-    // no audit rows written for the failed batch
+    // The failed batch wrote ZERO audit rows — the count is unchanged from
+    // before the request. (A vacuous `typeof === 'number'` check could never
+    // fail; this asserts the actual rollback of the audit writes.)
     const auditCountAfter = await prisma.auditLog.count({
       where: { projectId, action: 'requirements:bulk-update' },
     })
-    // the prior passing tests wrote rows; this assertion just confirms the
-    // failed batch added none — so the count equals the pre-failure count.
-    expect(typeof auditCountAfter).toBe('number')
+    expect(auditCountAfter).toBe(auditCountBefore)
   })
 
   it('rejects a batch larger than the 500-row cap (400)', async () => {
@@ -537,5 +544,118 @@ describe('Requirement bulk-update — NX-4 hardened convention (#447)', () => {
       .send({ requirementIds: tooMany, updates: { priority: 'high' } })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/batch too large/i)
+  })
+
+  // F-7 (#447) — optimisticVersions runtime shape guard.
+  it('rejects a malformed optimisticVersions (array) with 400, nothing written', async () => {
+    const before = await prisma.requirement.findUnique({ where: { id: reqIds[5] } })
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-update`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        requirementIds: [reqIds[5]],
+        updates: { source: 'guard-check' },
+        optimisticVersions: [1, 2, 3], // an array is not an id->number map
+      })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/optimisticversions/i)
+    const after = await prisma.requirement.findUnique({ where: { id: reqIds[5] } })
+    expect(after?.source).toBe(before?.source ?? null) // nothing written
+  })
+
+  it('rejects a malformed optimisticVersions (string) with 400', async () => {
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-update`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        requirementIds: [reqIds[5]],
+        updates: { source: 'guard-check-2' },
+        optimisticVersions: 'not-an-object',
+      })
+    expect(res.status).toBe(400)
+  })
+
+  it('ignores a non-numeric per-id optimisticVersion value (treated as no conflict check)', async () => {
+    const fresh = await prisma.requirement.findUnique({ where: { id: reqIds[5] } })
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-update`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        requirementIds: [reqIds[5]],
+        updates: { source: 'non-numeric-version' },
+        // a non-numeric value for this id is dropped — the row simply gets no
+        // conflict check, so the update still applies.
+        optimisticVersions: { [reqIds[5]]: 'oops' as unknown as number },
+      })
+    expect(res.status).toBe(200)
+    expect(res.body.data.updated).toBe(1)
+    const after = await prisma.requirement.findUnique({ where: { id: reqIds[5] } })
+    expect(after?.source).toBe('non-numeric-version')
+    expect(fresh).toBeDefined()
+  })
+
+  // F-8 (#447) — the privileged-field 403 writes a denial AuditLog row.
+  it('writes a requirements:bulk-update-denied AuditLog row on the privileged-field 403', async () => {
+    const deniedBefore = await prisma.auditLog.count({
+      where: { projectId, action: 'requirements:bulk-update-denied' },
+    })
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-update`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({ requirementIds: [reqIds[0]], updates: { lifecycleId: 'some-lifecycle-id' } })
+    expect(res.status).toBe(403)
+
+    // Exactly one new denial row was written.
+    const deniedRows = await prisma.auditLog.findMany({
+      where: { projectId, action: 'requirements:bulk-update-denied' },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(deniedRows.length).toBe(deniedBefore + 1)
+
+    // The row for THIS request — found by its privilegedFields content, not
+    // by array position (findMany row order is not insertion order).
+    const lifecycleDenial = deniedRows.find((row) => {
+      const detail = row.detailsJson as Record<string, unknown> | null
+      const fields = detail?.privilegedFields
+      return Array.isArray(fields) && fields.includes('lifecycleId')
+    })
+    expect(lifecycleDenial).toBeDefined()
+    expect(lifecycleDenial?.userId).toBe(memberId)
+    const detail = lifecycleDenial?.detailsJson as Record<string, unknown> | null
+    expect(detail?.reason).toBe('privileged-field-without-owner-or-admin')
+    expect(detail?.requirementCount).toBe(1)
+  })
+
+  // F-2 (#447) — write-path parity: a bulk statusId change sets
+  // statusChangedAt / statusChangedBy, exactly as the single-row path does.
+  it('sets statusChangedAt/statusChangedBy on a bulk statusId change (single-row parity)', async () => {
+    const target = reqIds[5]
+    const before = await prisma.requirement.findUnique({ where: { id: target } })
+    expect(before?.statusId ?? null).toBeNull()
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-update`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ requirementIds: [target], updates: { statusId: 'nx4-status-x' } })
+    expect(res.status).toBe(200)
+    expect(res.body.data.updated).toBe(1)
+    const after = await prisma.requirement.findUnique({ where: { id: target } })
+    expect(after?.statusId).toBe('nx4-status-x')
+    // the status-change provenance fields were stamped — parity with updateRequirement
+    expect(after?.statusChangedAt).not.toBeNull()
+    expect(after?.statusChangedBy).toBe(ownerId)
+  })
+
+  it('does not stamp statusChangedAt on a bulk edit that does not touch statusId', async () => {
+    const target = reqIds[4]
+    const before = await prisma.requirement.findUnique({ where: { id: target } })
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-update`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ requirementIds: [target], updates: { priority: 'low' } })
+    expect(res.status).toBe(200)
+    const after = await prisma.requirement.findUnique({ where: { id: target } })
+    // unchanged — a non-status bulk edit must not touch the status-change fields
+    expect(after?.statusChangedAt ?? null).toEqual(before?.statusChangedAt ?? null)
+    expect(after?.statusChangedBy ?? null).toEqual(before?.statusChangedBy ?? null)
   })
 })

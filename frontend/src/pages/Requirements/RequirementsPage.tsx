@@ -4886,6 +4886,15 @@ export default function RequirementsPage() {
             canEditPrivileged={canBulkEditPrivileged}
             onClose={() => setIsBulkEditDrawerOpen(false)}
             onApply={applyBulkRequirementEdit}
+            onViewBatchInAuditLog={(batchId) => {
+              // F-1 (#447): the result panel links the batch into the audit
+              // log. No `buildDeepLink` audit adapter exists — a plain router
+              // navigation with the batchId filter param (the audit-log page
+              // reads `?batchId=` and shows the real AuditLog rows).
+              if (projectId) {
+                navigate(`/projects/${projectId}/audit?batchId=${encodeURIComponent(batchId)}`)
+              }
+            }}
           />
 
           {isExportOpen && projectId && (() => {
