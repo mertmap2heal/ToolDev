@@ -308,6 +308,11 @@ When `authorType='human'`, the AI block is omitted and the section shows the hum
 
 ### P2-4. Scenario diff view
 
+**Status: In Architecture — ships separately from NX-2.** REQ-M4 (NX-2, #440) is now
+shipped: the SHR-8 shared `<VersionDiff>` component and its `FieldDiff` shape exist and
+should be reused here directly. P2-4 itself — the scenario-overlay vs live comparison —
+remains a separate parameters-package ticket and is NOT closed by NX-2.
+
 **Affects:** new `parameterScenario.service.compareScenarioToLive(scenarioId)`, frontend modal.
 
 **Change.** Show a field-level diff between the scenario-overlaid view and the live view, in the same shape as the baseline diff. Reuses the `DiffEntry` type from `parameterBaseline.service`.

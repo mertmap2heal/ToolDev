@@ -3,6 +3,28 @@ import { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
+import { compareBaselineRoots } from '../services/baseline.service'
+import { fieldLevelDiff } from '../services/diffService'
+
+// NX-2 (#440) — fields diffed per changed Requirement in a baseline-root diff.
+const REQUIREMENT_DIFF_FIELDS = [
+  'title',
+  'description',
+  'priority',
+  'status',
+  'stage',
+  'owner',
+  'category',
+  'source',
+  'verificationMethod',
+  'acceptanceCriteria',
+  'tags',
+] as const
+const REQUIREMENT_MULTILINE_FIELDS = [
+  'description',
+  'acceptanceCriteria',
+  'verificationMethod',
+] as const
 
 
 async function logBaselineAudit(
@@ -772,6 +794,131 @@ export const compareBaselines = async (req: AuthRequest, res: Response) => {
     })
   } catch (error) {
     console.error('Compare baselines error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+/**
+ * NX-2 (#440) — diff two R-4 BaselineRoot snapshots.
+ *
+ * Consumes baseline.service.ts compareBaselineRoots VERBATIM for the kind-
+ * agnostic added / removed / changed entity sets, then — for each `changed`
+ * pair whose linkedEntityType is `Requirement` — runs the same diffService
+ * field-level + line-level diff used by the version-compare endpoint over the
+ * two requirements' live state. `added` / `removed` pass straight through as
+ * the AC's added / removed artefact lists, enriched with the entity title.
+ *
+ * Query: ?rootIdA=<id>&rootIdB=<id>
+ */
+export const compareBaselineRootsDiff = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { rootIdA, rootIdB } = req.query
+
+    if (!rootIdA || !rootIdB) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both rootIdA and rootIdB query parameters are required',
+      })
+    }
+
+    // Tenant scope: both roots must belong to the resolved project.
+    const [rootA, rootB] = await Promise.all([
+      prisma.baselineRoot.findFirst({ where: { id: rootIdA as string, projectId } }),
+      prisma.baselineRoot.findFirst({ where: { id: rootIdB as string, projectId } }),
+    ])
+    if (!rootA || !rootB) {
+      return res.status(404).json({
+        success: false,
+        error: 'One or both baseline roots not found in this project',
+      })
+    }
+
+    // R-4 primitive — kind-agnostic added/removed/changed over BaselineRootItem.
+    const comparison = await compareBaselineRoots(rootA.id, rootB.id)
+
+    // Resolve titles for every entity touched, batched (no N+1).
+    const requirementIds = new Set<string>()
+    const collect = (item: { linkedEntityType: string; linkedEntityId: string }) => {
+      if (item.linkedEntityType === 'Requirement') requirementIds.add(item.linkedEntityId)
+    }
+    comparison.added.forEach(collect)
+    comparison.removed.forEach(collect)
+    comparison.changed.forEach(({ a, b }) => {
+      collect(a)
+      collect(b)
+    })
+
+    const requirements = requirementIds.size
+      ? await prisma.requirement.findMany({
+          where: { id: { in: Array.from(requirementIds) }, projectId },
+        })
+      : []
+    const reqById = new Map(requirements.map((r) => [r.id, r]))
+
+    const describe = (item: { linkedEntityType: string; linkedEntityId: string }) => {
+      const req = item.linkedEntityType === 'Requirement' ? reqById.get(item.linkedEntityId) : null
+      return {
+        linkedEntityType: item.linkedEntityType,
+        linkedEntityId: item.linkedEntityId,
+        title: req?.title ?? null,
+        requirementKey: req?.requirementId ?? null,
+      }
+    }
+
+    // For each changed Requirement pair, run the structured field-level diff.
+    //
+    // NOTE: R-4's BaselineRootItem stores only a content-hash, not the artefact
+    // snapshot — so compareBaselineRoots can report WHICH entities changed (the
+    // `changed` set, the AC's core deliverable) but not capture the historical
+    // field values. The field-level diff here is therefore computed over the
+    // entities' LIVE state; when both baseline items reference the same row id
+    // the per-field diff is unchanged-against-itself. A future ticket that adds
+    // a snapshot payload to BaselineRootItem upgrades this to a true point-in-
+    // time field diff without changing this response contract.
+    const changed = comparison.changed.map(({ a, b }) => {
+      const entry = {
+        linkedEntityType: a.linkedEntityType,
+        linkedEntityId: b.linkedEntityId,
+        title: reqById.get(b.linkedEntityId)?.title ?? null,
+        requirementKey: reqById.get(b.linkedEntityId)?.requirementId ?? null,
+        fields: [] as ReturnType<typeof fieldLevelDiff>,
+      }
+      if (a.linkedEntityType === 'Requirement') {
+        const reqA = reqById.get(a.linkedEntityId)
+        const reqB = reqById.get(b.linkedEntityId)
+        if (reqA && reqB) {
+          entry.fields = fieldLevelDiff(
+            reqA as unknown as Record<string, unknown>,
+            reqB as unknown as Record<string, unknown>,
+            REQUIREMENT_DIFF_FIELDS,
+            REQUIREMENT_MULTILINE_FIELDS,
+          )
+        }
+      }
+      return entry
+    })
+
+    res.json({
+      success: true,
+      data: {
+        rootA: { id: rootA.id, name: rootA.name, kind: rootA.kind, createdAt: rootA.createdAt.toISOString() },
+        rootB: { id: rootB.id, name: rootB.name, kind: rootB.kind, createdAt: rootB.createdAt.toISOString() },
+        added: comparison.added.map(describe),
+        removed: comparison.removed.map(describe),
+        changed,
+        summary: {
+          addedCount: comparison.added.length,
+          removedCount: comparison.removed.length,
+          changedCount: comparison.changed.length,
+        },
+      },
+    })
+  } catch (error) {
+    console.error('Compare baseline roots diff error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error',

@@ -10,6 +10,7 @@ import { useAuthStore } from '../../store/authStore'
 import type { Parameter } from 'shared/types/engineering.types'
 import { format, formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
+import VersionDiff, { type FieldDiff } from '../common/VersionDiff'
 
 interface ParameterDetailDrawerProps {
   isOpen: boolean
@@ -610,15 +611,16 @@ function DiscussionSection({ projectId, parameterId, currentUser }: DiscussionPr
   )
 }
 
-interface FieldDiff {
+// Timeline-mode field diff (legacy shape) — distinct from VersionDiff's FieldDiff.
+interface TimelineFieldDiff {
   field: string
   label: string
   prev: string
   next: string
 }
 
-function computeDiff(prev: Record<string, unknown> | null, next: Record<string, unknown>): FieldDiff[] {
-  const diffs: FieldDiff[] = []
+function computeDiff(prev: Record<string, unknown> | null, next: Record<string, unknown>): TimelineFieldDiff[] {
+  const diffs: TimelineFieldDiff[] = []
   for (const field of TRACKED_FIELDS) {
     const prevVal = prev != null ? String(prev[field] ?? '') : ''
     const nextVal = String(next[field] ?? '')
@@ -627,6 +629,59 @@ function computeDiff(prev: Record<string, unknown> | null, next: Record<string, 
     }
   }
   return diffs
+}
+
+// NX-2 (#440) — fields whose change carries a line-level diff in <VersionDiff>.
+const PARAM_MULTILINE_FIELDS = new Set(['description', 'formula'])
+
+/** Line-level LCS — mirrors backend diffService.lineDiff for the client path. */
+function lineDiffClient(before: string, after: string): { op: 'eq' | 'add' | 'del'; text: string }[] {
+  const a = before.split('\n')
+  const b = after.split('\n')
+  const n = a.length
+  const m = b.length
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const ops: { op: 'eq' | 'add' | 'del'; text: string }[] = []
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ op: 'eq', text: a[i] }); i++; j++ }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ op: 'del', text: a[i] }); i++ }
+    else { ops.push({ op: 'add', text: b[j] }); j++ }
+  }
+  while (i < n) { ops.push({ op: 'del', text: a[i] }); i++ }
+  while (j < m) { ops.push({ op: 'add', text: b[j] }); j++ }
+  return ops
+}
+
+/**
+ * NX-2 (#440) — build the structured FieldDiff[] <VersionDiff> consumes from
+ * two parameter snapshots. Uses TRACKED_FIELDS as the field list, mirroring the
+ * backend diffService.fieldLevelDiff classification.
+ */
+function buildParamFieldDiffs(
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
+): FieldDiff[] {
+  return TRACKED_FIELDS.map((name) => {
+    const before = String(prev[name] ?? '')
+    const after = String(next[name] ?? '')
+    let changeType: FieldDiff['changeType']
+    if (before === after) changeType = 'unchanged'
+    else if (before === '' && after !== '') changeType = 'added'
+    else if (before !== '' && after === '') changeType = 'removed'
+    else changeType = 'changed'
+    const entry: FieldDiff = { name, changeType, before, after }
+    if (changeType === 'changed' && PARAM_MULTILINE_FIELDS.has(name)) {
+      entry.lineDiff = lineDiffClient(before, after)
+    }
+    return entry
+  })
 }
 
 // Inline avatar + name chip used in Provenance + Timeline.
@@ -644,7 +699,7 @@ function AuthorChip({ name, email, subtitle }: { name?: string | null; email?: s
 }
 
 // Classify a version-to-version diff into one of the timeline event kinds.
-function classifyDiff(diffs: FieldDiff[], origIdx: number): 'publish' | 'stale' | 'edit' | 'created' {
+function classifyDiff(diffs: TimelineFieldDiff[], origIdx: number): 'publish' | 'stale' | 'edit' | 'created' {
   if (origIdx === 0) return 'created'
   const statusDiff = diffs.find(d => d.field === 'status')
   if (statusDiff && /^(approved|released)$/i.test(statusDiff.next)) return 'publish'
@@ -1441,68 +1496,33 @@ export default function ParameterDetailDrawer({
                   })}
                 </div>
 
-                {/* Side-by-side diff table */}
-                {compareA && compareB && (() => {
+                {/* NX-2 (#440) — shared <VersionDiff> replaces the bespoke table */}
+                {compareA && compareB ? (() => {
                   const vA = versions.find(v => v.id === compareA)
                   const vB = versions.find(v => v.id === compareB)
                   if (!vA || !vB) return null
 
-                  // A is always left (orange), B is always right (blue) — matching the selection list colours.
-                  // Add a small chronological hint in the header without reordering columns.
-                  const idxA = versions.findIndex(v => v.id === compareA)
-                  const idxB = versions.findIndex(v => v.id === compareB)
-                  const aIsOlder = idxA < idxB
                   const labelA = `A · v${vA.version}.${String((vA as unknown as Record<string, unknown>).minorVersion ?? 0)}`
                   const labelB = `B · v${vB.version}.${String((vB as unknown as Record<string, unknown>).minorVersion ?? 0)}`
 
-                  // Diff direction: always from A → B so changed cells show what B introduced
-                  const diffs = computeDiff(vA.snapshot as Record<string, unknown>, vB.snapshot as Record<string, unknown>)
-                  const allFields = TRACKED_FIELDS
+                  const fieldDiffs = buildParamFieldDiffs(
+                    vA.snapshot as Record<string, unknown>,
+                    vB.snapshot as Record<string, unknown>,
+                  )
 
                   return (
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead className="bg-gray-50 dark:bg-gray-700/50">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 w-24">Field</th>
-                            <th className="px-3 py-2 text-left font-semibold text-orange-600 dark:text-orange-400">
-                              {labelA}
-                              <span className="ml-1 font-normal text-orange-400 dark:text-orange-500 text-[10px]">({aIsOlder ? 'older' : 'newer'})</span>
-                            </th>
-                            <th className="px-3 py-2 text-left font-semibold text-blue-600 dark:text-blue-400">
-                              {labelB}
-                              <span className="ml-1 font-normal text-blue-400 dark:text-blue-500 text-[10px]">({aIsOlder ? 'newer' : 'older'})</span>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                          {allFields.map(field => {
-                            const valA = String((vA.snapshot as Record<string, unknown>)[field] ?? '')
-                            const valB = String((vB.snapshot as Record<string, unknown>)[field] ?? '')
-                            const changed = valA !== valB
-                            if (!valA && !valB) return null
-                            return (
-                              <tr key={field} className={changed ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
-                                <td className="px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{FIELD_LABELS[field] ?? field}</td>
-                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-red-700 dark:text-red-300 line-through opacity-70' : 'text-gray-700 dark:text-gray-300'}`} title={valA}>
-                                  {valA || <span className="italic text-gray-400">—</span>}
-                                </td>
-                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-green-700 dark:text-green-300 font-semibold' : 'text-gray-700 dark:text-gray-300'}`} title={valB}>
-                                  {valB || <span className="italic text-gray-400">—</span>}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                      {diffs.length === 0 && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 italic p-3">
-                          No differences in tracked fields between these two versions.
-                        </p>
-                      )}
-                    </div>
+                    <VersionDiff
+                      fields={fieldDiffs}
+                      labelA={labelA}
+                      labelB={labelB}
+                      fieldLabels={FIELD_LABELS}
+                    />
                   )
-                })()}
+                })() : (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Select two versions to compare.
+                  </p>
+                )}
               </div>
             ) : (
               // ── Timeline mode — newest first, design's pv-dr-timeline ─────

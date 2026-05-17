@@ -10,6 +10,7 @@ import RequirementsPage from './pages/Requirements/RequirementsPage'
 import RequirementsSettingsPage from './pages/Requirements/RequirementsSettingsPage'
 import RequirementsDashboardPage from './pages/Requirements/RequirementsDashboardPage'
 import TraceabilityViewsPage from './pages/Requirements/TraceabilityViewsPage'
+import BaselineDiffPage from './pages/Baselines/BaselineDiffPage'
 import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
 import VerificationLayoutPage from './pages/Verification/VerificationLayoutPage'
 import VerificationPage from './pages/Verification/VerificationPage'
@@ -122,6 +123,7 @@ function App() {
             <Route path="projects/:projectId/requirements/dashboard" element={<FeatureGuard moduleId="requirements"><RequirementsDashboardPage /></FeatureGuard>} />
             <Route path="projects/:projectId/requirements/traceability-views" element={<FeatureGuard moduleId="requirements"><TraceabilityViewsPage /></FeatureGuard>} />
             <Route path="projects/:projectId/requirements" element={<FeatureGuard moduleId="requirements"><RequirementsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/baselines/:baselineId/diff/:otherBaselineId" element={<FeatureGuard moduleId="requirements"><BaselineDiffPage /></FeatureGuard>} />
             <Route path="projects/:projectId/tasks" element={<FeatureGuard moduleId="tasks"><TasksPage /></FeatureGuard>} />
             <Route path="tasks">
             <Route index element={<TasksDashboardPage />} />

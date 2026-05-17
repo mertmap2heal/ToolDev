@@ -217,6 +217,17 @@ Tests:
 
 ### REQ-M4. Diff view between requirement versions + baselines
 
+**Status: Shipped — feat/NX-2-version-diff-view (PR against dev), Issue #440 (NX-2).**
+Field-level + line-level (line-LCS) diff with ZERO new npm dependency — `diff-match-patch`
+was NOT added; word-level intra-line highlighting was reshaped to a deferred fast-follow
+per the approved #440 Architecture comment. Backend `compareVersions` upgraded in place
+(`/diff` alias added) returning `{ fields: [{name, changeType, before, after, lineDiff?}],
+addedLinks, removedLinks }`; new `GET /baselines/:projectId/roots/diff` consumes R-4's
+`compareBaselineRoots`. Frontend ships the SHR-8 shared `<VersionDiff>` component
+(`frontend/src/components/common/VersionDiff.tsx`), wired into RequirementVersionHistory,
+ParameterDetailDrawer compare-mode (replacing both bespoke diff tables), and the new
+`/projects/:projectId/baselines/:baselineId/diff/:otherBaselineId` page.
+
 **Description.** Per gap-summary #7 and `competitor-matrix.md` §2 row "Baseline diff / compare view".
 
 **Acceptance criteria.**
