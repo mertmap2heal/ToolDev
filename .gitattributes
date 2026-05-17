@@ -1,0 +1,6 @@
+# NX-5 (#451): the committed OpenAPI spec is written by
+# `npm run openapi:generate` with LF line endings. `core.autocrlf=true`
+# would otherwise check it out with CRLF, so the `openapi:check` freshness
+# gate (regenerate + `git diff`) would fail on a fresh clone. Pin it to LF
+# so the generated file and the checked-out file always match.
+backend/openapi.json text eol=lf

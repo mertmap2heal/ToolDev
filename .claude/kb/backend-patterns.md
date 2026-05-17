@@ -293,6 +293,93 @@ All routes are mounted under `/api/v1/` by `server.ts`.
 
 ---
 
+## OpenAPI annotation convention (`@openapi` JSDoc)
+
+NX-5 (#451) added an OpenAPI 3.1 document served at `/api/v1/docs` (Swagger
+UI) and `/api/v1/docs/openapi.json` (raw spec). `swagger-jsdoc` scans every
+`backend/src/routes/*.routes.ts` file for `@openapi` JSDoc blocks and
+assembles the document. The config is `backend/src/openapi/openapi.ts`; the
+committed spec is `backend/openapi.json`.
+
+**Every new route file is annotated on creation — not back-filled.** A route
+with no `@openapi` block is invisible in the API docs, so the docs silently
+rot. Annotation is part of the definition-of-done for any new endpoint.
+
+### How to annotate
+
+Put a `/** @openapi ... */` JSDoc block immediately above the
+`router.<method>(...)` call. The block body is YAML. The path is the
+endpoint **as mounted under `/api/v1`** with the router's own prefix —
+e.g. a `router.get('/:projectId', ...)` in `baselines.routes.ts` (mounted at
+`/baselines`) is documented as `/baselines/{projectId}`. Express `:param`
+becomes OpenAPI `{param}`.
+
+```ts
+/**
+ * @openapi
+ * /my-feature/{projectId}:
+ *   get:
+ *     tags: [MyFeature]
+ *     summary: List the project's my-feature rows
+ *     description: Return every my-feature row for the project.
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema: { type: string }
+ *         description: The project id (membership-checked).
+ *     responses:
+ *       '200':
+ *         description: The list of rows.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties: { data: { type: array, items: { type: object } } }
+ *             example: { success: true, data: [{ id: mf_1, name: 'Example' }] }
+ *       '401':
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       '403':
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       '500':
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get('/:projectId', authenticateToken, ctrl.list)
+```
+
+### Rules
+
+- **Tag** every operation with the feature area (`tags: [MyFeature]`). Add
+  the tag's one-line description to the `tags` array in `openapi.ts` so it
+  is documented once.
+- **Reuse the shared components** in `openapi.ts` rather than re-declaring
+  per operation:
+  - `$ref: '#/components/schemas/SuccessEnvelope'` / `ErrorEnvelope` — the
+    two canonical response envelopes ("Standard Response Shape" above).
+  - `$ref: '#/components/responses/{Unauthorized,Forbidden,NotFound,Validation,Server}Error'`
+    — the standard 401 / 403 / 404 / 400 / 500 responses.
+  - `$ref: '#/components/parameters/...'` — shared path parameters.
+- **Document the success `data`** with `allOf: [SuccessEnvelope, { data: ... }]`.
+- **At least one `example`** per operation — a `requestBody` example for
+  writes, a response example for the success case.
+- **Auth.** The default security is the JWT bearer (`bearerAuth`), declared
+  globally — do not repeat it per operation. A **public** endpoint sets
+  `security: []`. An MCP-key endpoint sets `security: [{ mcpKey: [] }]`.
+- **Regenerate + commit.** After editing any route file's annotations, run
+  `npm run openapi:generate` and commit `backend/openapi.json` in the same
+  PR. The husky pre-push hook runs `npm run openapi:check` (regenerate +
+  `git diff`) and fails the push if the committed spec is stale — same
+  mechanic as the `shared/incoseEars/_compiled` drift-guard.
+
+As of NX-5 the first tranche — `auth`, `requirements`, `baselines`,
+`verification`, `certification` — is fully annotated. The remaining ~59
+route files back-fill in follow-on PRs; annotate any **new** route file in
+full when you create it.
+
+---
+
 ## File Uploads
 
 Express is configured with a 50MB body parsing limit in `server.ts`.

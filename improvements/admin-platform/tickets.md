@@ -513,6 +513,32 @@ Already described as AP-N1; tracked here as long-term because the **content** of
 
 ---
 
+### AP-NX5 — OpenAPI 3.1 documentation at `/api/v1/docs` (ROADMAP NX-5, gap #10)
+
+**Status: Shipped — Issue [#451](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/451), branch `feat/NX-5-openapi-docs`.** Implemented per the approved 2️⃣ Architecture comment (Option 1 — `swagger-jsdoc` + `swagger-ui-express`). Three user-approved npm packages added (`swagger-jsdoc@^6.2.8` + `swagger-ui-express@^5.0.1` runtime deps, `@types/swagger-jsdoc@^6.0.4` devDep). Shipped: `backend/src/openapi/openapi.ts` (OpenAPI 3.1.0 config — info, `/api/v1` server, `bearerAuth` + `mcpKey` security schemes, shared `SuccessEnvelope`/`ErrorEnvelope` schemas + standard-response components); a PUBLIC `GET /api/v1/docs` (Swagger UI) + `GET /api/v1/docs/openapi.json` (raw spec) mounted in `server.ts` ahead of the `authenticateToken` chains; a source-controlled `backend/openapi.json` + `openapi:generate` / `openapi:check` npm scripts; a `.husky/pre-push` freshness gate (`openapi:check` — regenerate + `git diff`, mirroring the `_compiled` drift-guard); the full first tranche annotated 100% (`auth` 12 ops, `requirements` 30, `baselines` 7, `verification` 132, `certification` 55 — 181 paths / 237 operations); and the `@openapi` annotation convention codified in `.claude/kb/backend-patterns.md`. The remaining ~59 route files back-fill in follow-on PRs. Tests: `backend/src/__tests__/openapiDocs.test.ts` (12 cases). `V-NT-10` is superseded by this ticket.
+
+**Tracking ticket** for `ROADMAP-phase3.md` §3 NX-5 / `gap-summary.md` #10. Recorded here because NX-5 is cross-cutting API infrastructure and the admin-platform package owns the API / MCP / credentials cluster. No standalone package ticket existed for the program-wide deliverable; the verification package's `V-NT-10` ("Pilot OpenAPI annotation on verification routes", served at `/api/v1/docs/verification`) is a verification-module slice only and is **superseded by** this ticket — a single program-wide `/api/v1/docs` makes a separate verification-only pilot route redundant. Tracked via **GitHub issue #451**.
+
+**Problem.** The API surface has 678 endpoints across 64 route files (`_shared/inventory.md`) with no machine-readable spec and no documentation page. Every named competitor publishes an OpenAPI / REST spec (`competitor-matrix.md` §7 "Documented REST API" row — Jama dev portal, Polarion REST docs, Codebeamer Swagger, DOORS Next OSLC + Reportable REST, Jira REST v3). Every integration evaluation asks for the docs URL in the first call.
+
+**Fix.** Annotate the Express routes/controllers and serve a live OpenAPI 3.1 document with an interactive Swagger UI at `/api/v1/docs`. Source-control the generated spec so it is diffable. Codify a route-annotation convention (in `kb/backend-patterns.md`) so future route files are annotated on creation rather than back-filled.
+
+**BLOCKING — npm-dependency decision (Rule 2).** NX-5 cannot be implemented without new npm dependencies — at minimum an OpenAPI-spec generator (`swagger-jsdoc` / `tsoa` / `zod-openapi`) and a docs-UI server (`swagger-ui-express` or equivalent). `.claude/rules.md` §2 forbids adding dependencies without explicit user permission. `backend/package.json` already lists `zod ^3.25.76` (favours `zod-openapi`); no spec generator and no UI server are present. The Architect must evaluate the options, specify the exact package(s), and render a **"Block — needs dependency decision"** verdict for the user to approve before any code. The PM surfaces; the Architect specifies; the user approves.
+
+**R-Wave deps.** None — NX-5 is documentation tooling; it does not consume R-1..R-5.
+
+**Files.** `backend/src/server.ts` (mount the docs route); a new `backend/src/routes/docs.routes.ts` (or equivalent); annotations across the 64 route/controller files; a committed `openapi.json` / `openapi.yaml`; `.claude/kb/backend-patterns.md` (annotation convention).
+
+**Acceptance.** A buyer can hit `/api/v1/docs` and see every endpoint, parameter schema, response schema, and example, with Swagger UI live. The generated spec is source-controlled. The docs endpoint's access posture (public vs. capability-gated) is an explicit decision.
+
+**Out of scope.** A bespoke hand-written API portal; client-SDK generation; a dedicated webhook-event catalogue; OSLC linked-data (a deliberate omission per `vision-and-usp.md` §9 / `gap-summary.md` #18 — do not conflate with OpenAPI).
+
+**Effort.** M (backend-only — route annotation breadth across 678 endpoints; no `.tsx`, no schema).
+
+**Status:** In Architecture — Issue #451.
+
+---
+
 ## Cross-cutting additions (append to `_shared/cross-cutting.md`)
 
 See file for the appended entries:
