@@ -15,27 +15,21 @@
  * A malformed file makes the chosen parser throw a `ParseError`; the
  * file-ingest route maps that to a 400 response (never a 500).
  */
-import {
-  NormalisedResult,
-  ParseError,
-  ParseResult,
-  TEST_RESULT_FORMATS,
-  TestResultFormat,
-} from './types'
+import { ParseError, TEST_RESULT_FORMATS } from './types'
+import type { NormalisedResult, ParseResult, TestResultFormat } from './types'
 import { parseJUnit } from './junitParser'
 import { parseXUnit } from './xunitParser'
 import { parseNUnit } from './nunitParser'
 import { parseRobot } from './robotParser'
 import { parseTap } from './tapParser'
 
-export {
+export { ParseError, TEST_RESULT_FORMATS } from './types'
+export type {
   NormalisedResult,
-  ParseError,
   ParseResult,
   ParseSummary,
   ResultStatus,
   TestResultFormat,
-  TEST_RESULT_FORMATS,
 } from './types'
 
 /** True when `value` is one of the six accepted format values. */

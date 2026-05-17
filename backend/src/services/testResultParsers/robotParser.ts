@@ -13,7 +13,8 @@
  * The VerTestCase key is resolved from a `<test>`-level `xref` tag or metadata,
  * then the test `name`.
  */
-import { NormalisedResult, ParseError, ParseSummary } from './types'
+import { ParseError } from './types'
+import type { NormalisedResult, ParseSummary } from './types'
 import {
   parseXmlSafely,
   toArray,

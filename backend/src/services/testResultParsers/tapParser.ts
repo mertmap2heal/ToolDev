@@ -17,7 +17,8 @@
  * A TAP description has no native VerTestCase key, so the key is regex-
  * extracted from the description text, then the whole description is used.
  */
-import { NormalisedResult, ParseError, ParseSummary } from './types'
+import { ParseError } from './types'
+import type { NormalisedResult, ParseSummary } from './types'
 import { resolveTestCaseKey, MAX_RESULT_ELEMENTS } from './xmlShared'
 
 interface TapParsed {

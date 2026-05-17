@@ -11,7 +11,8 @@
  *   - `<error>`               -> FAIL   (NOT PASSED_WITH_ERRORS)
  *   - `<skipped>`             -> SKIPPED
  */
-import { NormalisedResult, ParseError, ParseSummary } from './types'
+import { ParseError } from './types'
+import type { NormalisedResult, ParseSummary } from './types'
 import {
   parseXmlSafely,
   toArray,

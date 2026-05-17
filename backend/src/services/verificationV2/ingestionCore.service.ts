@@ -16,7 +16,7 @@
  * unchanged (issue #431 acceptance criterion 5).
  */
 import { prisma } from '../../lib/prisma'
-import { NormalisedResult } from '../testResultParsers'
+import type { NormalisedResult } from '../testResultParsers'
 
 /** Thrown when the linked test plan does not exist. The route maps it to 404. */
 export class TestPlanNotFoundError extends Error {

@@ -13,7 +13,8 @@
  * The VerTestCase key is resolved from a `<traits><trait name="xref">` trait,
  * then the test `name` / `type` (the xUnit equivalents of name / classname).
  */
-import { NormalisedResult, ParseError, ParseSummary } from './types'
+import { ParseError } from './types'
+import type { NormalisedResult, ParseSummary } from './types'
 import {
   parseXmlSafely,
   toArray,
