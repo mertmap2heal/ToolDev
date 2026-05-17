@@ -159,7 +159,6 @@ export type AuditAction =
   | 'SUBMIT_CR'
   | 'APPROVE_CR'
   | 'REJECT_CR'
-  | 'APPLY_CR_VERSIONS'
 
 export interface AuditEvent {
   eventId: string

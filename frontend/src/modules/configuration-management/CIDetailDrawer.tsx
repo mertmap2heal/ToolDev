@@ -1,249 +1,233 @@
+// NX-3 (#443) — Configuration Item detail drawer. Canonical object panel
+// (design-system §6.1): header (mono ID · type · status pill · lock pill),
+// title, attribute grid, lifecycle-transition controls, lock/unlock actions.
 import { useState, useEffect } from 'react'
-import { X, Shield, FileText, CheckCircle, AlertTriangle, Layers } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
+import { X, Shield, Lock, Unlock } from 'lucide-react'
 import clsx from 'clsx'
-import type { ConfigurationItem, CIVersionEntry } from './types'
-import { getCIStatusColor } from './constants'
-import LinkedArtifactsPlaceholderModal, { type FakeRow } from './LinkedArtifactsPlaceholderModal'
+import { configItemService, type ConfigItem } from '../../services/configItem.service'
+import { getCIStatusColor, getCILockStateColor } from './constants'
 
 interface CIDetailDrawerProps {
-  ci: ConfigurationItem | null
+  projectId: string
+  ci: ConfigItem | null
   isOpen: boolean
   onClose: () => void
-  onUpdate: (ci: ConfigurationItem) => void
+  onChanged: (updated: ConfigItem) => void
   onDelete?: () => void
 }
 
-const MOCK_VERSION_HISTORY: CIVersionEntry[] = [
-  { version: '2.1.0', revision: 'Rev C', date: new Date().toISOString().slice(0, 10), changedBy: 'J. Smith', summary: 'Updated limits' },
-  { version: '2.0.0', revision: 'Rev B', date: '2026-01-15', changedBy: 'A. Lee', summary: 'PDR baseline' },
-  { version: '1.0.0', revision: 'Rev A', date: '2025-11-01', changedBy: 'M. Chen', summary: 'Initial' },
-]
+// IEEE 828 lifecycle: Draft -> InReview -> Released -> Obsolete. The button on
+// each state names the next transition explicitly.
+const NEXT_TRANSITION: Record<string, { to: string; label: string } | null> = {
+  Draft: { to: 'InReview', label: 'Submit for review' },
+  InReview: { to: 'Released', label: 'Release' },
+  Released: { to: 'Obsolete', label: 'Mark obsolete' },
+  Obsolete: null,
+}
 
 export default function CIDetailDrawer({
+  projectId,
   ci,
   isOpen,
   onClose,
-  onUpdate: _onUpdate,
-  onDelete: _onDelete,
+  onChanged,
+  onDelete,
 }: CIDetailDrawerProps) {
-  const [linkedModal, setLinkedModal] = useState<{
-    title: string
-    message: string
-    rows: FakeRow[]
-  } | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (linkedModal) setLinkedModal(null)
-        else onClose()
-      }
+      if (e.key === 'Escape') onClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
       return () => document.removeEventListener('keydown', handleEsc)
     }
-  }, [isOpen, linkedModal, onClose])
+  }, [isOpen, onClose])
 
-  const openPlaceholder = (module: string, rows: FakeRow[]) => {
-    setLinkedModal({
-      title: `Linked ${module}`,
-      message: `Placeholder: This would navigate to ${module} filtered by this CI.`,
-      rows,
-    })
-  }
+  useEffect(() => {
+    setActionError(null)
+  }, [ci?.id])
+
+  const transitionMutation = useMutation({
+    mutationFn: (status: string) => configItemService.update(projectId, ci!.id, { status }),
+    onSuccess: (res) => {
+      if (res.data) onChanged(res.data)
+    },
+    onError: (e: Error) => setActionError(e.message),
+  })
+  const lockMutation = useMutation({
+    mutationFn: () => configItemService.lock(projectId, ci!.id, 'FrozenByBaseline'),
+    onSuccess: (res) => {
+      if (res.data) onChanged(res.data)
+    },
+    onError: (e: Error) => setActionError(e.message),
+  })
+  const unlockMutation = useMutation({
+    mutationFn: () => configItemService.unlock(projectId, ci!.id),
+    onSuccess: (res) => {
+      if (res.data) onChanged(res.data)
+    },
+    onError: (e: Error) => setActionError(e.message),
+  })
 
   if (!ci) return null
 
-  const fakeRequirements: FakeRow[] = [
-    { id: 'REQ-001', label: 'Flight control response time', status: 'Released' },
-    { id: 'REQ-002', label: 'Actuator limits', status: 'Released' },
-  ]
-  const fakeTests: FakeRow[] = [
-    { id: 'TC-101', label: 'Integration test autopilot', status: 'Passed' },
-  ]
-  const fakeSafety: FakeRow[] = [
-    { id: 'HAZ-01', label: 'Actuator runaway', status: 'Mitigated' },
-  ]
-  const fakeDocs: FakeRow[] = [
-    { id: 'DOC-SDD', label: 'System Design Document', status: 'Released' },
-  ]
+  const transition = NEXT_TRANSITION[ci.status]
+  const busy = transitionMutation.isPending || lockMutation.isPending || unlockMutation.isPending
 
   return (
-    <>
-      <div
-        className={clsx(
-          'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden fixed right-0 top-0 z-40',
-          isOpen ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
-        )}
-        style={{ height: 'calc(100vh - 4rem)', top: '4rem' }}
-        role="region"
-        aria-label="CI details"
-      >
-        <div className="flex flex-col h-full overflow-y-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{ci.ciId}</span>
-                <span
-                  className={clsx(
-                    'px-2 py-0.5 rounded text-xs font-medium',
-                    getCIStatusColor(ci.status)
-                  )}
-                >
-                  {ci.status}
+    <div
+      className={clsx(
+        'fixed right-0 top-0 z-40 flex h-full flex-col overflow-hidden transition-all duration-200 ease-out',
+        isOpen ? 'w-full min-w-[32rem] max-w-2xl' : 'w-0 min-w-0',
+      )}
+      style={{ height: 'calc(100vh - 4rem)', top: '4rem' }}
+      role="region"
+      aria-label="Configuration item details"
+    >
+      {/* Floating rounded card (kb/react-typescript.md drawer styling). */}
+      <div className="m-3 flex h-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border border-default bg-surface-raised shadow-2xl">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-default bg-surface-inset px-6 py-4">
+          <div>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-sm text-ink-muted">{ci.ciKey}</span>
+              <span className="rounded-xs bg-surface-base px-2 py-0.5 text-xs text-ink-muted">
+                {ci.type}
+              </span>
+              <span className={clsx('rounded-xs px-2 py-0.5 text-xs font-medium', getCIStatusColor(ci.status))}>
+                {ci.status}
+              </span>
+              <span
+                className={clsx('rounded-xs px-2 py-0.5 text-xs font-medium', getCILockStateColor(ci.lockState))}
+              >
+                {ci.lockState}
+              </span>
+              {ci.safetyCritical && (
+                <span className="inline-flex items-center gap-1 rounded-xs bg-status-warning/12 px-1.5 py-0.5 text-xs text-status-warning">
+                  <Shield size={12} />
+                  {ci.dal ?? 'Safety'}
                 </span>
-                {ci.safetyCritical && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs">
-                    <Shield size={12} />
-                    {ci.dal ?? 'Safety'}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{ci.name}</h2>
+              )}
             </div>
+            <h2 className="text-xl font-semibold text-ink-primary">{ci.name}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded p-2 text-ink-muted hover:bg-surface-base"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
+          <section>
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              <dt className="text-ink-muted">Type</dt>
+              <dd className="text-ink-primary">{ci.type}</dd>
+              <dt className="text-ink-muted">Owner</dt>
+              <dd className="text-ink-primary">{ci.ownerName ?? '—'}</dd>
+              <dt className="text-ink-muted">Version</dt>
+              <dd className="font-mono text-ink-primary">{ci.version}</dd>
+              <dt className="text-ink-muted">Revision</dt>
+              <dd className="font-mono text-ink-primary">{ci.revision}</dd>
+              <dt className="text-ink-muted">Lock state</dt>
+              <dd className="text-ink-primary">{ci.lockState}</dd>
+              <dt className="text-ink-muted">DAL</dt>
+              <dd className="text-ink-primary">{ci.dal ?? '—'}</dd>
+              <dt className="text-ink-muted">Created</dt>
+              <dd className="text-ink-primary">{new Date(ci.createdAt).toLocaleString()}</dd>
+              <dt className="text-ink-muted">Updated</dt>
+              <dd className="text-ink-primary">{new Date(ci.updatedAt).toLocaleString()}</dd>
+            </dl>
+            {ci.tags.length > 0 && (
+              <div className="mt-3">
+                <span className="text-sm text-ink-muted">Tags</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {ci.tags.map((t) => (
+                    <span key={t} className="rounded-xs bg-surface-inset px-2 py-0.5 text-xs text-ink-muted">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {(ci.refType || ci.refId) && (
+            <section>
+              <h3 className="mb-2 text-sm font-semibold text-ink-primary">Linked artefact</h3>
+              <p className="text-sm text-ink-muted">
+                <span className="font-mono">{ci.refType}</span>
+                {' · '}
+                <span className="font-mono">{ci.refId}</span>
+              </p>
+            </section>
+          )}
+
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-ink-primary">Provenance</h3>
+            <p className="text-sm text-ink-muted">
+              Authored by {ci.authorType === 'human' ? 'a human engineer' : `AI (${ci.authorType})`} ·
+              review status {ci.provenanceReviewStatus}.
+            </p>
+          </section>
+
+          {actionError && (
+            <p role="alert" className="text-sm text-status-danger">
+              {actionError}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-shrink-0 flex-wrap gap-2 border-t border-default px-6 py-4">
+          {transition && (
             <button
               type="button"
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              onClick={() => transitionMutation.mutate(transition.to)}
+              disabled={busy}
+              aria-label={transition.label}
+              className="rounded-sm bg-accent-primary px-4 py-2 text-sm text-white hover:bg-accent-primary-hover disabled:opacity-50"
             >
-              <X size={20} />
+              {transition.label}
             </button>
-          </div>
-
-          <div className="px-6 py-4 space-y-6 flex-1">
-            <section>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                Metadata
-              </h3>
-              <dl className="grid grid-cols-2 gap-2 text-sm">
-                <dt className="text-gray-500 dark:text-gray-400">Type</dt>
-                <dd className="text-gray-900 dark:text-white">{ci.type}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Owner</dt>
-                <dd className="text-gray-900 dark:text-white">{ci.owner}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Version</dt>
-                <dd className="text-gray-900 dark:text-white font-mono">{ci.version}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Revision</dt>
-                <dd className="text-gray-900 dark:text-white font-mono">{ci.revision}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Lock state</dt>
-                <dd className="text-gray-900 dark:text-white">{ci.lockState}</dd>
-                <dt className="text-gray-500 dark:text-gray-400">Last modified</dt>
-                <dd className="text-gray-900 dark:text-white">{new Date(ci.lastModified).toLocaleString()}</dd>
-              </dl>
-              {ci.tags.length > 0 && (
-                <div className="mt-2">
-                  <dt className="text-gray-500 dark:text-gray-400 text-sm">Tags</dt>
-                  <dd className="flex flex-wrap gap-1 mt-1">
-                    {ci.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </dd>
-                </div>
-              )}
-            </section>
-
-            <section>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                Version history
-              </h3>
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-900">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">Version</th>
-                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">Revision</th>
-                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">Date</th>
-                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">By</th>
-                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">Summary</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {MOCK_VERSION_HISTORY.map((v) => (
-                      <tr key={`${v.version}-${v.revision}`}>
-                        <td className="px-3 py-2 font-mono">{v.version}</td>
-                        <td className="px-3 py-2 font-mono">{v.revision}</td>
-                        <td className="px-3 py-2">{v.date}</td>
-                        <td className="px-3 py-2">{v.changedBy}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{v.summary}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                Linked artifacts (placeholder)
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                Counts are mock. Buttons open a placeholder modal; no navigation to other modules.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => openPlaceholder('Requirements', fakeRequirements)}
-                  className="flex items-center justify-between px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 text-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <FileText size={16} className="text-gray-400" />
-                    Requirements
-                  </span>
-                  <span className="font-mono text-xs text-gray-500">{ci.linkedArtifacts.requirementsCount}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openPlaceholder('Verification Evidence', fakeTests)}
-                  className="flex items-center justify-between px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 text-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-gray-400" />
-                    Tests
-                  </span>
-                  <span className="font-mono text-xs text-gray-500">{ci.linkedArtifacts.testsCount}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openPlaceholder('Safety Artifacts', fakeSafety)}
-                  className="flex items-center justify-between px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 text-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <AlertTriangle size={16} className="text-gray-400" />
-                    Safety
-                  </span>
-                  <span className="font-mono text-xs text-gray-500">{ci.linkedArtifacts.safetyCount}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openPlaceholder('Documentation', fakeDocs)}
-                  className="flex items-center justify-between px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 text-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <Layers size={16} className="text-gray-400" />
-                    Docs
-                  </span>
-                  <span className="font-mono text-xs text-gray-500">{ci.linkedArtifacts.docsCount}</span>
-                </button>
-              </div>
-            </section>
-          </div>
+          )}
+          {ci.lockState === 'Unlocked' ? (
+            <button
+              type="button"
+              onClick={() => lockMutation.mutate()}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-default px-4 py-2 text-sm text-ink-primary hover:bg-surface-inset disabled:opacity-50"
+            >
+              <Lock size={14} />
+              Lock CI
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => unlockMutation.mutate()}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-default px-4 py-2 text-sm text-ink-primary hover:bg-surface-inset disabled:opacity-50"
+            >
+              <Unlock size={14} />
+              Unlock CI
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy}
+              className="rounded-sm border border-default px-4 py-2 text-sm text-status-danger hover:bg-surface-inset disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
-
-      {linkedModal && (
-        <LinkedArtifactsPlaceholderModal
-          isOpen={!!linkedModal}
-          onClose={() => setLinkedModal(null)}
-          title={linkedModal.title}
-          message={linkedModal.message}
-          fakeRows={linkedModal.rows}
-        />
-      )}
-    </>
+    </div>
   )
 }

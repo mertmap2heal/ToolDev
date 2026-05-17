@@ -69,92 +69,127 @@ export const CM_ROLES: CMRole[] = [
   'Auditor',
 ]
 
+// NX-3 (#443): status-pill colours use design-system semantic tokens (R-9
+// §3.1) — no blue-*/indigo-*/purple-* palette classes. A pill always shows
+// the state word, so colour is never the sole signal (accessibility §9).
+const NEUTRAL_PILL = 'bg-surface-inset text-ink-muted'
+const SUCCESS_PILL = 'bg-status-success/12 text-status-success'
+const INFO_PILL = 'bg-status-info/12 text-status-info'
+const WARNING_PILL = 'bg-status-warning/12 text-status-warning'
+const DANGER_PILL = 'bg-status-danger/12 text-status-danger'
+const ACCENT_PILL = 'bg-accent-primary/12 text-accent-primary'
+
 export function getCIStatusColor(status: string): string {
   switch (status) {
     case 'Draft':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
     case 'InReview':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+      return INFO_PILL
     case 'Released':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      return SUCCESS_PILL
     case 'Obsolete':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      return DANGER_PILL
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
+  }
+}
+
+// CI lockState is an orthogonal pill — never fused with the lifecycle status.
+export function getCILockStateColor(lockState: string): string {
+  switch (lockState) {
+    case 'FrozenByBaseline':
+    case 'LockedForRelease':
+      return ACCENT_PILL
+    default:
+      return NEUTRAL_PILL
   }
 }
 
 export function getBaselineStatusColor(status: string): string {
   switch (status) {
     case 'Draft':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
     case 'Submitted':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+      return INFO_PILL
     case 'Approved':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      return SUCCESS_PILL
     case 'Frozen':
-      return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400'
+      return ACCENT_PILL
     case 'Superseded':
-      return 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+      return NEUTRAL_PILL
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
   }
 }
 
 export function getCRStatusColor(status: string): string {
   switch (status) {
     case 'Proposed':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
     case 'UnderReview':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+      return INFO_PILL
     case 'Approved':
     case 'Implemented':
     case 'Verified':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      return SUCCESS_PILL
     case 'Rejected':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      return DANGER_PILL
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
   }
 }
 
 export function getCRPriorityColor(priority: string): string {
   switch (priority) {
     case 'Urgent':
-      return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+      return WARNING_PILL
     case 'Emergency':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      return DANGER_PILL
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
   }
 }
 
 export function getDWStatusColor(status: string): string {
   switch (status) {
     case 'Draft':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
     case 'Submitted':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+      return INFO_PILL
     case 'Approved':
     case 'Closed':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      return SUCCESS_PILL
     case 'Rejected':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      return DANGER_PILL
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
   }
 }
 
 export function getRiskLevelColor(level: string): string {
   switch (level) {
     case 'High':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      return DANGER_PILL
     case 'Medium':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+      return WARNING_PILL
     case 'Low':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      return SUCCESS_PILL
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      return NEUTRAL_PILL
+  }
+}
+
+// CCB decision outcome pill.
+export function getCcbDecisionColor(decision: string): string {
+  switch (decision) {
+    case 'Approved':
+      return SUCCESS_PILL
+    case 'Rejected':
+      return DANGER_PILL
+    case 'Deferred':
+      return WARNING_PILL
+    default:
+      return NEUTRAL_PILL
   }
 }
 

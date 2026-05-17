@@ -285,6 +285,9 @@ model Project {
   validationSettings          ValidationSettings?
   validationBaselines         ValidationBaseline[]
   baselineRoots               BaselineRoot[]
+  configItems                 ConfigItem[]
+  deviations                  Deviation[]
+  ccbDecisions                CcbDecision[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -1099,6 +1102,7 @@ model ChangeRequest {
   project          Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   attachments      ChangeRequestAttachment[]
   requirementLinks RequirementChangeRequestLink[]
+  ccbDecisions     CcbDecision[]
 
   // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
   authorType             String    @default("human")
@@ -1133,6 +1137,129 @@ model ChangeRequestAttachment {
 
   @@index([changeRequestId])
   @@index([projectId])
+}
+
+// NX-3 (#443) — Configuration Management primitives. IEEE 828-2012 §6.2
+// configuration identification. ConfigItem is the foundational CM artefact —
+// a uniquely identified, versioned, lockable item under configuration control.
+model ConfigItem {
+  id             String    @id @default(uuid())
+  projectId      String
+  ciKey          String // Display key, atomic per project (e.g. CI-REQ-014)
+  name           String
+  type           String // Requirement | Architecture | Interface | Parameter | Software | Hardware | Document | Model | TestCase | TestResult | SafetyArtifact
+  status         String    @default("Draft") // Draft | InReview | Released | Obsolete
+  lockState      String    @default("Unlocked") // Unlocked | FrozenByBaseline | LockedForRelease
+  version        String    @default("0.1.0")
+  revision       String    @default("Rev 0")
+  ownerUserId    String?
+  ownerName      String? // display fallback
+  safetyCritical Boolean   @default(false)
+  dal            String? // A | B | C | D | E
+  tags           String[]  @default([])
+  // Polymorphic backref to the source artefact this CI describes.
+  refType        String? // 'requirement' | 'parameter' | ...
+  refId          String?
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  // Soft-delete (mirrors Requirement; cleanup.service.ts purge follows).
+  deletedAt   DateTime?
+  deletedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, ciKey])
+  @@index([projectId, type])
+  @@index([projectId, status])
+  @@index([projectId, deletedAt])
+}
+
+// NX-3 (#443) — Deviation / Waiver. IEEE 828 + EIA-649-C §7.5 + ARP4754A §5.3.
+// One discriminated table: `type` distinguishes Deviation (short-lived) from
+// Waiver (permanent — validUntil null). The columns are identical, so
+// table-per-class is rejected.
+model Deviation {
+  id                String   @id @default(uuid())
+  projectId         String
+  dwKey             String // DW-NNN
+  type              String // 'Deviation' | 'Waiver'
+  title             String
+  description       String   @default("")
+  riskLevel         String   @default("Low") // Low | Medium | High
+  validUntil        DateTime? // null = permanent (Waiver)
+  status            String   @default("Draft") // Draft | Submitted | Approved | Closed | Rejected
+  authorityInvolved Boolean  @default(false)
+  decisionNotes     String?
+  // Polymorphic linked CIs — [{ itemType, itemId }, ...].
+  linkedConfigItemIds Json   @default("[]")
+  createdById       String?
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, dwKey])
+  @@index([projectId, type, status])
+}
+
+// NX-3 (#443) — CCB decision. A vote record joined to the existing
+// ChangeRequest (a CR is 1:N with CCB decisions). The Requirements-module CR
+// flow is untouched and writes zero CcbDecision rows.
+model CcbDecision {
+  id                    String    @id @default(uuid())
+  projectId             String
+  changeRequestId       String
+  ccbLevel              String // SystemCCB | SafetyCCB | SoftwareCCB
+  safetyImpact          Boolean   @default(false)
+  decision              String // Approved | Rejected | Deferred
+  decisionRationale     String    @default("")
+  signedById            String?
+  signedAt              DateTime?
+  meaningCode           String? // SignatureEvent meaning vocabulary
+  // Polymorphic impacted CIs — [{ itemType, itemId }, ...].
+  impactedConfigItemIds Json      @default("[]")
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, ccbLevel])
+  @@index([changeRequestId])
 }
 
 model RequirementChangeRequestLink {

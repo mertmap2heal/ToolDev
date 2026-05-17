@@ -57,6 +57,9 @@ import transitionChecklistRoutes from './transitionChecklist.routes'
 import searchRoutes from './search.routes'
 import requirementsViewPreferencesRoutes from './requirementsViewPreferences.routes'
 import validationRoutes from './validation.routes'
+import configItemsRoutes from './configItems.routes'
+import deviationsWaiversRoutes from './deviationsWaivers.routes'
+import ccbDecisionsRoutes from './ccbDecisions.routes'
 
 const router = Router()
 
@@ -134,5 +137,9 @@ router.use('/lifecycle', lifecycleRoutes)
 router.use('/transition-checklists', transitionChecklistRoutes)
 router.use('/search', searchRoutes)
 router.use('/validation', validationRoutes)
+// NX-3 (#443) — Configuration Management primitives.
+router.use('/config-items', configItemsRoutes)
+router.use('/deviations-waivers', deviationsWaiversRoutes)
+router.use('/ccb-decisions', ccbDecisionsRoutes)
 
 export default router

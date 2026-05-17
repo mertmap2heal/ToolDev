@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger.js'
+import { generateExpiringDeviationIssues } from './deviationWaiver.service.js'
 
 /**
  * Permanently deletes requirements that have been soft-deleted past the retention window.
@@ -138,5 +139,21 @@ export const cleanupSoftDeletedRequirements = async () => {
         await prisma.$executeRaw`SELECT pg_advisory_unlock(${CLEANUP_LOCK_KEY})`.catch((e: unknown) => {
             logger.error('cleanup_lock_release_failed', { error: (e as Error).message })
         })
+    }
+}
+
+// NX-3 (#443) — daily Configuration Management maintenance. Currently a single
+// task: generate an Issue for every Approved deviation / waiver expiring within
+// 14 days (CM-N2). Idempotent — generateExpiringDeviationIssues derives the
+// Issue key deterministically, so a re-run never duplicates. Scheduled from
+// server.ts alongside the soft-deleted-requirement cleanup.
+export const runCmDailyMaintenance = async (): Promise<void> => {
+    try {
+        const windowDays = parseInt(process.env.CM_DEVIATION_EXPIRY_WINDOW_DAYS ?? '14', 10)
+        const created = await generateExpiringDeviationIssues(windowDays)
+        logger.info('cm_deviation_expiry_finished', { issuesCreated: created, windowDays })
+    } catch (err) {
+        // Never let CM maintenance crash the scheduler — log and move on.
+        logger.error('cm_deviation_expiry_failed', { error: (err as Error).message })
     }
 }

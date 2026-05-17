@@ -1,37 +1,64 @@
+// NX-3 (#443) — Create Deviation / Waiver modal. Single-screen modal. The
+// backend sets status Draft. A Waiver with no validUntil is permanent.
 import { useState, useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import type { DeviationWaiver, DWType, RiskLevel } from './types'
-import { DW_TYPES } from './constants'
-import { useNextIds, useCMStore } from './store'
+import {
+  DW_TYPES,
+  DW_RISK_LEVELS,
+  type CreateDeviationWaiverPayload,
+} from '../../services/deviationWaiver.service'
+import { configItemService } from '../../services/configItem.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateDWModalProps {
+  projectId: string
   isOpen: boolean
   onClose: () => void
-  onCreate: (dw: DeviationWaiver) => void
+  submitting?: boolean
+  onCreate: (payload: CreateDeviationWaiverPayload) => Promise<void> | void
 }
 
-export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWModalProps) {
+export default function CreateDWModal({
+  projectId,
+  isOpen,
+  onClose,
+  submitting,
+  onCreate,
+}: CreateDWModalProps) {
   const onDiscardRef = useRef<() => void>()
-  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const { state } = useCMStore()
-  const { nextDWId } = useNextIds()
-  const [type, setType] = useState<DWType>('Deviation')
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(
+    onClose,
+    isOpen,
+    () => onDiscardRef.current?.(),
+  )
+  const [type, setType] = useState<string>('Deviation')
   const [title, setTitle] = useState('')
-  const [riskLevel, setRiskLevel] = useState<RiskLevel>('Low')
+  const [description, setDescription] = useState('')
+  const [riskLevel, setRiskLevel] = useState<string>('Low')
   const [validUntil, setValidUntil] = useState('')
   const [authorityInvolved, setAuthorityInvolved] = useState(false)
   const [decisionNotes, setDecisionNotes] = useState('')
   const [linkedCiIds, setLinkedCiIds] = useState<Set<string>>(new Set())
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: ciData } = useQuery({
+    queryKey: ['cm', 'config-items', projectId],
+    queryFn: async () => (await configItemService.list(projectId)).data ?? [],
+    enabled: !!projectId && isOpen,
+  })
+  const cis = ciData ?? []
 
   onDiscardRef.current = () => {
     setType('Deviation')
     setTitle('')
+    setDescription('')
     setRiskLevel('Low')
     setValidUntil('')
     setAuthorityInvolved(false)
     setDecisionNotes('')
     setLinkedCiIds(new Set())
+    setError(null)
   }
 
   useEffect(() => {
@@ -42,78 +69,84 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
       document.addEventListener('keydown', handleEsc)
       return () => document.removeEventListener('keydown', handleEsc)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, guardClose])
 
   if (!isOpen) return null
 
-  const toggleCi = (ciId: string) => {
+  const toggleCi = (id: string) => {
     setLinkedCiIds((prev) => {
       const next = new Set(prev)
-      if (next.has(ciId)) next.delete(ciId)
-      else next.add(ciId)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
     markDirty()
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const dwId = nextDWId()
-    const dw: DeviationWaiver = {
-      dwId,
-      type,
-      title: title.trim() || 'Unnamed',
-      linkedCIs: Array.from(linkedCiIds),
-      riskLevel,
-      validUntil: validUntil.trim() || null,
-      status: 'Draft',
-      authorityInvolved,
-      decisionNotes: decisionNotes.trim() || '—',
+    setError(null)
+    try {
+      await onCreate({
+        type,
+        title: title.trim(),
+        description: description.trim(),
+        riskLevel,
+        validUntil: validUntil.trim() || null,
+        authorityInvolved,
+        decisionNotes: decisionNotes.trim(),
+        linkedConfigItemIds: Array.from(linkedCiIds).map((id) => ({
+          itemType: 'configItem',
+          itemId: id,
+        })),
+      })
+      onDiscardRef.current?.()
+      resetDirty()
+    } catch (err) {
+      setError((err as Error).message)
     }
-    onCreate(dw)
-    setTitle('')
-    setValidUntil('')
-    setDecisionNotes('')
-    setLinkedCiIds(new Set())
-    resetDirty()
-    onClose()
   }
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) guardClose()
+      }}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col overflow-hidden"
+        className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-md border border-default bg-surface-raised"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Create Deviation / Waiver
-          </h2>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-default p-6">
+          <h2 className="text-xl font-semibold text-ink-primary">Create Deviation / Waiver</h2>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button
               type="button"
               onClick={guardClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              aria-label="Close"
+              className="rounded p-2 text-ink-muted hover:bg-surface-inset"
             >
               <X size={20} />
             </button>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="dw-type" className="mb-1 block text-sm font-medium text-ink-primary">
               Type
             </label>
             <select
+              id="dw-type"
               value={type}
-              onChange={(e) => { setType(e.target.value as DWType); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setType(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             >
               {DW_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -123,100 +156,143 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="dw-title" className="mb-1 block text-sm font-medium text-ink-primary">
               Title *
             </label>
             <input
+              id="dw-title"
               type="text"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setTitle(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="dw-description" className="mb-1 block text-sm font-medium text-ink-primary">
+              Description
+            </label>
+            <textarea
+              id="dw-description"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                markDirty()
+              }}
+              rows={2}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="dw-risk" className="mb-1 block text-sm font-medium text-ink-primary">
               Risk level
             </label>
             <select
+              id="dw-risk"
               value={riskLevel}
-              onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => setRiskLevel(e.target.value)}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             >
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
+              {DW_RISK_LEVELS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Valid until (optional)
+            <label htmlFor="dw-valid-until" className="mb-1 block text-sm font-medium text-ink-primary">
+              Valid until (leave blank for a permanent waiver)
             </label>
             <input
+              id="dw-valid-until"
               type="date"
               value={validUntil}
-              onChange={(e) => { setValidUntil(e.target.value); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setValidUntil(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             />
           </div>
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
-              id="authority-involved"
+              id="dw-authority"
               checked={authorityInvolved}
-              onChange={(e) => { setAuthorityInvolved(e.target.checked); markDirty() }}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
+              onChange={(e) => {
+                setAuthorityInvolved(e.target.checked)
+                markDirty()
+              }}
+              className="rounded border-default accent-accent-primary"
             />
-            <label htmlFor="authority-involved" className="text-sm text-gray-700 dark:text-gray-300">
+            <label htmlFor="dw-authority" className="text-sm text-ink-primary">
               Authority involved
             </label>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Linked CIs
-            </label>
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-32 overflow-y-auto p-2">
-              {state.configurationItems.map((c) => (
-                <label
-                  key={c.ciId}
-                  className="flex items-center gap-2 cursor-pointer text-sm py-1"
-                >
-                  <input
-                    type="checkbox"
-                    checked={linkedCiIds.has(c.ciId)}
-                    onChange={() => toggleCi(c.ciId)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
-                  />
-                  <span className="font-mono">{c.ciId}</span>
-                  <span className="text-gray-500 dark:text-gray-400 truncate">{c.name}</span>
-                </label>
-              ))}
+            <span className="mb-1 block text-sm font-medium text-ink-primary">
+              Linked configuration items
+            </span>
+            <div className="max-h-32 overflow-y-auto rounded-sm border border-default p-2">
+              {cis.length === 0 ? (
+                <p className="text-sm text-ink-faint">No configuration items in this project.</p>
+              ) : (
+                cis.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex cursor-pointer items-center gap-2 py-1 text-sm text-ink-primary"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={linkedCiIds.has(c.id)}
+                      onChange={() => toggleCi(c.id)}
+                      className="rounded border-default accent-accent-primary"
+                    />
+                    <span className="font-mono">{c.ciKey}</span>
+                    <span className="truncate text-ink-muted">{c.name}</span>
+                  </label>
+                ))
+              )}
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="dw-notes" className="mb-1 block text-sm font-medium text-ink-primary">
               Decision notes
             </label>
             <textarea
+              id="dw-notes"
               value={decisionNotes}
-              onChange={(e) => { setDecisionNotes(e.target.value); markDirty() }}
+              onChange={(e) => {
+                setDecisionNotes(e.target.value)
+                markDirty()
+              }}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
             />
           </div>
+          {error && (
+            <p role="alert" className="text-sm text-status-danger">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={guardClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="rounded-sm border border-default px-4 py-2 text-ink-primary hover:bg-surface-inset"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              disabled={submitting}
+              className="rounded-sm bg-accent-primary px-4 py-2 text-white hover:bg-accent-primary-hover disabled:opacity-50"
             >
-              Create
+              {submitting ? 'Creating...' : 'Create Deviation / Waiver'}
             </button>
           </div>
         </form>

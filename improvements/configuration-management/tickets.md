@@ -87,6 +87,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N1 · Schema migration — `ConfigItem` table with provenance
 **Priority:** P0 · **Effort:** L
+**Status:** Shipped — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema
 
 **Problem.** The Configuration Item is the foundational primitive of IEEE 828-2012 §6.2 (Configuration identification). The frontend models 11 typed kinds (`types.ts:2-14`) with full schema design (`status`, `lockState`, `safetyCritical`, `dal`, `version`, `revision`, `tags`, polymorphic `linkedArtifacts`). The Prisma schema has zero of it. The Configuration Items tab (448 lines, the most polished tab) is 100% mock.
 
@@ -106,6 +107,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N2 · Schema migration — `Deviation` and `Waiver` tables
 **Priority:** P0 · **Effort:** M
+**Status:** Shipped — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema
 
 **Problem.** Deviations and Waivers are first-class CM authorisations (per IEEE 828 + EIA-649-C §7.5 + ARP4754A §5.3) and have zero backend persistence. Approving a deviation against a safety-critical CI is currently a one-click affordance with no signer, no expiry, no audit trail beyond a session-local log entry.
 
@@ -124,6 +126,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N3 · Schema migration — `CcbDecision` table joined to existing `ChangeRequest`
 **Priority:** P0 · **Effort:** M
+**Status:** Shipped — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema
 
 **Problem.** The frontend Changes tab models a CCB-aware change request (`safetyImpact`, `ccbLevel`, `impactedCIs[]`, `decisionBy`, `decisionAt`). The Prisma `ChangeRequest` model — designed for the Requirements module's CR flow — has none of those columns. Today the CM tab maintains a parallel mock CR concept.
 
@@ -174,6 +177,7 @@ Priority: **P0** load-bearing for aerospace buyer credibility, **P1** competitiv
 
 ### CM-N6 · Extend `BaselineItem` to polymorphic CI snapshot
 **Priority:** P0 · **Effort:** M
+**Status:** Shipped (intent met via R-4) — NX-3 / Issue #443 / PR feat/NX-3-cm-configitem-schema. The NX-3 Architecture review reshaped this ticket: the legacy `BaselineItem` is NOT extended. CM consumes R-4's already-polymorphic `BaselineRoot` / `BaselineRootItem` (`kind='CM'`, `linkedEntityType='ConfigItem'`), which delivers the polymorphic-CI-snapshot intent with zero migration and avoids a second competing baseline path. The legacy `Baseline`/`BaselineItem` → `BaselineRoot` migration stays deferred to V-L2 / CM-L3.
 
 **Problem.** `BaselineItem` snapshots only `requirementId`. The CM baseline concept must snapshot any `ConfigItem` (Software, Document, Parameter, Model, etc., not just Requirement).
 

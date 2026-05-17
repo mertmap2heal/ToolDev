@@ -1,35 +1,52 @@
+// NX-3 (#443) — Create Change Request modal. Single-screen modal. A CM change
+// request targets a Configuration Item; the existing ChangeRequest model
+// requires a source artefact, so the modal sources the CR from the picked
+// CI's linked artefact (refType / refId). A CI with no linked source artefact
+// cannot yet be the subject of a CR — the modal says so plainly.
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import type { ChangeRequest, CRPriority, CCBLevel } from './types'
-import { CR_PRIORITIES } from './constants'
-import { useNextIds, useCMStore } from './store'
+import type { CreateChangeRequestDto } from 'shared/types/engineering.types'
+import { configItemService } from '../../services/configItem.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateCRModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (cr: ChangeRequest) => void
+  submitting?: boolean
+  onCreate: (payload: CreateChangeRequestDto) => Promise<void> | void
 }
 
-export default function CreateCRModal({ isOpen, onClose, onCreate }: CreateCRModalProps) {
+const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
+// The source-artefact types the ChangeRequest model accepts.
+const VALID_SOURCE_TYPES = new Set(['function', 'issue', 'parameter', 'requirement'])
+
+export default function CreateCRModal({ isOpen, onClose, submitting, onCreate }: CreateCRModalProps) {
   const onDiscardRef = useRef<() => void>()
-  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const { state } = useCMStore()
-  const { nextCRId } = useNextIds()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(
+    onClose,
+    isOpen,
+    () => onDiscardRef.current?.(),
+  )
   const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<CRPriority>('Normal')
-  const [ccbLevel, setCcbLevel] = useState<CCBLevel>('SystemCCB')
-  const [safetyImpact, setSafetyImpact] = useState(false)
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<string>('medium')
+  const [subjectCiId, setSubjectCiId] = useState('')
   const [justification, setJustification] = useState('')
-  const [impactedCiIds, setImpactedCiIds] = useState<Set<string>>(new Set())
+  const [error, setError] = useState<string | null>(null)
+
+  // CIs feed the subject picker — only items linked to a source artefact
+  // qualify. Loaded lazily the first time the picker is opened.
+  const [projectCis, setProjectCis] = useState<
+    { id: string; ciKey: string; name: string; refType: string | null; refId: string | null }[]
+  >([])
 
   onDiscardRef.current = () => {
     setTitle('')
-    setPriority('Normal')
-    setCcbLevel('SystemCCB')
-    setSafetyImpact(false)
+    setDescription('')
+    setPriority('medium')
+    setSubjectCiId('')
     setJustification('')
-    setImpactedCiIds(new Set())
+    setError(null)
   }
 
   useEffect(() => {
@@ -40,175 +57,200 @@ export default function CreateCRModal({ isOpen, onClose, onCreate }: CreateCRMod
       document.addEventListener('keydown', handleEsc)
       return () => document.removeEventListener('keydown', handleEsc)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, guardClose])
+
+  const subject = projectCis.find((c) => c.id === subjectCiId)
+  const subjectLinked =
+    !!subject && !!subject.refType && !!subject.refId && VALID_SOURCE_TYPES.has(subject.refType)
 
   if (!isOpen) return null
 
-  const toggleCi = (ciId: string) => {
-    setImpactedCiIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(ciId)) next.delete(ciId)
-      else next.add(ciId)
-      return next
-    })
-    markDirty()
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const crId = nextCRId()
-    const now = new Date().toISOString()
-    const cr: ChangeRequest = {
-      crId,
-      title: title.trim() || 'Unnamed change request',
-      priority,
-      status: 'Proposed',
-      impactedCIs: Array.from(impactedCiIds),
-      safetyImpact,
-      ccbLevel,
-      submittedBy: state.currentRole,
-      submittedAt: now,
-      justification: justification.trim() || '—',
+    setError(null)
+    if (!subject) {
+      setError('Pick the configuration item this change request targets.')
+      return
     }
-    onCreate(cr)
-    setTitle('')
-    setJustification('')
-    setImpactedCiIds(new Set())
-    setSafetyImpact(false)
-    resetDirty()
-    onClose()
+    if (!subjectLinked) {
+      setError(
+        `${subject.ciKey} is not linked to a source artefact. Link the CI to a requirement, ` +
+          'function, parameter, or issue first, then raise the change request.',
+      )
+      return
+    }
+    try {
+      await onCreate({
+        title: title.trim(),
+        description: description.trim(),
+        sourceType: subject.refType as CreateChangeRequestDto['sourceType'],
+        sourceId: subject.refId as string,
+        priority: priority as CreateChangeRequestDto['priority'],
+        justification: justification.trim() || undefined,
+      })
+      onDiscardRef.current?.()
+      resetDirty()
+    } catch (err) {
+      setError((err as Error).message)
+    }
   }
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) guardClose()
+      }}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col overflow-hidden"
+        className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-md border border-default bg-surface-raised"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Create Change Request
-          </h2>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-default p-6">
+          <h2 className="text-xl font-semibold text-ink-primary">Create Change Request</h2>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button
               type="button"
               onClick={guardClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              aria-label="Close"
+              className="rounded p-2 text-ink-muted hover:bg-surface-inset"
             >
               <X size={20} />
             </button>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="cr-title" className="mb-1 block text-sm font-medium text-ink-primary">
               Title *
             </label>
             <input
+              id="cr-title"
               type="text"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setTitle(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Priority
-              </label>
-              <select
-                value={priority}
-                onChange={(e) => { setPriority(e.target.value as CRPriority); markDirty() }}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                {CR_PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                CCB Level
-              </label>
-              <select
-                value={ccbLevel}
-                onChange={(e) => setCcbLevel(e.target.value as CCBLevel)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="SystemCCB">SystemCCB</option>
-                <option value="SafetyCCB">SafetyCCB</option>
-                <option value="SoftwareCCB">SoftwareCCB</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="safety-impact"
-              checked={safetyImpact}
-              onChange={(e) => { setSafetyImpact(e.target.checked); markDirty() }}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
-            />
-            <label htmlFor="safety-impact" className="text-sm text-gray-700 dark:text-gray-300">
-              Safety impact
-            </label>
-          </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Impacted CIs
+            <label htmlFor="cr-subject" className="mb-1 block text-sm font-medium text-ink-primary">
+              Subject configuration item *
             </label>
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-32 overflow-y-auto p-2">
-              {state.configurationItems.map((c) => (
-                <label
-                  key={c.ciId}
-                  className="flex items-center gap-2 cursor-pointer text-sm py-1"
-                >
-                  <input
-                    type="checkbox"
-                    checked={impactedCiIds.has(c.ciId)}
-                    onChange={() => toggleCi(c.ciId)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
-                  />
-                  <span className="font-mono">{c.ciId}</span>
-                  <span className="text-gray-500 dark:text-gray-400 truncate">{c.name}</span>
-                </label>
+            <select
+              id="cr-subject"
+              value={subjectCiId}
+              onClick={async () => {
+                if (projectCis.length === 0) {
+                  // Lazy-load the project CIs from the cache-less service the
+                  // first time the picker is touched.
+                  const projId = window.location.pathname.split('/projects/')[1]?.split('/')[0]
+                  if (projId) {
+                    const res = await configItemService.list(projId)
+                    setProjectCis(
+                      (res.data ?? []).map((c) => ({
+                        id: c.id,
+                        ciKey: c.ciKey,
+                        name: c.name,
+                        refType: c.refType,
+                        refId: c.refId,
+                      })),
+                    )
+                  }
+                }
+              }}
+              onChange={(e) => {
+                setSubjectCiId(e.target.value)
+                markDirty()
+              }}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
+            >
+              <option value="">Select a configuration item...</option>
+              {projectCis.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.ciKey} — {c.name}
+                </option>
               ))}
-            </div>
+            </select>
+            {subject && !subjectLinked && (
+              <p className="mt-1 text-xs text-status-warning">
+                {subject.ciKey} has no linked source artefact. Link it on the CI detail panel first.
+              </p>
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Justification *
+            <label htmlFor="cr-priority" className="mb-1 block text-sm font-medium text-ink-primary">
+              Priority
+            </label>
+            <select
+              id="cr-priority"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 capitalize text-ink-primary"
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="cr-description" className="mb-1 block text-sm font-medium text-ink-primary">
+              Description *
             </label>
             <textarea
-              value={justification}
-              onChange={(e) => { setJustification(e.target.value); markDirty() }}
+              id="cr-description"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                markDirty()
+              }}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
               required
             />
           </div>
+          <div>
+            <label htmlFor="cr-justification" className="mb-1 block text-sm font-medium text-ink-primary">
+              Justification
+            </label>
+            <textarea
+              id="cr-justification"
+              value={justification}
+              onChange={(e) => {
+                setJustification(e.target.value)
+                markDirty()
+              }}
+              rows={2}
+              className="w-full rounded-sm border border-default bg-surface-base px-3 py-2 text-ink-primary"
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-status-danger">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={guardClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="rounded-sm border border-default px-4 py-2 text-ink-primary hover:bg-surface-inset"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              disabled={submitting}
+              className="rounded-sm bg-accent-primary px-4 py-2 text-white hover:bg-accent-primary-hover disabled:opacity-50"
             >
-              Create
+              {submitting ? 'Creating...' : 'Create Change Request'}
             </button>
           </div>
         </form>
