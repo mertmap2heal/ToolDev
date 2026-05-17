@@ -1,102 +1,171 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import { prisma } from '../../lib/prisma'
+import {
+    ingestNormalisedRun,
+    TestPlanNotFoundError,
+    EntryCriteriaError,
+} from '../../services/verificationV2/ingestionCore.service'
+import {
+    parseTestResults,
+    isTestResultFormat,
+    ParseError,
+    TEST_RESULT_FORMATS,
+} from '../../services/testResultParsers'
 
+/** A file uploaded via multer.memoryStorage(). */
+interface UploadedFile {
+    originalname: string
+    mimetype: string
+    buffer: Buffer
+    size: number
+}
 
+/**
+ * POST /runs/ingest/:projectId
+ *
+ * Ingest an already-normalised result set supplied as JSON in the request
+ * body: { testPlanKey?, runName?, environment?, results: NormalisedResult[] }.
+ * This is a thin wrapper over the shared ingestion core — behaviour is
+ * unchanged from before the N-2.4 refactor. The project is membership-scoped
+ * by router.param('projectId', projectIdParam) before this handler runs.
+ */
 export const ingestAutomatedResult = async (req: AuthRequest, res: Response): Promise<Response | void> => {
     try {
         const { projectId } = req.params
         const { testPlanKey, runName, environment, results } = req.body
+        const userId = req.userId
 
-        // @ts-ignore - Assuming auth middleware attaches user differently or we just need userId
-        const userId = (req as any).userId
-
-        // Ensure project exists
-        const project = await prisma.project.findUnique({ where: { id: projectId } })
-        if (!project) return res.status(404).json({ success: false, error: 'Project not found' })
-
-        // Find test plan if provided
-        let testPlanId = null
-        if (testPlanKey) {
-            const plan = await prisma.verTestPlan.findUnique({
-                where: { projectId_key: { projectId, key: testPlanKey } }
-            })
-            if (!plan) {
-                return res.status(404).json({ success: false, error: `Test Plan ${testPlanKey} not found` })
-            }
-            testPlanId = plan.id
-
-            // DO-178C Entry Criteria Check
-            // If the plan is not approved or active, we cannot run automated tests against it.
-            if (plan.status === 'DRAFT' || plan.status === 'CLOSED') {
-                return res.status(400).json({ success: false, error: `Cannot ingest run for Test Plan in ${plan.status} status` })
-            }
-        }
-
-        // Create Environment
-        const testEnv = await prisma.verTestEnvironment.create({
-            data: {
-                projectId,
-                name: environment?.name || 'Automated CI/CD Environment',
-                hardwareVersion: environment?.hardwareVersion,
-                softwareBuild: environment?.softwareBuild,
-                hilBenchConfig: environment?.hilBenchConfig || {}
-            }
+        const outcome = await ingestNormalisedRun(projectId, userId, {
+            testPlanKey,
+            runName,
+            environment,
+            results: Array.isArray(results) ? results : [],
         })
 
-        // Create Test Run - Immutable upon creation with COMPLETED status
-        const testRun = await prisma.verTestRun.create({
-            data: {
-                projectId,
-                testPlanId,
-                environmentId: testEnv.id,
-                runName: runName || `Automated Run ${new Date().toISOString()}`,
-                status: 'COMPLETED',
-                executedByUserId: userId,
-                startedAt: new Date(),
-                endedAt: new Date(),
-            }
+        res.json({
+            success: true,
+            data: { testRunId: outcome.testRunId, environmentId: outcome.environmentId },
         })
-
-        // Process Results
-        if (Array.isArray(results)) {
-            for (const result of results) {
-                // Find Test Case
-                const testCase = await prisma.verTestCase.findUnique({
-                    where: { projectId_key: { projectId, key: result.testCaseKey } }
-                })
-
-                if (!testCase) continue // Skip if test case missing
-
-                // Create Test Run Result
-                await prisma.verTestRunResult.create({
-                    data: {
-                        testRunId: testRun.id,
-                        testCaseId: testCase.id,
-                        testCaseVersionSnapshot: { version: testCase.version, title: testCase.title },
-                        parentTestCaseVersionAtExecution: testCase.version,
-                        resultStatus: result.status,
-                        actualResults: result.actualResults || {},
-                        executedAt: result.executedAt ? new Date(result.executedAt) : new Date(),
-                        isSuspect: false // Newly run tests are fresh and verified
-                    }
-                })
-            }
-        }
-
-        // Create a centralized Test Log
-        await prisma.verTestLog.create({
-            data: {
-                testRunId: testRun.id,
-                projectId,
-                stdoutText: "Batch automated test completion log.",
-                jsonResult: results || []
-            }
-        })
-
-        res.json({ success: true, data: { testRunId: testRun.id, environmentId: testEnv.id } })
     } catch (error: any) {
+        if (error instanceof TestPlanNotFoundError) {
+            return res.status(404).json({ success: false, error: error.message })
+        }
+        if (error instanceof EntryCriteriaError) {
+            return res.status(400).json({ success: false, error: error.message })
+        }
         console.error('Ingest Automated Result error:', error)
+        res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+    }
+}
+
+/**
+ * POST /runs/ingest/:projectId/file
+ *
+ * Ingest a raw CI-tool output FILE. The caller uploads the file as multipart
+ * field `file` plus a `format` field (junit / xunit / nunit / robot / tap /
+ * pytest) and optional `testPlanKey` / `runName` / `environment`. The file is
+ * parsed into a normalised result set, then handed to the same ingestion core
+ * as the JSON endpoint. A malformed file -> a clear 400, never a 500.
+ *
+ * The project is membership-scoped by router.param('projectId', projectIdParam).
+ * The 8 MB upload cap is enforced by multer at the route.
+ */
+export const ingestFileResult = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+    try {
+        const { projectId } = req.params
+        const userId = req.userId
+
+        // multer attaches the parsed file at req.file.
+        const file = (req as AuthRequest & { file?: UploadedFile }).file
+        if (!file) {
+            return res.status(400).json({ success: false, error: 'file is required' })
+        }
+        if (file.size === 0) {
+            return res.status(400).json({ success: false, error: 'Uploaded file is empty' })
+        }
+
+        // `format` is explicit — no fragile content sniffing.
+        const format = typeof req.body?.format === 'string' ? req.body.format.trim().toLowerCase() : ''
+        if (!isTestResultFormat(format)) {
+            return res.status(400).json({
+                success: false,
+                error: `format is required and must be one of: ${TEST_RESULT_FORMATS.join(', ')}`,
+            })
+        }
+
+        // Parse the file. A malformed file throws ParseError -> 400.
+        let parsed
+        try {
+            parsed = parseTestResults(file.buffer, format)
+        } catch (parseErr: any) {
+            if (parseErr instanceof ParseError) {
+                return res.status(400).json({ success: false, error: parseErr.message })
+            }
+            // Any other parse-time failure is still a bad-input 400, not a 500.
+            return res.status(400).json({
+                success: false,
+                error: `Could not parse the uploaded file: ${parseErr?.message || 'unknown error'}`,
+            })
+        }
+
+        // multer drops extra multipart fields into req.body as strings.
+        const testPlanKey =
+            typeof req.body?.testPlanKey === 'string' && req.body.testPlanKey.trim()
+                ? req.body.testPlanKey.trim()
+                : undefined
+        const runName =
+            typeof req.body?.runName === 'string' && req.body.runName.trim()
+                ? req.body.runName.trim()
+                : undefined
+        let environment: Record<string, unknown> | undefined
+        if (typeof req.body?.environment === 'string' && req.body.environment.trim()) {
+            try {
+                const e = JSON.parse(req.body.environment)
+                if (e && typeof e === 'object') environment = e
+            } catch {
+                return res.status(400).json({
+                    success: false,
+                    error: 'environment must be a valid JSON object',
+                })
+            }
+        } else if (req.body?.environment && typeof req.body.environment === 'object') {
+            environment = req.body.environment
+        }
+
+        const outcome = await ingestNormalisedRun(projectId, userId, {
+            testPlanKey,
+            runName,
+            environment,
+            results: parsed.results,
+        })
+
+        res.json({
+            success: true,
+            data: {
+                testRunId: outcome.testRunId,
+                environmentId: outcome.environmentId,
+                testPlanId: outcome.testPlanId,
+                format: parsed.format,
+                summary: {
+                    total: outcome.summary.totalResults,
+                    matched: outcome.summary.matched,
+                    skipped: outcome.summary.skipped,
+                    pass: outcome.summary.pass,
+                    fail: outcome.summary.fail,
+                    skippedStatus: outcome.summary.skippedStatus,
+                    passedWithErrors: outcome.summary.passedWithErrors,
+                },
+            },
+        })
+    } catch (error: any) {
+        if (error instanceof TestPlanNotFoundError) {
+            return res.status(404).json({ success: false, error: error.message })
+        }
+        if (error instanceof EntryCriteriaError) {
+            return res.status(400).json({ success: false, error: error.message })
+        }
+        console.error('Ingest File Result error:', error)
         res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
     }
 }
