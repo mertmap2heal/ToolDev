@@ -2,7 +2,7 @@
 title: "Requirements"
 description: "Capture, organise, and trace engineering requirements through the full project lifecycle"
 status: "published"
-lastUpdated: "2026-04-14"
+lastUpdated: "2026-05-17"
 version: "1.0"
 audience: "all"
 relatedPages:
@@ -285,6 +285,29 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 4. Click **Create**.
 
 **Result:** All current requirements are snapshotted. Baselined requirements cannot be edited (a lock warning appears on attempt). To compare two baselines, select both and click **Compare**.
+
+---
+
+### How to compare versions
+
+Compare two saved versions of a single requirement, or two project baselines, to see exactly what changed.
+
+**Compare two requirement versions:**
+
+1. Open a requirement's **Detail Drawer**.
+2. Open the **Version History** section.
+3. Pick the two versions to compare.
+4. Read the diff: changed fields are listed with their before and after values, and long text fields show a line-by-line diff. Added and removed links are listed separately.
+
+**Compare two baselines:**
+
+1. Open **Data → Baseline Manager**.
+2. Select two baselines and click **Compare**.
+3. The baseline diff page lists every requirement added, removed, or changed between the two baselines, with per-field detail for each changed requirement.
+
+**Result:** The diff view shows a field-level summary. Use the **side-by-side / unified** toggle to switch layouts, and the `j` / `k` keys to step between changes (`u` toggles the layout).
+
+> **Note:** A baseline diff currently computes per-field changes against the requirement's live state. When a requirement is unchanged between the two baselines its fields show as unchanged.
 
 ---
 
