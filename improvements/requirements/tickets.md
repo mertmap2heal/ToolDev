@@ -188,6 +188,33 @@ Tests:
 
 ### REQ-M3. Unified bulk-edit drawer + endpoint
 
+**Status: Shipped — feat/NX-4-unified-bulk-edit (PR against dev), Issue [#447](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/447) (NX-4).**
+The hardened generic `/bulk-update` convention + a new shared `<BulkEditDrawer>`. NO schema
+change, NO new npm dependency (`crypto.randomUUID()` is a Node built-in). Per the approved
+#447 Architecture comment, Excel round-trip was split to a separate co-ticket (Option A) —
+NX-4 ships ONLY the `/bulk` convention + cell-level multi-select + `<BulkEditDrawer>`.
+
+Backend — `bulkUpdateRequirements` rewritten in place to the convention: a `BULK_EDITABLE_FIELDS`
+whitelist (non-whitelisted keys silently dropped — forward-compatible) + a `BULK_PRIVILEGED_FIELDS`
+sub-set (`lifecycleId`/`statusId`) gated by an in-controller project-owner/admin check (403 with
+nothing written); one `prisma.$transaction` wrapping the candidate `findMany`, the lock/conflict
+partition, every accepted `update` (`version: { increment: 1 }` + an echoed-version `WHERE` for
+TOCTOU safety), and every per-row `AuditLog.create` (shared `crypto.randomUUID()` `batchId` in
+`detailsJson`, action `requirements:bulk-update`); the standard `{ success, data: { batchId,
+updated, skippedDueToLock, skippedDueToConflict } }` response shape; a 500-row batch cap. The
+shared `batchId`/audit mechanic lives in `backend/src/lib/bulkAudit.ts` `applyBulkAudit` —
+every future noun's `/bulk-update` calls it.
+
+Frontend — cell/row-level multi-select reskin of the 4 surfaces in `RequirementsPage.tsx`
+(per-row checkbox with `aria-label` + shift-click range, select-all with `indeterminate`,
+the selection bar migrated off `blue-*` to design tokens per R-9, the `Edit fields…` trigger);
+a new shared `frontend/src/components/common/BulkEditDrawer.tsx` — the design-system §6.3
+3-step canonical wizard (Fields → Values → Review), polymorphic over the noun, in the
+established drawer chrome, tokens only. The result panel names `accepted / skippedDueToLock /
+skippedDueToConflict` honestly and separately. `<BulkEditDrawer>` is a new SHR-class shared
+component (register in `SHARED-SERVICES.md` §3.2 on merge); the generic `/bulk-update`
+convention is appended to `cross-cutting.md`.
+
 **Description.** Per gap-summary #9 and `competitor-matrix.md` §1 row "Bulk-edit selected items". Today's bulk-update covers 5 of 25 editable fields.
 
 **Acceptance criteria.**

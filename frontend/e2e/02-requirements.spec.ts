@@ -1187,3 +1187,100 @@ test.describe('Requirements — INCOSE/EARS quality gate', () => {
     ).toHaveCount(0, { timeout: 20_000 })
   })
 })
+
+/**
+ * NX-4 (#447) — generic bulk-edit: cell-level multi-select + <BulkEditDrawer>.
+ *
+ * Uses 5 freshly-created requirements (a representative selection — the ROADMAP
+ * AC names 25, but 5 exercises every code path: the per-row checkbox, the
+ * selection bar, the 3-step wizard, the result summary; a smaller N keeps the
+ * test fast and the fixture clean).
+ */
+test.describe('Requirements — bulk edit (NX-4)', () => {
+  test('multi-select requirements, open the wizard, edit a field, see the result summary', async ({
+    page,
+    projectId,
+  }) => {
+    const prefix = `e2e_bulk_${Date.now()}`
+    const token = await readAuthToken(page)
+
+    // Seed 5 requirements via the API.
+    const createdKeys: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const resp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { title: `${prefix}_${i}`, description: `Bulk-edit e2e seed ${i}`, priority: 'low' },
+      })
+      test.skip(!resp.ok(), 'Could not seed requirements via API')
+      const body = await resp.json()
+      const key = body?.data?.requirementId ?? body?.data?.id
+      if (key) createdKeys.push(String(key))
+    }
+    expect(createdKeys.length).toBe(5)
+
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /requirements/i }).first()).toBeVisible({
+      timeout: 10_000,
+    })
+
+    // Select the 5 seeded rows via their per-row checkboxes.
+    let selected = 0
+    for (const key of createdKeys) {
+      const row = page
+        .locator('table tbody tr')
+        .filter({ has: page.locator('td:nth-child(2)') })
+        .filter({ hasText: key })
+        .first()
+      await expect(row).toBeVisible({ timeout: 10_000 })
+      await row.locator('input[type="checkbox"]').first().check()
+      selected += 1
+    }
+    expect(selected).toBe(5)
+
+    // The selection bar reports the count and offers Bulk actions.
+    const selectionBar = page.getByRole('region', { name: /bulk selection/i })
+    await expect(selectionBar).toBeVisible({ timeout: 5_000 })
+    await expect(selectionBar).toContainText('5 selected')
+
+    // Open the wizard via the Bulk actions -> Edit fields… item.
+    await selectionBar.getByRole('button', { name: /bulk actions/i }).click()
+    await page.getByRole('button', { name: /edit fields/i }).click()
+
+    const drawer = page.getByRole('dialog')
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
+    await expect(drawer).toContainText(/edit 5 requirements/i)
+
+    // Step 1 — pick the Priority field.
+    await drawer.getByRole('checkbox', { name: /^priority$/i }).check()
+    await drawer.getByRole('button', { name: /^next$/i }).click()
+
+    // Step 2 — set the new value.
+    await expect(drawer).toContainText(/set new values/i)
+    await drawer.locator('#bulk-field-priority').selectOption('high')
+    await drawer.getByRole('button', { name: /^next$/i }).click()
+
+    // Step 3 — review, then confirm.
+    await expect(drawer).toContainText(/review and confirm/i)
+    await drawer.getByRole('button', { name: /update 5 requirements/i }).click()
+
+    // The honest result summary appears.
+    await expect(drawer.getByText(/5 requirements updated/i)).toBeVisible({ timeout: 10_000 })
+
+    await drawer.getByRole('button', { name: /^done$/i }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 5_000 })
+
+    // Verify the edit landed server-side.
+    const verifyResp = await page.request.get(
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    expect(verifyResp.ok()).toBe(true)
+    const verifyBody = await verifyResp.json()
+    const items: Array<{ requirementId?: string; title?: string; priority?: string }> =
+      verifyBody?.data?.items ?? verifyBody?.data?.requirements ?? []
+    const seededRows = items.filter((r) => (r.title ?? '').startsWith(prefix))
+    expect(seededRows.length).toBe(5)
+    expect(seededRows.every((r) => r.priority === 'high')).toBe(true)
+  })
+})

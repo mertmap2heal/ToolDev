@@ -8,6 +8,18 @@ export type RequirementSubscriptionSnapshot = {
   preview: Array<{ id: string; name: string; avatarUrl: string | null }>
 }
 
+/** NX-4 (#447) — outcome of a `/bulk-update` batch. */
+export interface BulkUpdateResult {
+  /** Shared id correlating every `AuditLog` row written for this batch. */
+  batchId: string
+  /** Rows actually updated. */
+  updated: number
+  /** Rows skipped because they were locked. */
+  skippedDueToLock: number
+  /** Rows skipped because their version moved since the client loaded them. */
+  skippedDueToConflict: number
+}
+
 export interface RequirementFilters {
   page?: number
   pageSize?: number
@@ -129,8 +141,23 @@ export const requirementService = {
     return apiClient.put<Requirement>(`/requirements/${projectId}/${requirementId}/parent`, { newParentId })
   },
 
-  async bulkUpdateRequirements(projectId: string, requirementIds: string[], updates: Partial<UpdateRequirementDto>): Promise<ApiResponse<{ count: number }>> {
-    return apiClient.post<{ count: number }>(`/requirements/${projectId}/bulk-update`, { requirementIds, updates })
+  /**
+   * NX-4 (#447) — generic `/bulk-update` convention. `optimisticVersions`
+   * maps requirement id -> the `version` the client loaded; a row whose DB
+   * version has since moved is reported in `skippedDueToConflict` and not
+   * touched. The response `data` carries the batch outcome.
+   */
+  async bulkUpdateRequirements(
+    projectId: string,
+    requirementIds: string[],
+    updates: Partial<UpdateRequirementDto>,
+    optimisticVersions?: Record<string, number>,
+  ): Promise<ApiResponse<BulkUpdateResult>> {
+    return apiClient.post<BulkUpdateResult>(`/requirements/${projectId}/bulk-update`, {
+      requirementIds,
+      updates,
+      ...(optimisticVersions ? { optimisticVersions } : {}),
+    })
   },
 
   async createRequirementComment(projectId: string, requirementId: string, content: string): Promise<ApiResponse<RequirementComment>> {

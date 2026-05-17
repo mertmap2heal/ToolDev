@@ -31,6 +31,9 @@ import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import LockWarningModal from '../../components/requirements/LockWarningModal'
 import { requirementService, type RequirementFilters } from '../../services/requirement.service'
+import { authService } from '../../services/auth.service'
+import { projectService } from '../../services/project.service'
+import BulkEditDrawer, { type BulkEditableField as BulkDrawerField } from '../../components/common/BulkEditDrawer'
 import { functionService } from '../../services/function.service'
 import { loadPBSComponentTreeAsync } from '../../modules/pbs/storage'
 import { issueService } from '../../services/issue.service'
@@ -221,6 +224,10 @@ export default function RequirementsPage() {
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
   const [panelTabDropdownOpen, setPanelTabDropdownOpen] = useState(false)
   const [bulkActionDropdownOpen, setBulkActionDropdownOpen] = useState(false)
+  /** NX-4 (#447): whether the shared <BulkEditDrawer> wizard is open. */
+  const [isBulkEditDrawerOpen, setIsBulkEditDrawerOpen] = useState(false)
+  /** NX-4 (#447): anchor row id for Shift+click range selection. */
+  const lastSelectedReqIdRef = useRef<string | null>(null)
   const traceabilityDropdownRef = useRef<HTMLDivElement>(null)
   const dataDropdownRef = useRef<HTMLDivElement>(null)
   /** View menu + column selector share one container for outside-click detection. */
@@ -869,6 +876,32 @@ export default function RequirementsPage() {
     },
     enabled: !!projectId && !baselineId,
     staleTime: 30_000, // Cache for 30s to avoid excessive refetches
+  })
+
+  // NX-4 (#447): the project (for the owner check) and the platform users
+  // (the bulk-edit owner select). Both feed <BulkEditDrawer>; lazily relevant
+  // but cheap enough to fetch with the page.
+  const { data: projectForBulk } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      if (!projectId) return null
+      const response = await projectService.getProject(projectId)
+      return response.success && response.data ? response.data : null
+    },
+    enabled: !!projectId,
+    staleTime: 60_000,
+  })
+
+  // NX-4 (#447): a distinct query key — the bare ['admin-users'] key is used
+  // elsewhere with a queryFn that returns the raw ApiResponse, not the array;
+  // sharing the key would poison the cache shape and crash this consumer.
+  const { data: bulkOwnerUsers = [] } = useQuery({
+    queryKey: ['bulk-edit-owner-users', projectId],
+    queryFn: async () => {
+      const response = await authService.getUsers()
+      return response.success && response.data ? response.data : []
+    },
+    staleTime: 60_000,
   })
 
   // Baseline (when baselineId in URL) - must be before baselineRequirements
@@ -2015,6 +2048,147 @@ export default function RequirementsPage() {
   // filteredRequirements is now just the server-returned items for backward compat.
   const filteredRequirements = requirements
 
+  // ---------------------------------------------------------------------
+  // NX-4 (#447): bulk-edit wiring.
+  // ---------------------------------------------------------------------
+
+  /**
+   * True when the current user may bulk-edit privileged fields (lifecycle /
+   * status). Mirrors the backend `isProjectOwnerOrAdmin` check: platform /
+   * tenant admin, or the project owner. The backend re-checks and is the
+   * authority — this only disables the privileged checkboxes early (§2.4).
+   */
+  const canBulkEditPrivileged = useMemo(() => {
+    if (!user) return false
+    if (user.isSuperiorAdmin || user.role === 'SUPERIOR_ADMIN') return true
+    if (user.isAdmin) return true
+    if (
+      user.role === 'COMPANY_ADMIN' &&
+      projectForBulk?.companyName != null &&
+      user.company != null &&
+      projectForBulk.companyName === user.company
+    ) {
+      return true
+    }
+    return projectForBulk?.userId === currentUserId
+  }, [user, currentUserId, projectForBulk])
+
+  /** The fields <BulkEditDrawer> offers for a requirement bulk edit. */
+  const bulkEditableFields: BulkDrawerField[] = useMemo(() => {
+    const ownerOptions = (Array.isArray(bulkOwnerUsers) ? bulkOwnerUsers : []).map((u) => ({
+      value: u.name || u.email,
+      label: u.name || u.email,
+    }))
+    const statusOptions = statusDefinitions.map((s) => ({
+      value: s.name,
+      label: s.name,
+    }))
+    return [
+      // Common
+      ...(statusOptions.length > 0
+        ? [{ key: 'status', label: 'Status', kind: 'select' as const, options: statusOptions }]
+        : []),
+      {
+        key: 'priority',
+        label: 'Priority',
+        kind: 'select' as const,
+        options: [
+          { value: 'critical', label: 'Critical' },
+          { value: 'high', label: 'High' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'low', label: 'Low' },
+        ],
+      },
+      { key: 'owner', label: 'Owner', kind: 'select' as const, options: ownerOptions },
+      { key: 'category', label: 'Category', kind: 'text' as const },
+      { key: 'tags', label: 'Tags', kind: 'tags' as const },
+      // Advanced
+      { key: 'risk', label: 'Risk', kind: 'text' as const, advanced: true },
+      { key: 'complexity', label: 'Complexity', kind: 'text' as const, advanced: true },
+      { key: 'source', label: 'Source / origin', kind: 'text' as const, advanced: true },
+      {
+        key: 'verificationMethod',
+        label: 'Verification method',
+        kind: 'text' as const,
+        advanced: true,
+      },
+    ]
+  }, [bulkOwnerUsers, statusDefinitions])
+
+  /** The selected requirements as <BulkEditDrawer> rows (id + key + lock + version). */
+  const bulkEditRows = useMemo(
+    () =>
+      requirements
+        .filter((r) => selectedRequirements.has(r.id))
+        .map((r) => ({
+          id: r.id,
+          displayKey: r.requirementId || r.id,
+          isLocked: !!r.isLocked,
+          version: typeof r.version === 'number' ? r.version : undefined,
+        })),
+    [requirements, selectedRequirements],
+  )
+
+  /** Toggle one requirement's selection; records it as the Shift+click anchor. */
+  const toggleRequirementSelection = useCallback((id: string) => {
+    setSelectedRequirements((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    lastSelectedReqIdRef.current = id
+  }, [])
+
+  /**
+   * Shift+click range select: select every row between the anchor and `id`
+   * in the current filtered order. With no anchor, behaves as a plain toggle.
+   */
+  const toggleRequirementSelectionRange = useCallback(
+    (id: string) => {
+      const order = filteredRequirements.map((r) => r.id)
+      const anchor = lastSelectedReqIdRef.current
+      const toIndex = order.indexOf(id)
+      const fromIndex = anchor ? order.indexOf(anchor) : -1
+      if (toIndex === -1 || fromIndex === -1) {
+        toggleRequirementSelection(id)
+        return
+      }
+      const [lo, hi] = fromIndex < toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex]
+      setSelectedRequirements((prev) => {
+        const next = new Set(prev)
+        for (let i = lo; i <= hi; i++) next.add(order[i])
+        return next
+      })
+      lastSelectedReqIdRef.current = id
+    },
+    [filteredRequirements, toggleRequirementSelection],
+  )
+
+  /** Apply a bulk field edit to the current selection via the hardened endpoint. */
+  const applyBulkRequirementEdit = useCallback(
+    async (
+      updates: Record<string, unknown>,
+      optimisticVersions: Record<string, number>,
+    ) => {
+      if (!projectId) throw new Error('Project ID required')
+      const ids = bulkEditRows.map((r) => r.id)
+      const response = await requirementService.bulkUpdateRequirements(
+        projectId,
+        ids,
+        updates as Partial<UpdateRequirementDto>,
+        optimisticVersions,
+      )
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Bulk update failed')
+      }
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['requirements-all', projectId] })
+      return response.data
+    },
+    [projectId, bulkEditRows, queryClient],
+  )
+
   // With server-side pagination, root requirements come pre-paginated.
   // Children are already included inline from the server.
   const hierarchyRequirements = useMemo(() => {
@@ -2258,22 +2432,26 @@ export default function RequirementsPage() {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
+                aria-label={`Select requirement ${req.requirementId || req.id}`}
                 checked={selectedRequirements.has(req.id)}
                 disabled={isBaselineView}
+                onClick={(e) => {
+                  // NX-4 (#447): Shift+click extends a range from the last
+                  // toggled row, computed against the current filtered order.
+                  if (isBaselineView) return
+                  if ((e as React.MouseEvent).shiftKey) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    toggleRequirementSelectionRange(req.id)
+                  }
+                }}
                 onChange={(e) => {
                   e.stopPropagation()
                   if (isBaselineView) return
-                  setSelectedRequirements((prev) => {
-                    const newSet = new Set(prev)
-                    if (newSet.has(req.id)) {
-                      newSet.delete(req.id)
-                    } else {
-                      newSet.add(req.id)
-                    }
-                    return newSet
-                  })
+                  if ((e.nativeEvent as MouseEvent).shiftKey) return
+                  toggleRequirementSelection(req.id)
                 }}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                className="w-4 h-4 rounded-sm accent-accent-primary border-default focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
               />
             </div>
           </td>
@@ -4049,28 +4227,44 @@ export default function RequirementsPage() {
 
           {/* Bulk Selection Sticky Banner */}
           {selectedRequirements.size > 0 && !isBaselineView && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center justify-between shadow-sm flex-shrink-0">
+            <div
+              role="region"
+              aria-label="Bulk selection"
+              className="bg-surface-raised border border-default rounded-md px-4 py-2 flex items-center justify-between flex-shrink-0"
+            >
               <div className="flex items-center gap-3">
-                <span className="font-semibold text-blue-800 dark:text-blue-300">
-                  {selectedRequirements.size} {selectedRequirements.size === 1 ? 'requirement' : 'requirements'} selected
+                <span className="font-semibold text-ink-primary">
+                  {selectedRequirements.size} selected
                 </span>
                 <button
-                  onClick={() => setSelectedRequirements(new Set())}
-                  className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                  onClick={() => {
+                    setSelectedRequirements(new Set())
+                    lastSelectedReqIdRef.current = null
+                  }}
+                  className="text-sm font-medium text-accent-primary hover:text-accent-primary-hover transition-colors"
                 >
-                  Clear selection
+                  Clear
                 </button>
               </div>
               <div className="flex items-center gap-2 relative" ref={bulkActionDropdownRef}>
                 <button
                   onClick={() => setBulkActionDropdownOpen(!bulkActionDropdownOpen)}
-                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-md text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors shadow-sm"
+                  className="px-3 py-1.5 bg-surface-base border border-default rounded-sm text-ink-primary text-sm font-medium hover:bg-surface-inset flex items-center gap-2 transition-colors"
                 >
-                  Bulk Actions
-                  <ChevronDown size={14} />
+                  Bulk actions
+                  <ChevronDown size={14} strokeWidth={1.75} />
                 </button>
                 {bulkActionDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-surface-base border border-default rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.06)] z-50 py-1">
+                    <button
+                      onClick={() => {
+                        setIsBulkEditDrawerOpen(true)
+                        setBulkActionDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-ink-primary hover:bg-surface-inset transition-colors"
+                    >
+                      Edit fields…
+                    </button>
                     <button
                       onClick={() => {
                         const requirementIds = Array.from(selectedRequirements)
@@ -4079,7 +4273,7 @@ export default function RequirementsPage() {
                         }
                         setBulkActionDropdownOpen(false)
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="w-full text-left px-4 py-2 text-sm text-ink-primary hover:bg-surface-inset transition-colors"
                     >
                       Create Change Request(s)
                     </button>
@@ -4091,7 +4285,7 @@ export default function RequirementsPage() {
                         }
                         setBulkActionDropdownOpen(false)
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="w-full text-left px-4 py-2 text-sm text-ink-primary hover:bg-surface-inset transition-colors"
                     >
                       Create Issue(s)
                     </button>
@@ -4107,7 +4301,7 @@ export default function RequirementsPage() {
                         }
                         setBulkActionDropdownOpen(false)
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="w-full text-left px-4 py-2 text-sm text-status-danger hover:bg-status-danger/10 transition-colors"
                     >
                       Delete Selected
                     </button>
@@ -4276,6 +4470,17 @@ export default function RequirementsPage() {
                     >
                       <input
                         type="checkbox"
+                        aria-label="Select all requirements"
+                        ref={(el) => {
+                          // NX-4 (#447): React does not set `indeterminate` from
+                          // JSX — set the DOM property via a ref callback so a
+                          // partial selection announces aria-checked="mixed".
+                          if (el) {
+                            el.indeterminate =
+                              selectedRequirements.size > 0 &&
+                              selectedRequirements.size < filteredRequirements.length
+                          }
+                        }}
                         checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
                         disabled={isBaselineView}
                         onChange={(e) => {
@@ -4285,8 +4490,9 @@ export default function RequirementsPage() {
                           } else {
                             setSelectedRequirements(new Set())
                           }
+                          lastSelectedReqIdRef.current = null
                         }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                        className="w-4 h-4 rounded-sm accent-accent-primary border-default focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
                       />
                     </th>
                     {REQUIREMENT_FIELDS.filter(col => requirementColumns.has(col.key)).map(col => {
@@ -4669,6 +4875,17 @@ export default function RequirementsPage() {
             isOpen={lockWarning.isOpen}
             onClose={() => setLockWarning({ ...lockWarning, isOpen: false })}
             message={lockWarning.message}
+          />
+
+          {/* NX-4 (#447): generic bulk-edit wizard. */}
+          <BulkEditDrawer
+            isOpen={isBulkEditDrawerOpen}
+            entityType="requirement"
+            rows={bulkEditRows}
+            editableFields={bulkEditableFields}
+            canEditPrivileged={canBulkEditPrivileged}
+            onClose={() => setIsBulkEditDrawerOpen(false)}
+            onApply={applyBulkRequirementEdit}
           />
 
           {isExportOpen && projectId && (() => {
