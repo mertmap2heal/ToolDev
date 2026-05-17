@@ -1205,6 +1205,14 @@ test.describe('Requirements — bulk edit (NX-4)', () => {
     const prefix = `e2e_bulk_${Date.now()}`
     const token = await readAuthToken(page)
 
+    // Force table view: listViewStyle is server-persisted per-project state
+    // shared across the single worker account. On a project whose persisted
+    // listViewStyle is "document" the multi-select block below (table tbody tr
+    // / input[type="checkbox"]) matches nothing. Reset BEFORE the page.goto so
+    // the mount-time prefsQuery hydration picks up "table" (this test does no
+    // later page.reload()).
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+
     // Seed 6 requirements via the API; remember both the display key and id.
     const created: { key: string; id: string }[] = []
     for (let i = 0; i < 6; i++) {
