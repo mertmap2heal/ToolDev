@@ -103,6 +103,8 @@ describe('Configuration Management — NX-3 integration', () => {
     ]})`
     await prisma.ccbDecision.deleteMany({ where: { projectId: { in: projectIds } } })
     await prisma.deviation.deleteMany({ where: { projectId: { in: projectIds } } })
+    // CM-N6 — BaselineRootItem rows cascade with their BaselineRoot.
+    await prisma.baselineRoot.deleteMany({ where: { projectId: { in: projectIds } } })
     await prisma.configItem.deleteMany({ where: { projectId: { in: projectIds } } })
     await prisma.changeRequest.deleteMany({ where: { projectId: { in: projectIds } } })
     await prisma.issue.deleteMany({ where: { projectId: { in: projectIds } } })
@@ -506,6 +508,37 @@ describe('Configuration Management — NX-3 integration', () => {
       expect(bumped?.version).toBe('0.1.1')
     })
 
+    it('NIT-1: a CCB-bumped revision advances Rev Z -> Rev AA, never wrapping to Rev A', async () => {
+      // A CI seeded at the last single-letter revision. The CCB ceremony's
+      // revision bump must go Z -> AA (a non-colliding label), not wrap to A.
+      const ci = await prisma.configItem.create({
+        data: {
+          projectId: openProjectId,
+          ciKey: `CI-MDL-REVZ-${ts}`,
+          name: 'Rev-Z CI',
+          type: 'Model',
+          status: 'Draft',
+          lockState: 'Unlocked',
+          version: '1.0.0',
+          revision: 'Rev Z',
+        },
+      })
+      const res = await request(app)
+        .post(`/api/v1/ccb-decisions/${openProjectId}/sign`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set(reauthHeader(memberId))
+        .send({
+          changeRequestId,
+          ccbLevel: 'SystemCCB',
+          decision: 'Approved',
+          impactedConfigItemIds: [{ itemType: 'configItem', itemId: ci.id }],
+        })
+      expect(res.status).toBe(201)
+
+      const bumped = await prisma.configItem.findUnique({ where: { id: ci.id } })
+      expect(bumped?.revision).toBe('Rev AA')
+    })
+
     it('lists CCB decisions for a project and for a change request (200)', async () => {
       const byProject = await request(app)
         .get(`/api/v1/ccb-decisions/${openProjectId}`)
@@ -567,6 +600,191 @@ describe('Configuration Management — NX-3 integration', () => {
           safetyImpact: false,
         })
       expect(res.status).toBe(201)
+    })
+
+    it('R-6: a CCB decision impacting a safety-critical CI is treated as safety-impacting server-side (403)', async () => {
+      // The client claims safetyImpact:false, but an impacted CI is
+      // safety-critical — the server-derived flag raises it to true, so the
+      // strict-mode Safety-Engineer gate fires (the member is CCB Member only).
+      const safetyCi = await prisma.configItem.create({
+        data: {
+          projectId: strictProjectId,
+          ciKey: `CI-SAF-${ts}`,
+          name: 'Server-derived safety CI',
+          type: 'SafetyArtifact',
+          status: 'Draft',
+          lockState: 'Unlocked',
+          version: '0.1.0',
+          revision: 'Rev 0',
+          safetyCritical: true,
+        },
+      })
+      const cr = await prisma.changeRequest.create({
+        data: {
+          projectId: strictProjectId,
+          crId: `CR-CM-SAFEDERIVE-${ts}`,
+          title: 'Strict CR impacting a safety CI',
+          description: 'Client under-claims safety impact',
+          sourceType: 'requirement',
+          sourceId: 'seed-source',
+        },
+      })
+      const res = await request(app)
+        .post(`/api/v1/ccb-decisions/${strictProjectId}/sign`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .set(reauthHeader(memberId))
+        .send({
+          changeRequestId: cr.id,
+          ccbLevel: 'SystemCCB',
+          decision: 'Approved',
+          safetyImpact: false, // client under-claims — server overrides
+          impactedConfigItemIds: [{ itemType: 'configItem', itemId: safetyCi.id }],
+        })
+      expect(res.status).toBe(403)
+    })
+  })
+
+  // --- CM Baseline (CM-N6) -------------------------------------------------
+
+  describe('CM Baseline (CM-N6)', () => {
+    let baselineCiId: string
+
+    beforeAll(async () => {
+      const ci = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Baseline-target CI', type: 'Document' })
+      baselineCiId = ci.body.data.id
+    })
+
+    it('rejects an unauthenticated request (401)', async () => {
+      const res = await request(app).get(`/api/v1/config-items/${openProjectId}/baselines`)
+      expect(res.status).toBe(401)
+    })
+
+    it('creates a CM baseline (kind=CM) snapshotting the project ConfigItems (201)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'CDR baseline' })
+      expect(res.status).toBe(201)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.kind).toBe('CM')
+      expect(res.body.data.status).toBe('draft')
+      // Every non-deleted CI in the project is snapshotted as a ConfigItem item.
+      expect(Array.isArray(res.body.data.items)).toBe(true)
+      expect(res.body.data.items.length).toBeGreaterThan(0)
+      expect(
+        res.body.data.items.every(
+          (i: { linkedEntityType: string }) => i.linkedEntityType === 'ConfigItem',
+        ),
+      ).toBe(true)
+      // The target CI is in the snapshot, content-hashed.
+      const item = res.body.data.items.find(
+        (i: { linkedEntityId: string }) => i.linkedEntityId === baselineCiId,
+      )
+      expect(item).toBeTruthy()
+      expect(item.contentHash).toMatch(/^[0-9a-f]{64}$/)
+    })
+
+    it('rejects a baseline create with no name (400)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({})
+      expect(res.status).toBe(400)
+    })
+
+    it('lists CM baselines (200) and reads one back with its items (200)', async () => {
+      const list = await request(app)
+        .get(`/api/v1/config-items/${openProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+      expect(list.status).toBe(200)
+      expect(list.body.data.length).toBeGreaterThanOrEqual(1)
+      expect(list.body.data.every((b: { kind: string }) => b.kind === 'CM')).toBe(true)
+
+      const one = await request(app)
+        .get(`/api/v1/config-items/${openProjectId}/baselines/${list.body.data[0].id}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+      expect(one.status).toBe(200)
+      expect(Array.isArray(one.body.data.items)).toBe(true)
+    })
+
+    it('adds a single ConfigItem snapshot to a draft baseline, freezes it, then rejects further adds (409)', async () => {
+      // A fresh draft baseline scoped to one CI.
+      const created = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Freeze-test baseline', configItemIds: [baselineCiId] })
+      const baselineId = created.body.data.id
+
+      // A second CI added one at a time while the baseline is still draft.
+      const extra = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Late-added CI', type: 'Model' })
+      const added = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines/${baselineId}/items`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ configItemId: extra.body.data.id })
+      expect(added.status).toBe(201)
+      expect(added.body.data.linkedEntityType).toBe('ConfigItem')
+
+      // Freeze — draft -> frozen.
+      const frozen = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines/${baselineId}/freeze`)
+        .set('Authorization', `Bearer ${memberToken}`)
+      expect(frozen.status).toBe(200)
+      expect(frozen.body.data.status).toBe('frozen')
+
+      // A frozen baseline rejects further items (409).
+      const blocked = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines/${baselineId}/items`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ configItemId: baselineCiId })
+      expect(blocked.status).toBe(409)
+    })
+
+    it('compares two CM baselines and reports the added ConfigItem (200)', async () => {
+      // Baseline A — only the original target CI.
+      const a = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Compare A', configItemIds: [baselineCiId] })
+      // A new CI, then baseline B — the target CI plus the new one.
+      const newCi = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Added-since-A CI', type: 'Hardware' })
+      const b = await request(app)
+        .post(`/api/v1/config-items/${openProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Compare B', configItemIds: [baselineCiId, newCi.body.data.id] })
+
+      const diff = await request(app)
+        .get(`/api/v1/config-items/${openProjectId}/baselines/compare`)
+        .query({ aId: a.body.data.id, bId: b.body.data.id })
+        .set('Authorization', `Bearer ${memberToken}`)
+      expect(diff.status).toBe(200)
+      expect(
+        diff.body.data.added.some(
+          (i: { linkedEntityId: string }) => i.linkedEntityId === newCi.body.data.id,
+        ),
+      ).toBe(true)
+      expect(diff.body.data.removed.length).toBe(0)
+    })
+
+    it('returns 404 for a baseline id from another project', async () => {
+      // A CM baseline created in the strict project is not visible from the
+      // open project — the kind+project scope guards cross-tenant reads.
+      const foreign = await request(app)
+        .post(`/api/v1/config-items/${strictProjectId}/baselines`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Foreign baseline' })
+      const res = await request(app)
+        .get(`/api/v1/config-items/${openProjectId}/baselines/${foreign.body.data.id}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+      expect(res.status).toBe(404)
     })
   })
 })

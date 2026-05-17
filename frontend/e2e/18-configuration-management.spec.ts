@@ -62,6 +62,79 @@ test.describe('Configuration Management — NX-3', () => {
     ).toBeVisible({ timeout: 8_000 })
   })
 
+  test('edit a configuration item — advance its lifecycle via the drawer', async ({
+    page,
+    projectId,
+  }) => {
+    await openCM(page, projectId)
+    await page.getByRole('button', { name: /configuration items/i }).click()
+    await expect(page.getByRole('columnheader', { name: /^CI ID$/i })).toBeVisible({
+      timeout: 8_000,
+    })
+
+    // Create a CI, then edit it through the drawer's lifecycle transition.
+    const ciName = `e2e_ci_edit_${Date.now()}`
+    await page.getByRole('button', { name: /create ci/i }).click()
+    const createModal = page.locator(MODAL).filter({ hasText: /create configuration item/i })
+    await expect(createModal).toBeVisible({ timeout: 5_000 })
+    await createModal.locator('#ci-name').fill(ciName)
+    await createModal.locator('#ci-type').selectOption('Software')
+    await createModal.getByRole('button', { name: /^create ci$/i }).click()
+    await expect(createModal).not.toBeVisible({ timeout: 8_000 })
+
+    // Open the new CI's drawer — a fresh CI is Draft.
+    const row = page.locator('table tbody tr').filter({ hasText: ciName }).first()
+    await expect(row).toBeVisible({ timeout: 8_000 })
+    await row.click()
+    const drawer = page.getByRole('region', { name: /configuration item details/i })
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
+
+    // "Submit for review" transitions Draft -> InReview (a real update call).
+    await drawer.getByRole('button', { name: /submit for review/i }).click()
+    // The header status pill reflects the new state.
+    await expect(drawer.getByText(/^InReview$/).first()).toBeVisible({ timeout: 8_000 })
+  })
+
+  test('soft-delete a configuration item — it disappears from the list', async ({
+    page,
+    projectId,
+  }) => {
+    await openCM(page, projectId)
+    await page.getByRole('button', { name: /configuration items/i }).click()
+    await expect(page.getByRole('columnheader', { name: /^CI ID$/i })).toBeVisible({
+      timeout: 8_000,
+    })
+
+    // Create a CI to delete.
+    const ciName = `e2e_ci_del_${Date.now()}`
+    await page.getByRole('button', { name: /create ci/i }).click()
+    const createModal = page.locator(MODAL).filter({ hasText: /create configuration item/i })
+    await expect(createModal).toBeVisible({ timeout: 5_000 })
+    await createModal.locator('#ci-name').fill(ciName)
+    await createModal.locator('#ci-type').selectOption('Document')
+    await createModal.getByRole('button', { name: /^create ci$/i }).click()
+    await expect(createModal).not.toBeVisible({ timeout: 8_000 })
+
+    const row = page.locator('table tbody tr').filter({ hasText: ciName }).first()
+    await expect(row).toBeVisible({ timeout: 8_000 })
+
+    // Open the drawer and trigger the delete.
+    await row.click()
+    const drawer = page.getByRole('region', { name: /configuration item details/i })
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
+    await drawer.getByRole('button', { name: /^delete$/i }).click()
+
+    // The DeleteConfirmationModal's confirm button is "Delete Configuration item".
+    const confirm = page.locator(MODAL).filter({ hasText: /permanently deleted/i })
+    await expect(confirm).toBeVisible({ timeout: 5_000 })
+    await confirm.getByRole('button', { name: /delete configuration item/i }).click()
+
+    // The soft-deleted CI is gone from the default list.
+    await expect(
+      page.locator('table tbody tr').filter({ hasText: ciName }),
+    ).toHaveCount(0, { timeout: 8_000 })
+  })
+
   test('CI detail drawer opens with lifecycle and lock controls', async ({ page, projectId }) => {
     await openCM(page, projectId)
     await page.getByRole('button', { name: /configuration items/i }).click()

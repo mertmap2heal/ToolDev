@@ -80,12 +80,33 @@ function bumpVersion(v: string): string {
   return `${v}.1`
 }
 
-/** Advance a `Rev X` revision letter (Rev B -> Rev C; Rev 0 -> Rev A). */
+/**
+ * Increment a spreadsheet-style (bijective base-26) revision label:
+ * A -> B, ..., Z -> AA, AA -> AB, ..., AZ -> BA, ..., ZZ -> AAA.
+ * The label never wraps Z -> A — colliding revision identifiers in a CFR 21
+ * Part 11 CM trail would corrupt the audit history.
+ */
+function nextRevisionLetters(letters: string): string {
+  const chars = letters.toUpperCase().split('')
+  let i = chars.length - 1
+  while (i >= 0) {
+    if (chars[i] === 'Z') {
+      chars[i] = 'A'
+      i -= 1
+    } else {
+      chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1)
+      return chars.join('')
+    }
+  }
+  // Every position carried over (…ZZ) — grow the label by one place.
+  return `A${chars.join('')}`
+}
+
+/** Advance a `Rev X` revision (Rev B -> Rev C; Rev Z -> Rev AA; Rev 0 -> Rev A). */
 function bumpRevision(rev: string): string {
-  const m = rev.match(/Rev\s*([A-Z])/i)
+  const m = rev.match(/Rev\s*([A-Z]+)/i)
   if (m) {
-    const code = m[1].toUpperCase().charCodeAt(0)
-    return code >= 90 ? 'Rev A' : `Rev ${String.fromCharCode(code + 1)}`
+    return `Rev ${nextRevisionLetters(m[1])}`
   }
   return 'Rev A'
 }
@@ -99,6 +120,47 @@ async function readStrictMode(tx: Prisma.TransactionClient, projectId: string): 
     select: { strictMode: true },
   })
   return project?.strictMode ?? true
+}
+
+/**
+ * Derive the safety-impact of a CCB decision server-side (Security hardening).
+ *
+ * The client-supplied `safetyImpact` flag is NOT trusted on its own — a
+ * careless or malicious CCB Member could clear it to skip the strict-mode
+ * Safety-Engineer narrowing. The server OR-combines the client flag with two
+ * facts it owns:
+ *   - the linked ChangeRequest's `risk` is `critical`, and
+ *   - any impacted ConfigItem is flagged `safetyCritical`.
+ * A client can RAISE the flag (claim safety impact) but never LOWER it.
+ */
+async function deriveSafetyImpact(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  clientFlag: boolean,
+  changeRequestId: string,
+  impacted: ImpactedConfigItemRef[],
+): Promise<boolean> {
+  if (clientFlag) return true
+
+  const cr = await tx.changeRequest.findFirst({
+    where: { id: changeRequestId, projectId },
+    select: { risk: true },
+  })
+  if ((cr?.risk ?? '').toLowerCase() === 'critical') return true
+
+  if (impacted.length > 0) {
+    const safetyCi = await tx.configItem.findFirst({
+      where: {
+        projectId,
+        deletedAt: null,
+        id: { in: impacted.map((r) => r.itemId) },
+        safetyCritical: true,
+      },
+      select: { id: true },
+    })
+    if (safetyCi) return true
+  }
+  return false
 }
 
 /** True if the user holds the Safety Engineer engineering role on the project. */
@@ -277,15 +339,28 @@ export async function signCcbDecision(
       })
     }
 
+    // Security hardening — the per-decision safety-impact flag is derived
+    // server-side, not trusted from the client. A client can claim safety
+    // impact but cannot clear it: the server OR-combines its stored flag with
+    // the linked CR's `critical` risk and any impacted CI's `safetyCritical`.
+    const decisionImpacted = parseImpacted(decision.impactedConfigItemIds)
+    const safetyImpact = await deriveSafetyImpact(
+      tx,
+      projectId,
+      decision.safetyImpact,
+      decision.changeRequestId,
+      decisionImpacted,
+    )
+
     // R-6: safety-impact decisions in a strict project need a Safety Engineer.
-    if (decision.safetyImpact) {
+    if (safetyImpact) {
       const strict = await readStrictMode(tx, projectId)
       if (strict) {
         const admin = await isAdminUser(signerUserId)
         const isSafetyEngineer = admin || (await holdsSafetyEngineerRole(tx, projectId, signerUserId))
         if (!isSafetyEngineer) {
           throw new CmError(
-            'This CCB decision is flagged safety-impacting and the project is in strict mode — ' +
+            'This CCB decision impacts safety (project in strict mode) — ' +
               'it must be signed by a Safety Engineer.',
             403,
           )
@@ -293,10 +368,13 @@ export async function signCcbDecision(
       }
     }
 
-    // Record the signature on the decision.
+    // Record the signature on the decision. The server-derived `safetyImpact`
+    // is persisted so the SignatureEvent content hash and the audit row carry
+    // the authoritative value, not the client claim.
     const signed = await tx.ccbDecision.update({
       where: { id: decision.id },
       data: {
+        safetyImpact,
         signedById: signerUserId,
         signedAt: reauthAt,
         meaningCode: 'approval',

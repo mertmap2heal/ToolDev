@@ -23,6 +23,14 @@ router.use('/:projectId', requireProjectMember)
 router.get('/:projectId/by-change-request/:changeRequestId', ctrl.listByChangeRequest)
 
 router.get('/:projectId', ctrl.list)
+
+// `create` and `reject` are intentionally gated by `requireProjectMember`
+// only — no `requireEngineeringRole`. Recording an unsigned CCB decision row
+// (a draft / deferral / rejection) is a board-administration act any project
+// member may perform; it is NOT a CFR 21 Part 11 signature event. The
+// discipline gate (`requireEngineeringRole`) and reauthentication
+// (`requireReauth`) apply only to the signed `sign` ceremony below — that is
+// the regulated act per kb/configuration-management.md §"CCB".
 router.post('/:projectId', ctrl.create)
 router.post('/:projectId/reject', ctrl.reject)
 

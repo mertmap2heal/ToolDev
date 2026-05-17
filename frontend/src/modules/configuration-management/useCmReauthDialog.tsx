@@ -1,5 +1,10 @@
 // NX-3 (#443) — Configuration Management reauthentication signing dialog.
 //
+// MODULE-PRIVATE, pending shared extraction — see #445 ([SHR] Extract shared
+// reauthentication dialog component). N-2.1 (Validation) and NX-3 (CM) each
+// carry a copy of this CFR 21 Part 11 reauth-password dialog; #445 will
+// consolidate both onto one token-styled shared <ReauthDialog>.
+//
 // Mirrors the N-2.1 validation reauth modal (components/validation/
 // useValidationDialog.tsx): a friction-by-design centred modal where the user
 // re-enters their password to confirm a CFR 21 Part 11 electronic signature
