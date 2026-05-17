@@ -91,6 +91,9 @@ describe('Requirement Pessimistic Locking (#34)', () => {
   })
 
   afterAll(async () => {
+    // NX-4 (#447): bulk-update now writes per-row AuditLog rows — clear them
+    // before deleting the project or the FK constraint blocks the delete.
+    await prisma.auditLog.deleteMany({ where: { projectId } })
     await prisma.requirement.deleteMany({ where: { projectId } })
     await prisma.projectMember.deleteMany({ where: { projectId } })
     await prisma.project.delete({ where: { id: projectId } })

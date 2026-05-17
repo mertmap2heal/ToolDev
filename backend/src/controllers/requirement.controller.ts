@@ -1,7 +1,10 @@
 import { Response } from 'express'
 import { Prisma } from '@prisma/client'
+import { randomUUID } from 'crypto'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import { resolveIsAdmin } from '../lib/adminAuth'
+import { applyBulkAudit } from '../lib/bulkAudit'
 import { createVersionSnapshot } from './version.controller'
 import { traceabilityService } from '../services/traceability.service'
 import { linkageAuditService } from '../services/linkageAudit.service'
@@ -2811,10 +2814,141 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
   }
 }
 
+/**
+ * NX-4 (#447) — the requirements reference implementation of the generic
+ * `/bulk-update` convention (.claude/kb/backend-patterns.md "Bulk-update
+ * convention").
+ *
+ * `BULK_EDITABLE_FIELDS` is the whitelist of scalar / array `Requirement`
+ * fields a bulk edit may set. Any `updates` key outside this set is silently
+ * dropped (NOT a 400) so a forward-compatible client never breaks. Relational
+ * / identity fields (`title`, `description`, `parentId`, `componentId`,
+ * `requirementId`) are deliberately excluded — they are per-row decisions, not
+ * bulk decisions.
+ *
+ * This list is THE single noun-specific surface of the convention — every
+ * other noun adopting `/bulk-update` declares its own whitelist in its own
+ * controller.
+ */
+const BULK_EDITABLE_FIELDS = [
+  'status',
+  'priority',
+  'owner',
+  'category',
+  'tags',
+  'requirementType',
+  'requirementLevel',
+  'risk',
+  'complexity',
+  'source',
+  'verificationMethod',
+  'verificationStatus',
+  'stage',
+  'stakeholders',
+  'lifecycleId',
+  'statusId',
+] as const
+
+type BulkEditableField = (typeof BULK_EDITABLE_FIELDS)[number]
+
+/**
+ * The subset of `BULK_EDITABLE_FIELDS` that requires project-owner / admin
+ * authority. A non-privileged member touching one of these is rejected 403
+ * with nothing written — these fields move a requirement past a lifecycle
+ * gate, so they are not a normal-member bulk operation.
+ */
+const BULK_PRIVILEGED_FIELDS: ReadonlySet<BulkEditableField> = new Set<BulkEditableField>([
+  'lifecycleId',
+  'statusId',
+])
+
+/** `String[]` array fields on `Requirement` — coerced to `[]` on a null/absent value. */
+const BULK_ARRAY_FIELDS: ReadonlySet<BulkEditableField> = new Set<BulkEditableField>([
+  'tags',
+  'stakeholders',
+])
+
+/** Hard cap on one bulk-update batch (Architecture risk note — keeps the $transaction bounded). */
+const BULK_UPDATE_MAX_BATCH = 500
+
+/**
+ * True when `userId` is the project owner or a platform / tenant admin —
+ * the boolean form of `requireProjectOwnerOrAdmin.middleware.ts`, used here
+ * for the in-controller field-level RBAC check (the convention gates
+ * privileged fields in the controller, not via a route middleware, because
+ * the gate is conditional on which fields the request touches).
+ */
+async function isProjectOwnerOrAdmin(
+  userId: string,
+  projectId: string,
+): Promise<boolean> {
+  const [project, user] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true, companyName: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, role: true, company: true },
+    }),
+  ])
+  if (!project) return false
+  if (project.userId === userId) return true
+  if (user?.role === 'SUPERIOR_ADMIN') return true
+  if (
+    user?.role === 'COMPANY_ADMIN' &&
+    project.companyName != null &&
+    user.company != null &&
+    project.companyName === user.company
+  ) {
+    return true
+  }
+  if (user?.email && (await resolveIsAdmin(user.email))) return true
+  const ownerMember = await prisma.projectMember.findFirst({
+    where: { projectId, userId, role: 'owner' },
+    select: { id: true },
+  })
+  return !!ownerMember
+}
+
 export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { requirementIds, updates } = req.body
+    const userId = req.userId
+    const { requirementIds, updates, optimisticVersions: rawOptimisticVersions } = req.body as {
+      requirementIds?: unknown
+      updates?: Record<string, unknown>
+      optimisticVersions?: unknown
+    }
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    // Security NB-1 (#447): `optimisticVersions` is attacker-controlled body
+    // input — validate its shape before use. It must be a plain object map of
+    // id -> number; anything else (an array, a string, a number) is rejected
+    // 400 with nothing written. Per-id entries that are not finite numbers are
+    // dropped (a row with no echoed version simply gets no conflict check).
+    let optimisticVersions: Record<string, number> | undefined
+    if (rawOptimisticVersions !== undefined) {
+      if (
+        typeof rawOptimisticVersions !== 'object' ||
+        rawOptimisticVersions === null ||
+        Array.isArray(rawOptimisticVersions)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'optimisticVersions must be an object mapping id to version number',
+        })
+      }
+      optimisticVersions = {}
+      for (const [id, value] of Object.entries(rawOptimisticVersions)) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          optimisticVersions[id] = value
+        }
+      }
+    }
 
     if (!requirementIds || !Array.isArray(requirementIds) || requirementIds.length === 0) {
       return res.status(400).json({
@@ -2823,71 +2957,231 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       })
     }
 
-    if (!updates || Object.keys(updates).length === 0) {
+    if (requirementIds.length > BULK_UPDATE_MAX_BATCH) {
+      return res.status(400).json({
+        success: false,
+        error: `Batch too large — select ${BULK_UPDATE_MAX_BATCH} or fewer requirements.`,
+      })
+    }
+
+    if (!updates || typeof updates !== 'object' || Object.keys(updates).length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Updates are required',
       })
     }
 
-    const updateData: any = {}
-    if (updates.status !== undefined) updateData.status = updates.status
-    if (updates.priority !== undefined) updateData.priority = updates.priority
-    if (updates.owner !== undefined) updateData.owner = updates.owner || null
-    if (updates.category !== undefined) updateData.category = updates.category || null
-    if (updates.tags !== undefined) updateData.tags = updates.tags || []
+    // Whitelist filter — any key outside BULK_EDITABLE_FIELDS is silently
+    // dropped (forward-compat). Build the Prisma `data` from the survivors.
+    const updateData: Prisma.RequirementUpdateManyMutationInput = {}
+    const appliedFields: BulkEditableField[] = []
+    for (const field of BULK_EDITABLE_FIELDS) {
+      if (!(field in updates)) continue
+      const value = updates[field]
+      if (BULK_ARRAY_FIELDS.has(field)) {
+        ;(updateData as Record<string, unknown>)[field] = Array.isArray(value) ? value : []
+      } else {
+        // empty-string -> null for the nullable scalar columns
+        ;(updateData as Record<string, unknown>)[field] = value === '' ? null : value
+      }
+      appliedFields.push(field)
+    }
 
-    const beforeRequirements = await prisma.requirement.findMany({
-      where: {
-        projectId,
-        id: { in: requirementIds },
-      },
+    if (appliedFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No editable fields supplied',
+      })
+    }
+
+    // F-2 (#447): write-path parity with the single-row `updateRequirement`.
+    // The single-row path sets `statusChangedAt` / `statusChangedBy` when (and
+    // only when) `statusId` changes. The bulk path replicates that, computed
+    // per row inside the transaction (the new value is the same for the whole
+    // batch; whether it is a *change* is per row). The single-row path does
+    // NOT touch `provenanceReviewStatus` / `reviewTimestamp` on an edit — so
+    // for true parity the bulk path does not either (`authorType` stays at the
+    // `"human"` column default for a human-driven bulk edit; bumping the
+    // provenance-review fields here would itself be a divergence).
+    const statusIdApplied = appliedFields.includes('statusId')
+    const newStatusId = statusIdApplied
+      ? ((updateData as Record<string, unknown>).statusId as string | null | undefined)
+      : undefined
+
+    // Field-level RBAC — checked BEFORE the transaction opens; if the request
+    // touches a privileged field and the caller is not owner/admin, 403 with
+    // nothing written.
+    const touchesPrivileged = appliedFields.some((f) => BULK_PRIVILEGED_FIELDS.has(f))
+    if (touchesPrivileged) {
+      const privileged = await isProjectOwnerOrAdmin(userId, projectId)
+      if (!privileged) {
+        // Security NB-3 (#447): record the denied privileged-field attempt —
+        // the SEC-1 / SEC-3 denial-audit pattern (an RBAC denial writes one
+        // `<module>:<kebab-verb>-denied` AuditLog row). The audit write must
+        // not break the response if it fails.
+        try {
+          await prisma.auditLog.create({
+            data: {
+              projectId,
+              userId,
+              action: 'requirements:bulk-update-denied',
+              detailsJson: {
+                reason: 'privileged-field-without-owner-or-admin',
+                privilegedFields: appliedFields.filter((f) =>
+                  BULK_PRIVILEGED_FIELDS.has(f),
+                ),
+                requirementCount: requirementIds.length,
+              },
+            },
+          })
+        } catch (auditErr) {
+          console.error('Bulk-update privileged-denial audit write error:', auditErr)
+        }
+        return res.status(403).json({
+          success: false,
+          error:
+            'Only the project owner or an administrator can bulk-edit lifecycle or status fields',
+        })
+      }
+    }
+
+    const batchId = randomUUID()
+
+    // Atomicity: the candidate snapshot, the partition, every accepted update,
+    // and every audit row run in ONE $transaction. Any throw rolls the whole
+    // batch back — that is the AC's "any single failure rolls back the batch".
+    const outcome = await prisma.$transaction(async (tx) => {
+      const candidates = await tx.requirement.findMany({
+        where: { projectId, id: { in: requirementIds as string[] } },
+      })
+
+      const accepted: typeof candidates = []
+      let skippedDueToLock = 0
+      let skippedDueToConflict = 0
+
+      for (const row of candidates) {
+        if (row.isLocked) {
+          skippedDueToLock += 1
+          continue
+        }
+        const echoed = optimisticVersions?.[row.id]
+        if (typeof echoed === 'number' && echoed !== row.version) {
+          skippedDueToConflict += 1
+          continue
+        }
+        accepted.push(row)
+      }
+
+      const updatedRows: typeof candidates = []
+      const auditRows: { entityId: string; detail: Prisma.InputJsonObject }[] = []
+
+      for (const row of accepted) {
+        const echoed = optimisticVersions?.[row.id]
+        try {
+          // F-2 (#447): per-row status-change tracking, parity with the
+          // single-row path — `statusChangedAt` / `statusChangedBy` are set
+          // only on a row whose `statusId` actually changes.
+          const statusChange: Prisma.RequirementUpdateInput =
+            statusIdApplied && (newStatusId ?? null) !== (row.statusId ?? null)
+              ? { statusChangedAt: new Date(), statusChangedBy: userId }
+              : {}
+          // The `where` re-asserts isLocked AND the echoed version (when
+          // supplied) so a concurrent write between findMany and update loses
+          // the row — Prisma throws P2025, caught and counted as a conflict
+          // rather than silently overwriting (TOCTOU safety).
+          const updated = await tx.requirement.update({
+            where: {
+              id: row.id,
+              isLocked: false,
+              ...(typeof echoed === 'number' ? { version: echoed } : {}),
+            },
+            data: { ...updateData, ...statusChange, version: { increment: 1 } },
+          })
+          updatedRows.push(updated)
+
+          // Per-row before/after detail for the audit entry.
+          const before: Record<string, unknown> = {}
+          const after: Record<string, unknown> = {}
+          for (const field of appliedFields) {
+            before[field] = (row as Record<string, unknown>)[field] ?? null
+            after[field] = (updated as Record<string, unknown>)[field] ?? null
+          }
+          auditRows.push({
+            entityId: row.id,
+            detail: {
+              requirementKey: row.requirementId ?? null,
+              fields: appliedFields,
+              before: before as Prisma.InputJsonObject,
+              after: after as Prisma.InputJsonObject,
+            },
+          })
+        } catch (err) {
+          if (
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === 'P2025'
+          ) {
+            // Lost the row to a concurrent lock/version change — count it.
+            skippedDueToConflict += 1
+            continue
+          }
+          throw err
+        }
+      }
+
+      // One AuditLog row per touched requirement, all sharing `batchId`.
+      if (auditRows.length > 0) {
+        await applyBulkAudit(tx, {
+          projectId,
+          userId,
+          action: 'requirements:bulk-update',
+          rows: auditRows,
+          batchId,
+        })
+      }
+
+      return { updatedRows, candidates, skippedDueToLock, skippedDueToConflict }
     })
 
-    // isLocked: false ensures locked requirements are silently skipped rather than overwritten (#34)
-    const result = await prisma.requirement.updateMany({
-      where: {
-        projectId,
-        id: {
-          in: requirementIds,
-        },
-        isLocked: false,
-      },
-      data: updateData,
-    })
-
-    const afterRequirements = await prisma.requirement.findMany({
-      where: {
-        projectId,
-        id: { in: requirementIds },
-      },
-    })
-
-    const afterById = new Map(afterRequirements.map((req) => [req.id, req]))
-    beforeRequirements.forEach((before) => {
-      const after = afterById.get(before.id)
-      if (!after) return
-      const changes = buildRequirementChangeSummary(before, after)
+    // Fire-and-forget subscriber notifications (outside the transaction —
+    // a notification failure must not roll back a committed bulk edit).
+    const candidateById = new Map(outcome.candidates.map((r) => [r.id, r]))
+    for (const updated of outcome.updatedRows) {
+      const before = candidateById.get(updated.id)
+      if (!before) continue
+      const changes = buildRequirementChangeSummary(before, updated)
       notifyRequirementSubscribers({
         projectId,
-        requirementId: before.id,
-        actorUserId: req.userId,
+        requirementId: updated.id,
+        actorUserId: userId,
         changes,
         requirementSnapshot: {
-          id: after.id,
-          requirementId: after.requirementId,
-          title: after.title,
+          id: updated.id,
+          requirementId: updated.requirementId,
+          title: updated.title,
         },
       }).catch(console.error)
-    })
+    }
 
-    const skippedDueToLock = beforeRequirements.filter(r => r.isLocked).length
+    const updated = outcome.updatedRows.length
+    const { skippedDueToLock, skippedDueToConflict } = outcome
 
     res.json({
       success: true,
-      message: `Updated ${result.count} requirement(s)${skippedDueToLock > 0 ? `, ${skippedDueToLock} skipped (locked)` : ''}`,
-      count: result.count,
+      // Canonical /bulk-update response shape.
+      data: {
+        batchId,
+        updated,
+        skippedDueToLock,
+        skippedDueToConflict,
+      },
+      // Legacy top-level fields retained for backwards compatibility.
+      message:
+        `Updated ${updated} requirement(s)` +
+        (skippedDueToLock > 0 ? `, ${skippedDueToLock} skipped (locked)` : '') +
+        (skippedDueToConflict > 0 ? `, ${skippedDueToConflict} skipped (changed since loaded)` : ''),
+      count: updated,
       skippedDueToLock,
+      skippedDueToConflict,
     })
   } catch (error) {
     console.error('Bulk update requirements error:', error)

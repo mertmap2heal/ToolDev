@@ -1187,3 +1187,145 @@ test.describe('Requirements — INCOSE/EARS quality gate', () => {
     ).toHaveCount(0, { timeout: 20_000 })
   })
 })
+
+/**
+ * NX-4 (#447) — generic bulk-edit: cell-level multi-select + <BulkEditDrawer>.
+ *
+ * Seeds 6 requirements, locks one, then bulk-edits priority + owner across the
+ * whole selection. Exercises every code path the AC names: per-row checkbox,
+ * selection bar, the 3-step wizard, multi-field edit, the locked-row skip, and
+ * the honest result summary that reports the batch outcome. (The ROADMAP AC
+ * names 25 rows; 6 covers every path while keeping the fixture fast and clean.)
+ */
+test.describe('Requirements — bulk edit (NX-4)', () => {
+  test('multi-select, bulk-edit priority + owner, a locked row is skipped, the result reports the batch', async ({
+    page,
+    projectId,
+  }) => {
+    const prefix = `e2e_bulk_${Date.now()}`
+    const token = await readAuthToken(page)
+
+    // Force table view: listViewStyle is server-persisted per-project state
+    // shared across the single worker account. On a project whose persisted
+    // listViewStyle is "document" the multi-select block below (table tbody tr
+    // / input[type="checkbox"]) matches nothing. Reset BEFORE the page.goto so
+    // the mount-time prefsQuery hydration picks up "table" (this test does no
+    // later page.reload()).
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+
+    // Seed 6 requirements via the API; remember both the display key and id.
+    const created: { key: string; id: string }[] = []
+    for (let i = 0; i < 6; i++) {
+      const resp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { title: `${prefix}_${i}`, description: `Bulk-edit e2e seed ${i}`, priority: 'low' },
+      })
+      test.skip(!resp.ok(), 'Could not seed requirements via API')
+      const body = await resp.json()
+      const id = body?.data?.id
+      const key = body?.data?.requirementId ?? id
+      if (id && key) created.push({ key: String(key), id: String(id) })
+    }
+    expect(created.length).toBe(6)
+
+    // Lock the last seeded requirement — it must be skipped by the bulk edit.
+    const lockedReq = created[5]
+    const lockResp = await page.request.post(
+      `${E2E_API_V1}/requirements/${projectId}/${lockedReq.id}/lock`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    test.skip(!lockResp.ok(), 'Could not lock a requirement via API')
+
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /requirements/i }).first()).toBeVisible({
+      timeout: 10_000,
+    })
+
+    // Select all 6 seeded rows (5 unlocked + 1 locked) via per-row checkboxes.
+    let selected = 0
+    for (const { key } of created) {
+      const row = page
+        .locator('table tbody tr')
+        .filter({ has: page.locator('td:nth-child(2)') })
+        .filter({ hasText: key })
+        .first()
+      await expect(row).toBeVisible({ timeout: 10_000 })
+      await row.locator('input[type="checkbox"]').first().check()
+      selected += 1
+    }
+    expect(selected).toBe(6)
+
+    // The selection bar reports the count and offers Bulk actions.
+    const selectionBar = page.getByRole('region', { name: /bulk selection/i })
+    await expect(selectionBar).toBeVisible({ timeout: 5_000 })
+    await expect(selectionBar).toContainText('6 selected')
+
+    // Open the wizard via the Bulk actions -> Edit fields… item.
+    await selectionBar.getByRole('button', { name: /bulk actions/i }).click()
+    await page.getByRole('button', { name: /edit fields/i }).click()
+
+    const drawer = page.getByRole('dialog')
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
+    await expect(drawer).toContainText(/edit 6 requirements/i)
+
+    // Step 1 — pick Priority AND Owner (a multi-field bulk edit).
+    await drawer.getByRole('checkbox', { name: /^priority$/i }).check()
+    await drawer.getByRole('checkbox', { name: /^owner$/i }).check()
+    await drawer.getByRole('button', { name: /^next$/i }).click()
+
+    // Step 2 — set both new values. Capture the chosen owner value so the
+    // server-side verification can assert it landed.
+    await expect(drawer).toContainText(/set new values/i)
+    await drawer.locator('#bulk-field-priority').selectOption('high')
+    const ownerSelect = drawer.locator('#bulk-field-owner')
+    await ownerSelect.selectOption({ index: 1 }) // index 0 is the placeholder
+    const chosenOwner = await ownerSelect.inputValue()
+    expect(chosenOwner.length).toBeGreaterThan(0)
+    await drawer.getByRole('button', { name: /^next$/i }).click()
+
+    // Step 3 — review. The locked row is pre-flagged; only 5 will update.
+    await expect(drawer).toContainText(/review and confirm/i)
+    await expect(drawer.getByText(/locked — will skip/i)).toBeVisible()
+    await drawer.getByRole('button', { name: /update 5 requirements/i }).click()
+
+    // The honest result summary reports the batch outcome — 5 updated, 1
+    // skipped because it was locked, each disposition named separately.
+    await expect(
+      drawer.getByText(/5 updated.*1 skipped \(locked\)/i),
+    ).toBeVisible({ timeout: 10_000 })
+    // The result panel exposes the audit-batch deep-link.
+    await expect(
+      drawer.getByRole('button', { name: /view this batch in the audit log/i }),
+    ).toBeVisible()
+
+    await drawer.getByRole('button', { name: /^done$/i }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 5_000 })
+
+    // Verify the edit landed server-side: the 5 unlocked rows got the new
+    // priority + owner; the locked row was left untouched.
+    const verifyResp = await page.request.get(
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    expect(verifyResp.ok()).toBe(true)
+    const verifyBody = await verifyResp.json()
+    const items: Array<{
+      id?: string
+      requirementId?: string
+      title?: string
+      priority?: string
+      owner?: string
+    }> = verifyBody?.data?.items ?? verifyBody?.data?.requirements ?? []
+    const seededRows = items.filter((r) => (r.title ?? '').startsWith(prefix))
+    expect(seededRows.length).toBe(6)
+
+    const unlockedRows = seededRows.filter((r) => r.id !== lockedReq.id)
+    const lockedRow = seededRows.find((r) => r.id === lockedReq.id)
+    expect(unlockedRows.length).toBe(5)
+    expect(unlockedRows.every((r) => r.priority === 'high')).toBe(true)
+    expect(unlockedRows.every((r) => r.owner === chosenOwner)).toBe(true)
+    // the locked row was skipped — its priority stayed 'low'
+    expect(lockedRow?.priority).toBe('low')
+  })
+})

@@ -62,6 +62,8 @@ export interface Requirement {
         description?: string;
     };
     reviewStatus?: 'draft' | 'under_review' | 'approved' | 'rejected';
+    /** Optimistic-concurrency counter — bumped on every update; consumed by NX-4 bulk-edit (#447). */
+    version?: number;
     comments?: RequirementComment[];
     attachments?: RequirementAttachment[];
     reviews?: RequirementReview[];

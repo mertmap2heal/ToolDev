@@ -539,6 +539,109 @@ read endpoint are deferred "Next" work (ROADMAP §3).
 
 ---
 
+## Bulk-update convention
+
+NX-4 (#447) generalised bulk-editing. A noun that needs a bulk field edit
+exposes **one** endpoint following this convention. `requirements`
+(`bulkUpdateRequirements` in `requirement.controller.ts`) is the reference
+implementation — Verification / Validation / Tasks / Issues / Change Requests
+adopt the same shape.
+
+### Route
+
+`POST /api/v1/<noun-plural>/:projectId/bulk-update` — project-scoped, behind
+the noun's existing `authenticateToken` + `projectIdParam` +
+`requireProjectMember` chain. No new route middleware — the field-level RBAC
+(below) is a *conditional* in-controller check, so it cannot be a route
+middleware.
+
+### Request body
+
+```ts
+{
+  <noun>Ids: string[],                       // e.g. requirementIds
+  updates: Record<string, unknown>,          // the field changes
+  optimisticVersions?: Record<string, number> // id -> loaded version
+}
+```
+
+`optimisticVersions` is attacker-controlled — **validate its shape**: reject a
+400 unless it is a plain object map; drop any per-id value that is not a
+finite number (a row with no echoed version simply gets no conflict check).
+
+### Whitelists — the noun-specific surface
+
+Declare two `const` arrays at the top of the noun's controller:
+
+- `BULK_EDITABLE_FIELDS` — the permitted scalar / array fields. Any `updates`
+  key outside it is **silently dropped** (NOT a 400 — a forward-compatible
+  client must not break). Identity / relational fields (`title`,
+  `description`, `parentId`, …) are deliberately excluded — they are per-row
+  decisions, not bulk decisions. If `updates` survives the filter empty, 400.
+- `BULK_PRIVILEGED_FIELDS` — the subset needing project-owner / admin
+  authority (for requirements: `lifecycleId`, `statusId`). If `updates`
+  touches one, gate it with `isProjectOwnerOrAdmin(req.userId, projectId)`
+  **before the transaction opens**; failure → 403 with nothing written, and
+  write one `requirements:bulk-update-denied` `AuditLog` row (the SEC-1 /
+  SEC-3 denial-audit pattern).
+
+The whitelist is the convention's single per-noun surface — everything else
+below is identical across nouns.
+
+### Atomicity — one `$transaction`
+
+The candidate `findMany`, the lock/conflict partition, every accepted
+`update`, and every audit row run inside **one** `prisma.$transaction(async
+tx => …)`. Any throw rolls the whole batch back ("any single failure rolls
+back the batch"). The candidate `findMany` is scoped `{ projectId, id: { in:
+<noun>Ids } }` — a foreign-project id never enters the update set.
+
+### The skip partition
+
+From the in-transaction `findMany` snapshot, partition the candidates:
+
+- `skippedDueToLock` — `row.isLocked === true`.
+- `skippedDueToConflict` — `optimisticVersions[id]` supplied AND not equal to
+  `row.version`.
+- `accepted` — everything else.
+
+Each accepted `update` re-asserts `isLocked: false` and the echoed `version`
+in its `where` and does `version: { increment: 1 }`; a concurrent write makes
+the `where` match nothing → Prisma `P2025`, caught and counted as a conflict
+(TOCTOU safety). Keep write-path parity with the noun's single-row update
+path — e.g. requirements stamps `statusChangedAt` / `statusChangedBy` on a
+row whose `statusId` changes, exactly as `updateRequirement` does.
+
+### Audit — shared `batchId` via `applyBulkAudit`
+
+`batchId` is a `crypto.randomUUID()` generated **once per request**
+(server-side, never the body). Write one `AuditLog` row per touched entity,
+all sharing that `batchId`, via the shared helper
+`backend/src/lib/bulkAudit.ts` `applyBulkAudit(tx, { projectId, userId,
+action, rows, batchId })` — call it **inside** the `$transaction` so the
+audit rows roll back with the edit. `action` is the `<module>:<kebab-verb>`
+string (`requirements:bulk-update`). The `batchId` lives in
+`detailsJson.batchId` — **no schema column**. `applyBulkAudit` is the one
+genuinely-shared mechanic; it folds into `audit.service.ts` `writeAudit` if
+that SHR service lands.
+
+### The 500-row cap
+
+`<noun>Ids.length > 500` → 400 before any DB work — keeps the `$transaction`
+bounded. An unbounded fire-and-forget bulk operation is a different primitive
+(`ParameterBulkJob`'s async job queue), not this convention.
+
+### Response
+
+```ts
+{ success: true, data: { batchId, updated, skippedDueToLock, skippedDueToConflict } }
+```
+
+The standard `{ success, data }` shape. The two skip counts are reported
+separately — a locked row and a stale row are different problems.
+
+---
+
 ## Background Jobs
 
 The scheduled cleanup job runs via `cleanup.service.ts`. If you need to add
