@@ -10,7 +10,7 @@ import { transitionChecklistService } from '../services/transitionChecklist.serv
 import { requirementSubscriptionService } from '../services/requirementSubscription.service'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 import { extractParameterIds } from '../utils/parameterPlaceholder'
-import { parseReqIF } from '../services/reqifParser'
+import { importReqIFXml, ReqIFLimitError, ReqIFStructureError } from '../services/reqif'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 import { filterIdsExcluding } from '../utils/requirementScopeMerge'
 import { htmlToPlainText, truncatePlainText } from '../utils/htmlToPlainText'
@@ -3508,8 +3508,16 @@ const MAX_REQIF_SIZE = 5 * 1024 * 1024 // 5MB
 /**
  * POST /projects/:projectId/requirements/import/reqif
  * Body: JSON { content: string } (ReqIF XML string).
- * Parses ReqIF, creates requirements (skips duplicates by requirementId), creates TraceLinks for relations.
- * Returns { created, skipped, linksCreated, errors }.
+ *
+ * NX-1: parses ReqIF via the converged `reqif/` module — reconstructs the
+ * SPEC-HIERARCHY tree onto `Requirement.parentId`, resolves attribute values
+ * through their DATATYPE-DEFINITION-*, keeps xhtml payload as HTML, and maps
+ * SPEC-RELATIONs to typed `TraceLink` rows. Requirements are matched by
+ * `requirementId`; an existing match is updated, a new one created.
+ *
+ * Returns { created, updated, skipped, linksCreated, warnings, errors } —
+ * a superset of the legacy shape ({ created, skipped, linksCreated, errors }),
+ * so the existing import UI keeps working unchanged.
  */
 export const importReqif = async (req: AuthRequest, res: Response) => {
   try {
@@ -3525,84 +3533,41 @@ export const importReqif = async (req: AuthRequest, res: Response) => {
     if (content.length > MAX_REQIF_SIZE) {
       return res.status(400).json({
         success: false,
-      error: `File too large. Maximum size is ${MAX_REQIF_SIZE / 1024 / 1024}MB`,
+        error: `File too large. Maximum size is ${MAX_REQIF_SIZE / 1024 / 1024}MB`,
       })
     }
-    const { requirements: reqs, relations } = parseReqIF(content)
-    let created = 0
-    let skipped = 0
-    const errors: Array<{ row?: number; message: string }> = []
-    const identifierToId = new Map<string, string>()
 
-    const existingByReqId = await prisma.requirement.findMany({
-      where: { projectId, deletedAt: null },
-      select: { id: true, requirementId: true },
-    })
-    const existingMap = new Map<string, string>()
-    for (const r of existingByReqId) {
-      if (r.requirementId) existingMap.set(r.requirementId, r.id)
-    }
-
-    for (let i = 0; i < reqs.length; i++) {
-      const r = reqs[i]
-      const identifier = (r.identifier || '').trim()
-      const title = (r.title || r.identifier || 'Untitled').trim()
-      const description = (r.description ?? '').trim() || ' '
-      if (!identifier) {
-        errors.push({ row: i + 1, message: 'Missing identifier' })
-        continue
-      }
-      if (existingMap.has(identifier)) {
-        identifierToId.set(identifier, existingMap.get(identifier)!)
-        skipped++
-        continue
-      }
-      try {
-        const createdReq = await prisma.requirement.create({
-          data: {
-            projectId,
-            requirementId: identifier,
-            title,
-            description,
-            priority: 'medium',
-            status: 'draft',
-            stage: '',
-          },
+    let result
+    try {
+      result = await importReqIFXml(projectId, content, req.userId)
+    } catch (parseErr: any) {
+      // Malformed / non-ReqIF / over-cap input is a 400 client error, not a 500.
+      if (parseErr instanceof ReqIFStructureError || parseErr instanceof ReqIFLimitError) {
+        return res.status(400).json({
+          success: false,
+          error: parseErr.message,
         })
-        existingMap.set(identifier, createdReq.id)
-        identifierToId.set(identifier, createdReq.id)
-        created++
-      } catch (err: any) {
-        errors.push({ row: i + 1, message: err?.message || 'Failed to create requirement' })
       }
+      throw parseErr
     }
 
-    let linksCreated = 0
-    for (const rel of relations) {
-      const sourceId = identifierToId.get(rel.sourceRef) ?? existingMap.get(rel.sourceRef)
-      const targetId = identifierToId.get(rel.targetRef) ?? existingMap.get(rel.targetRef)
-      if (!sourceId || !targetId) continue
-      try {
-        await traceabilityService.createTraceLink(
-          projectId,
-          'requirement',
-          sourceId,
-          'requirement',
-          targetId,
-          rel.type || 'trace',
-          undefined,
-          'Imported from ReqIF',
-          req.userId
-        )
-        linksCreated++
-      } catch {
-        // ignore duplicate or invalid link
-      }
+    // Flatten the structured per-row errors to the legacy { row, message }
+    // shape the existing import UI expects.
+    const flatErrors: Array<{ row?: number; message: string }> = []
+    for (const e of result.errors) {
+      for (const msg of e.errors) flatErrors.push({ row: e.row, message: msg })
     }
 
     res.json({
       success: true,
-      data: { created, skipped, linksCreated, errors },
+      data: {
+        created: result.created,
+        updated: result.updated,
+        skipped: result.skipped,
+        linksCreated: result.linksCreated,
+        warnings: result.warnings,
+        errors: flatErrors,
+      },
     })
   } catch (error: any) {
     console.error('ReqIF import error:', error)

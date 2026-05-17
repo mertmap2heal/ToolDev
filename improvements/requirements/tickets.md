@@ -393,6 +393,20 @@ Tests:
 
 ---
 
+### REQ-L4. ReqIF round-trip parity (ROADMAP NX-1)
+
+**Status: Shipped — issue #437 (NX-1).**
+
+**Description.** The ReqIF round-trip fidelity gap (`gap-summary.md` #6, ROADMAP-phase3.md §3 NX-1) had no dedicated ticket — it was recorded only as a known gap in `README.md:39`/`:65` and analysed in `backend.md` §4. Tracked here so it ships through the pipeline. The 149-line `reqifParser.ts` drops ~80% of typical input — `SPEC-HIERARCHY`, `SPECIFICATION`, `SPEC-OBJECT-TYPE` / `SPEC-RELATION-TYPE`, `DATATYPE-DEFINITION-*`, and `xhtml`-embedded payload — so DOORS Next / Polarion / Jama exports import as flat lists of unrelated rows.
+
+**Acceptance criteria.** Canonical AC from `gap-summary.md` #6: a DOORS Next ReqIF export imports without data loss; a re-export from us imports back into DOORS Next with no diff in objects, attributes, or links; same round-trip with Polarion and Jama Universal ReqIF exports. Round-trip tests against those three real exports plus the public ReqIF Academy "Reference Implementation Conformance Test Suite", asserting object count, attribute fidelity, hierarchy fidelity, and link fidelity. The parser is expected to be rebuilt as a visitor over the ReqIF 1.x XSD.
+
+**Effort.** L (4–6 weeks). **Dependencies.** None — no R-Wave dependency; no other ticket. Schema: no new Prisma models (writes existing `Requirement` + `TraceLink`). **Surface.** Backend-only — import/export UI (`ImportWizard.tsx`, `ExportBuilder.tsx`) and service plumbing already exist. **Out of scope.** OSLC (`vision-and-usp.md` §9 omission); unifying the parallel `parameterReqif.service.ts` (Parameters-package follow-up co-ticket once this parser lands).
+
+**Shipped — issue #437 (NX-1).** Built the converged `backend/src/services/reqif/` module — a two-pass, namespace-agnostic, order-preserving ReqIF 1.x parser (`parser.ts`), serializer (`serializer.ts`), typed model (`model.ts`), `Requirement`-tree/`TraceLink` importer (`importer.ts`), `Requirement`/`TraceLink` exporter (`exporter.ts`) and bidirectional link-type map (`linkTypeMap.ts`). The two divergent legacy importers are converged onto it: `reqifParser.ts` deleted, `reqif.service.ts` reduced to a thin facade, and `requirement.controller.ts importReqif` repointed — one importer, not two. Closes the ~80% data-loss gap: `SPEC-HIERARCHY` reconstructs onto `Requirement.parentId`, `SPEC-OBJECT-TYPE` / `DATATYPE-DEFINITION-*` resolve attribute values by type, `SPEC-RELATION` maps to typed `TraceLink.linkType` (lossy mappings surfaced as warnings), and `xhtml` payload (tables, formatting) round-trips as HTML. No schema change, no new npm dependency (uses `fast-xml-parser`). New `reqif.conformance.test.ts` round-trip suite (36 ReqIF tests) over four representative DOORS Next / Polarion / Jama / ReqIF-Academy fixtures asserts structural equality on objects, attributes, hierarchy and link types across import → export → re-import. Follow-up: vendor real licensed-tool corpora + the public ReqIF Academy conformance suite; the Parameters-package co-ticket unifying `parameterReqif.service.ts` onto the new module.
+
+---
+
 ## Cross-cutting refactors (cited but not duplicated here)
 
 The following are appended to `improvements/_shared/cross-cutting.md` because they affect multiple packages. They are listed here for context only — they ship as separate workstreams sequenced ahead of this package's M/L tickets:

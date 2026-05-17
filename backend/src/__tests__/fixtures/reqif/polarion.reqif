@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Representative Siemens Polarion ReqIF export fixture (NX-1 conformance corpus).
+  Exercises the Polarion dialect quirks: NO namespace prefix on ReqIF elements
+  (default xmlns), a `reqif-xhtml:` prefix on XHTML content, INTEGER / REAL /
+  BOOLEAN / DATE datatypes, and an xhtml <table> payload that must survive the
+  round-trip. Faithful representative fixture, not a real licensed-tool export.
+-->
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
+        xmlns:reqif-xhtml="http://www.w3.org/1999/xhtml">
+  <THE-HEADER>
+    <REQ-IF-HEADER IDENTIFIER="hdr-polarion-1">
+      <CREATION-TIME>2026-02-02T10:00:00.000Z</CREATION-TIME>
+      <REQ-IF-VERSION>1.2</REQ-IF-VERSION>
+      <SOURCE-TOOL-ID>Polarion ALM</SOURCE-TOOL-ID>
+      <TITLE>Avionics Subsystem Spec</TITLE>
+    </REQ-IF-HEADER>
+  </THE-HEADER>
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <DATATYPES>
+        <DATATYPE-DEFINITION-STRING IDENTIFIER="dt-str" LONG-NAME="Text" MAX-LENGTH="32000"/>
+        <DATATYPE-DEFINITION-XHTML IDENTIFIER="dt-html" LONG-NAME="Rich Text"/>
+        <DATATYPE-DEFINITION-INTEGER IDENTIFIER="dt-int" LONG-NAME="Integer" MIN="0" MAX="1000"/>
+        <DATATYPE-DEFINITION-REAL IDENTIFIER="dt-real" LONG-NAME="Real" MIN="0.0" MAX="1.0" ACCURACY="3"/>
+        <DATATYPE-DEFINITION-BOOLEAN IDENTIFIER="dt-bool" LONG-NAME="Boolean"/>
+        <DATATYPE-DEFINITION-DATE IDENTIFIER="dt-date" LONG-NAME="Date"/>
+      </DATATYPES>
+      <SPEC-TYPES>
+        <SPEC-OBJECT-TYPE IDENTIFIER="sot-pol" LONG-NAME="System Requirement">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="ad-id" LONG-NAME="Requirement ID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>dt-str</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="ad-title" LONG-NAME="Title">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>dt-str</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="ad-desc" LONG-NAME="Description">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>dt-html</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-INTEGER IDENTIFIER="ad-weight" LONG-NAME="Weight">
+              <TYPE><DATATYPE-DEFINITION-INTEGER-REF>dt-int</DATATYPE-DEFINITION-INTEGER-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-INTEGER>
+            <ATTRIBUTE-DEFINITION-REAL IDENTIFIER="ad-margin" LONG-NAME="Margin">
+              <TYPE><DATATYPE-DEFINITION-REAL-REF>dt-real</DATATYPE-DEFINITION-REAL-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-REAL>
+            <ATTRIBUTE-DEFINITION-BOOLEAN IDENTIFIER="ad-safety" LONG-NAME="Safety Critical">
+              <TYPE><DATATYPE-DEFINITION-BOOLEAN-REF>dt-bool</DATATYPE-DEFINITION-BOOLEAN-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-BOOLEAN>
+            <ATTRIBUTE-DEFINITION-DATE IDENTIFIER="ad-reviewed" LONG-NAME="Reviewed On">
+              <TYPE><DATATYPE-DEFINITION-DATE-REF>dt-date</DATATYPE-DEFINITION-DATE-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-DATE>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="srt-derives" LONG-NAME="Derived From"/>
+        <SPECIFICATION-TYPE IDENTIFIER="spectype-pol" LONG-NAME="Specification"/>
+      </SPEC-TYPES>
+      <SPEC-OBJECTS>
+        <SPEC-OBJECT IDENTIFIER="so-pol-1" LONG-NAME="Power budget requirement">
+          <TYPE><SPEC-OBJECT-TYPE-REF>sot-pol</SPEC-OBJECT-TYPE-REF></TYPE>
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="POL-REQ-100">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>ad-id</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Power budget requirement">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>ad-title</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>ad-desc</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><reqif-xhtml:div>The subsystem power draw budget:<reqif-xhtml:table><reqif-xhtml:tr><reqif-xhtml:td>Mode</reqif-xhtml:td><reqif-xhtml:td>Watts</reqif-xhtml:td></reqif-xhtml:tr><reqif-xhtml:tr><reqif-xhtml:td>Idle</reqif-xhtml:td><reqif-xhtml:td>12</reqif-xhtml:td></reqif-xhtml:tr></reqif-xhtml:table></reqif-xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-INTEGER THE-VALUE="42">
+              <DEFINITION><ATTRIBUTE-DEFINITION-INTEGER-REF>ad-weight</ATTRIBUTE-DEFINITION-INTEGER-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-INTEGER>
+            <ATTRIBUTE-VALUE-REAL THE-VALUE="0.125">
+              <DEFINITION><ATTRIBUTE-DEFINITION-REAL-REF>ad-margin</ATTRIBUTE-DEFINITION-REAL-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-REAL>
+            <ATTRIBUTE-VALUE-BOOLEAN THE-VALUE="true">
+              <DEFINITION><ATTRIBUTE-DEFINITION-BOOLEAN-REF>ad-safety</ATTRIBUTE-DEFINITION-BOOLEAN-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-BOOLEAN>
+            <ATTRIBUTE-VALUE-DATE THE-VALUE="2026-01-15T00:00:00.000Z">
+              <DEFINITION><ATTRIBUTE-DEFINITION-DATE-REF>ad-reviewed</ATTRIBUTE-DEFINITION-DATE-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-DATE>
+          </VALUES>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="so-pol-2" LONG-NAME="Idle power requirement">
+          <TYPE><SPEC-OBJECT-TYPE-REF>sot-pol</SPEC-OBJECT-TYPE-REF></TYPE>
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="POL-REQ-101">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>ad-id</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Idle power requirement">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>ad-title</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>ad-desc</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><reqif-xhtml:div>Idle power draw shall not exceed <reqif-xhtml:b>12 W</reqif-xhtml:b>.</reqif-xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-BOOLEAN THE-VALUE="false">
+              <DEFINITION><ATTRIBUTE-DEFINITION-BOOLEAN-REF>ad-safety</ATTRIBUTE-DEFINITION-BOOLEAN-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-BOOLEAN>
+          </VALUES>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+      <SPEC-RELATIONS>
+        <SPEC-RELATION IDENTIFIER="sr-pol-1">
+          <TYPE><SPEC-RELATION-TYPE-REF>srt-derives</SPEC-RELATION-TYPE-REF></TYPE>
+          <SOURCE><SPEC-OBJECT-REF>so-pol-2</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>so-pol-1</SPEC-OBJECT-REF></TARGET>
+        </SPEC-RELATION>
+      </SPEC-RELATIONS>
+      <SPECIFICATIONS>
+        <SPECIFICATION IDENTIFIER="spec-pol" LONG-NAME="Avionics Subsystem Spec">
+          <TYPE><SPECIFICATION-TYPE-REF>spectype-pol</SPECIFICATION-TYPE-REF></TYPE>
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="sh-pol-1">
+              <OBJECT><SPEC-OBJECT-REF>so-pol-1</SPEC-OBJECT-REF></OBJECT>
+              <CHILDREN>
+                <SPEC-HIERARCHY IDENTIFIER="sh-pol-2">
+                  <OBJECT><SPEC-OBJECT-REF>so-pol-2</SPEC-OBJECT-REF></OBJECT>
+                </SPEC-HIERARCHY>
+              </CHILDREN>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+        </SPECIFICATION>
+      </SPECIFICATIONS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>
