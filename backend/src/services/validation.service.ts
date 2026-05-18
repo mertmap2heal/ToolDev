@@ -4,6 +4,7 @@ import { randomUUID, createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { isAdminUser } from '../lib/adminAuth'
+import { SAFE_USER_SELECT } from '../lib/safeUserSelect'
 import { createSignature, supersedeSignature } from './signature.service'
 
 // N-2.1: the active sign-off SignatureEvent rows for a ValidationItem.
@@ -647,7 +648,10 @@ export async function createItem(projectId: string, userId: string, payload: Cre
         tags: payload.tags ?? [],
         createdById: userId,
       },
-      include: { owner: true, createdBy: true },
+      include: {
+        owner: { select: SAFE_USER_SELECT },
+        createdBy: { select: SAFE_USER_SELECT },
+      },
     }),
   )
 
@@ -766,7 +770,10 @@ export async function updateItem(
           : existing.dueDate,
       status: nextStatus,
     },
-    include: { owner: true, createdBy: true },
+    include: {
+      owner: { select: SAFE_USER_SELECT },
+      createdBy: { select: SAFE_USER_SELECT },
+    },
   })
 
   await writeAudit(projectId, userId, 'validation:update', {
@@ -809,7 +816,10 @@ export async function duplicateItem(projectId: string, id: string, userId: strin
         status: 'PLANNED',
         createdById: userId,
       },
-      include: { owner: true, createdBy: true },
+      include: {
+        owner: { select: SAFE_USER_SELECT },
+        createdBy: { select: SAFE_USER_SELECT },
+      },
     }),
   )
   await writeAudit(projectId, userId, 'validation:duplicate', {
