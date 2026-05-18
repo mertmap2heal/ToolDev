@@ -209,6 +209,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
+# --- 3f. Seed dedicated e2e test user (idempotent - safe to run every start) ---
+# Guarantees the Playwright auth flow has the account it logs in with, so the
+# e2e suite is self-contained. Fixed non-secret test password - no env var.
+Write-Host "  Seeding e2e test user..."
+Push-Location (Join-Path $ROOT "backend")
+npm run seed:e2e-user
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  WARNING: seed:e2e-user failed - run manually: cd backend && npm run seed:e2e-user"
+} else {
+    Write-Host "  E2E test user up to date."
+}
+Pop-Location
+
 # ============================================================
 # [4/5] LAUNCH SERVERS
 # ============================================================
