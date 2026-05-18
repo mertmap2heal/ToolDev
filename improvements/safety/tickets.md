@@ -12,6 +12,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-S-001 — Hazard schema migration
 
+**Status:** Shipped — NX-9 / Issue #466. The 5 Hazard + FMEA models (`Hazard`, `FailureCondition`, `Fmea`, `FmeaRow`, `FmeaHazardLink`) shipped in the NX-9 foundational Safety slice; the FTA / Markov / CCA models remain in SAFE-S-002. The new `Project` safety-domain column is `safetyDomain` (additive, defaulted `"aerospace"`) — NOT a reuse of the pre-existing required free-text `Project.domain` (see the #466 Architecture comment). No `asil` column in this slice (aerospace-only at v1).
+
 **Goal:** Add `Hazard`, `FailureCondition` Prisma models per `backend.md` §2.1 + §2.2.
 
 **Steps:**
@@ -31,6 +33,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-S-002 — FMEA / FTA / Markov / CCA schema migration
 
+**Status:** Partially bundled. The `Fmea` / `FmeaRow` / `FmeaHazardLink` models are pulled forward into SAFE-S-001 under Issue #466 (NX-9 foundational slice). The remaining models — `Fta` / `FtaNode` / `FtaEdge` / `FtaHazardLink` (NX-9-followup-A), `MarkovChain` / `MarkovState` / `MarkovTransition` / `MarkovHazardLink` (NX-9-followup-B), `Cca` / `CcaHazardLink` (NX-9-followup-C) — stay here, to be split across the three NX-9 follow-on tickets.
+
 **Goal:** Add `Fmea`, `FmeaRow`, `FmeaHazardLink`, `Fta`, `FtaNode`, `FtaEdge`, `FtaHazardLink`, `MarkovChain`, `MarkovState`, `MarkovTransition`, `MarkovHazardLink`, `Cca`, `CcaHazardLink` per `backend.md` §§2.3–2.6.
 
 **Steps:**
@@ -47,6 +51,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-B-001 — Hazard CRUD routes
+
+**Status:** Shipped — NX-9 / Issue #466. `safety.{routes,controller,service}.ts` trio mounted at `/api/v1/safety-analysis`; Hazard CRUD project-scoped (`authenticateToken` -> `projectIdParam` -> `requireProjectMember`), zod request schemas, soft-delete on DELETE, `?severity=`/`?status=` filters, server-derived `dal`. Routes 4-7's missing-link filters deferred (no backend link data this slice — NX-9-followup-D).
 
 **Goal:** `GET / POST / PATCH / DELETE /projects/:projectId/safety-analysis/hazards[/:id]` per `kb/backend-patterns.md`.
 
@@ -71,6 +77,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-002 — FailureCondition CRUD routes
 
+**Status:** Shipped — NX-9 / Issue #466. FailureCondition CRUD scoped under `/hazards/:hazardId/failure-conditions`; `level` zod-validated to `AFHA` / `SFHA`; soft-delete on DELETE.
+
 **Goal:** Same shape, scoped under `/hazards/:hazardId/failure-conditions`. Supports AFHA vs SFHA `level` differentiation per `kb/safety-standards.md`.
 
 **Effort:** ~3 days.
@@ -78,6 +86,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-B-003 — FMEA routes + RPN server-compute
+
+**Status:** Shipped — NX-9 / Issue #466. FMEA CRUD + per-row CRUD; `rpn = severity*occurrence*detection` computed server-side after zod validation (`severity`/`occurrence`/`detection` each int 1-10); a client-supplied `rpn` -> 400; `rpn` recomputed on every row create/PATCH.
 
 **Goal:** FMEA CRUD + per-row CRUD; RPN computed server-side and rejecting client-supplied values per `kb/safety-standards.md`.
 
@@ -98,6 +108,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-004 — FTA CRUD routes
 
+**Status:** Deferred to NX-9-followup-A (FTA + MOCUS solver) — not in the NX-9 foundational slice (Issue #466).
+
 **Goal:** FTA + nodes + edges CRUD. TOP-singleton + cycle-detection validation.
 
 **Steps:**
@@ -116,6 +128,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-005 — Markov + CCA CRUD routes
 
+**Status:** Deferred — not in the NX-9 foundational slice (Issue #466). The Markov CRUD goes to NX-9-followup-B (Markov + Gauss-Seidel solver); the CCA CRUD goes to NX-9-followup-C (CCA).
+
 **Goal:** Markov state-machine + CCA CRUD per `backend.md` §§2.5–2.6.
 
 **Steps:**
@@ -128,6 +142,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-B-006 — FTA MOCUS minimal cut-sets solver
+
+**Status:** Deferred to NX-9-followup-A (FTA + MOCUS solver) — not in the NX-9 foundational slice (Issue #466). No new npm dependency (MOCUS is a graph algorithm, not a library).
 
 **Goal:** Compute minimal cut-sets via MOCUS algorithm per `kb/safety-standards.md`. Endpoint `POST /safety-analysis/fta/:id/solve`.
 
@@ -161,6 +177,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-007 — Markov Gauss-Seidel steady-state solver
 
+**Status:** Deferred to NX-9-followup-B (Markov + Gauss-Seidel solver) — not in the NX-9 foundational slice (Issue #466). **This follow-on carries the `mathjs` npm-dependency permission request** (`.claude/rules.md` §2) — the Gauss-Seidel solve needs `math.lusolve`.
+
 **Goal:** Solve `π · Q = 0`, `Σπ = 1` per `kb/safety-standards.md`. Endpoint `POST /safety-analysis/markov/:id/solve`.
 
 **Algorithm:**
@@ -185,6 +203,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-008 — FMEA xUnit-style import parser
 
+**Status:** Deferred to NX-9-followup-D (remaining mock Safety pages + export/import) — not in the NX-9 foundational slice (Issue #466).
+
 **Goal:** Some teams maintain FMEAs in xUnit-style XML exports from Excel-add-in tools. Provide an import endpoint `POST /safety-analysis/fmea/import` that accepts XML (or CSV) and creates an FMEA + rows.
 
 **Steps:**
@@ -206,6 +226,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-009 — ICD-style export endpoint (FTA tree as DOCX)
 
+**Status:** Deferred to NX-9-followup-D (remaining mock Safety pages + export/import) — not in the NX-9 foundational slice (Issue #466). Depends on the FTA models from NX-9-followup-A.
+
 **Goal:** Reuse the `corporateDocxTemplates` pipeline (per `kb/documentation-model.md`) to export an FTA tree as DOCX with the cut-sets table. Endpoint `GET /safety-analysis/fta/:id/icd?format=json|csv|docx`.
 
 **Steps:**
@@ -223,6 +245,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-B-010 — Severity → DAL propagation
+
+**Status:** Partially shipped — NX-9 / Issue #466. The **per-hazard `severity` → `dal` derivation** (the `hazard.dal` column computed server-side and persisted on every Hazard create/update via the frozen `kb/safety-standards.md` map) shipped in the NX-9 foundational slice. The **cross-module propagation transaction** — the `TraceLink` walk re-deriving DAL on every traced Requirement / function / component, the `RequirementVersion` writes, the Socket.IO `safety:dal-propagated` event, the CCB-review notice on downgrade — stays here and is deferred to NX-9-followup-A's sibling cross-module work.
 
 **Goal:** The cross-cutting wire that makes the certification-native pitch demonstrable. When a hazard's severity changes, recompute DAL on every traced requirement / function / interface / component.
 
@@ -249,6 +273,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 ## SAFE-B-011 — Audit log integration
 
+**Status:** Shipped — NX-9 / Issue #466. Every Safety service write records one row to the central `AuditLog` (no `SafetyAuditLog` table) via a module-private `writeAudit` helper, action strings on the `safety:<kebab-verb>` convention (`safety:hazard-create`, `safety:fmea-row-update`, …), `detailsJson` a structured object. Safety joins Validation + Stakeholders as a from-day-one consumer of the central table.
+
 **Goal:** Writes through the universal audit table (per `inventory.md` gap #11). Do not introduce a `SafetyAuditLog` table.
 
 **Steps:**
@@ -261,6 +287,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-F-001 — Replace mock imports with services
+
+**Status:** Partially shipped — NX-9 / Issue #466. `frontend/src/services/safety.service.ts` created; `HazardsPage` reads `useQuery(['hazards', projectId], …)` (no `MOCK_HAZARDS` import), and the `FmeaForm` worksheet persists rows to the real FMEA-row backend rendering the server `rpn`. Wiring the remaining ~15 mock Safety pages (Overview, Analyses landing/list/wizard, Traceability matrix, Impact, Libraries, Reviews, Audit Log, Exports, Settings) is deferred to NX-9-followup-D.
 
 **Goal:** Wire `frontend/src/services/safety.service.ts` to the new backend, replace all 18 `MOCK_*` imports with React Query hooks.
 
@@ -275,6 +303,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-F-002 — Real Hazard Create modal
+
+**Status:** Shipped — NX-9 / Issue #466 — the aerospace severity path. The placeholder "UI stub only" modal is replaced with a real Title / Description / Severity create form calling `createHazard()`; on success it invalidates `['hazards', projectId]` and closes. No DAL input — DAL is server-derived and shown read-only as a mono badge in the list. The automotive S/E/C step is deferred (the `Project.safetyDomain` column is added by NX-9 for forward-compatibility; the automotive branch is NX-9-followup work).
 
 **Goal:** Replace the "Create Hazard will be implemented later. UI stub only." placeholder with a real create form per `design-review.md` §5 and `design-system.md` §2.2.
 
@@ -402,6 +432,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 ---
 
 ## SAFE-X-005 — Universal provenance migration on Hazard
+
+**Status:** Shipped — NX-9 / Issue #466. The R-1 8-field AI-provenance lattice (`authorType` default `"human"`, `authorAiModel`/`Version`/`PromptId`/`ContextHash`, `provenanceReviewStatus` default `"drafted"`, `reviewerUserId`, `reviewTimestamp`) is applied verbatim to `Hazard`, `Fmea`, and `FmeaRow`. `FailureCondition` and `FmeaHazardLink` opt out (a child detail row / a pure join — R-1's own opt-out precedent). The canonical review-state field is `provenanceReviewStatus`.
 
 **Goal:** Apply the universal-provenance lattice per `cross-cutting.md` to the `Hazard` model. This is the cross-cutting refactor #1 in `gap-summary.md` §1.
 

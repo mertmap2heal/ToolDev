@@ -7,24 +7,15 @@ export default function SafetyLayoutPage() {
     <div className="space-y-6">
       <SafetyNavigation />
 
-      {/* #270: the Safety Analysis module (hazards, FTA, Markov, audit
-          log) is entirely UI / in-memory. Persistence, real solvers, and
-          the audit trail are not implemented. Render a persistent warning
-          banner across every Safety sub-page so entries are not mistaken
-          for certifiable evidence. */}
-      <div
-        role="alert"
-        className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3"
-      >
-        <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
-          Demo data only — nothing is saved
-        </p>
-        <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
-          Hazards, FTA nodes, Markov chains, and the audit log on these
-          pages live in session state only and are lost on refresh.
-          Results are not computed from real solvers. These views MUST
-          NOT be used as safety evidence. Backend persistence and the
-          Markov / FTA solvers are not yet implemented.
+      {/* NX-9 (#466): the Hazard log and the FMEA worksheet are now
+          backed by real persistence. The rest of the module (fault
+          trees, Markov models, the audit trail) is still preview-scope,
+          so a calm Beta status strip stays across every Safety sub-page. */}
+      <div className="rounded-md border border-default bg-status-info/10 px-4 py-3">
+        <p className="text-xs text-ink-primary">
+          Safety Analysis is in Beta. Hazards and FMEA worksheets are saved. Fault trees,
+          Markov models, and the audit trail are not yet wired — do not cite them as
+          evidence.
         </p>
       </div>
 

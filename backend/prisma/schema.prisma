@@ -177,6 +177,15 @@ model Project {
   // lifecycle-status transitions. Toggled solely via PATCH /:id/strict-mode.
   strictMode           Boolean           @default(false)
 
+  // Safety-classification domain (ROADMAP NX-9; kb/safety-standards.md).
+  // Distinct from `domain` above — `domain` is a required free-text
+  // business/industry descriptor; `safetyDomain` is the controlled
+  // safety-standard switch ("aerospace" -> DO-178C DAL, "automotive" ->
+  // ISO 26262 ASIL). Added additively per the R-6 `strictMode` precedent;
+  // NX-9 reads it only to assert the aerospace path — the automotive
+  // S/E/C->ASIL branch is NX-9-followup work.
+  safetyDomain         String            @default("aerospace")
+
   // AI feature flag (ai-ready-vision.md §5). Global env kill-switch
   // (FEATURES_AI_ENABLED) overrides this; this field is the per-project
   // opt-in that a project admin sets.
@@ -292,6 +301,11 @@ model Project {
   ccbDecisions                CcbDecision[]
   committees                  Committee[]
   raciEntries                 RaciEntry[]
+  hazards                     Hazard[]
+  failureConditions           FailureCondition[]
+  fmeas                       Fmea[]
+  fmeaRows                    FmeaRow[]
+  fmeaHazardLinks             FmeaHazardLink[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -4749,4 +4763,178 @@ model RaciAssignment {
   @@unique([raciId, userId, letter])
   @@index([raciId])
   @@index([userId])
+}
+
+// ===========================================================================
+// Safety Analysis (ROADMAP NX-9 — Issue #466; kb/safety-standards.md)
+//
+// Foundational Hazard + FMEA slice. ARP4761A FHA hazard log + FMEA worksheet.
+// FTA / Markov / CCA models are deferred to NX-9-followup-{A,B,C}.
+// ===========================================================================
+
+// A safety hazard (ARP4761A FHA — Functional Hazard Assessment). The anchor
+// model: every FailureCondition and FMEA-hazard link hangs off a Hazard.
+// `dal` is server-derived from `severity` via the kb/safety-standards.md map
+// (Catastrophic->A ... NoSafetyEffect->E) — never client-supplied.
+model Hazard {
+  id                     String    @id @default(uuid())
+  projectId              String
+  identifier             String // e.g. HAZ-001 — unique within a project
+  title                  String
+  description            String    @db.Text
+  // Aerospace hazard severity (AC 25.1309-1A): one of
+  // Catastrophic | Hazardous | Major | Minor | NoSafetyEffect.
+  severity               String
+  // Development Assurance Level (DO-178C §6.3) — SERVER-DERIVED from severity.
+  dal                    String?
+  status                 String    @default("Open")
+  // Failure-rate target per flight hour (AC 25.1309-1A), optional.
+  failureRateTargetPerHr Float?
+  rationale              String?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  failureConditions FailureCondition[]
+  fmeaLinks         FmeaHazardLink[]
+
+  @@unique([projectId, identifier])
+  @@index([projectId, severity])
+  @@index([projectId, status])
+  @@index([projectId, deletedAt])
+}
+
+// A failure condition under a Hazard (ARP4761A FHA detail row). AFHA =
+// aircraft-level, SFHA = system-level. A child detail row of a Hazard — its
+// provenance is the parent's, so it carries no R-1 lattice (R-1 opt-out
+// precedent for child / join tables).
+model FailureCondition {
+  id            String    @id @default(uuid())
+  projectId     String
+  hazardId      String
+  // AFHA (aircraft-level) | SFHA (system-level).
+  level         String
+  description   String
+  phaseOfFlight String?
+  effect        String?
+  classification String?
+  rationale     String?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  hazard  Hazard  @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, hazardId])
+  @@index([projectId, deletedAt])
+}
+
+// An FMEA worksheet (Failure Modes and Effects Analysis — bottom-up).
+model Fmea {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  description String?
+  status      String    @default("Draft")
+  systemRef   String?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rows        FmeaRow[]
+  hazardLinks FmeaHazardLink[]
+
+  @@index([projectId, status])
+  @@index([projectId, deletedAt])
+}
+
+// One FMEA row — a (component x failure mode) pair. `rpn` is SERVER-COMPUTED
+// as severity * occurrence * detection (each 1-10; rpn range 1-1000) — never
+// client-supplied (kb/safety-standards.md).
+model FmeaRow {
+  id          String    @id @default(uuid())
+  projectId   String
+  fmeaId      String
+  component   String
+  failureMode String
+  effect      String
+  cause       String?
+  severity    Int
+  occurrence  Int
+  detection   Int
+  // SERVER-COMPUTED: severity * occurrence * detection.
+  rpn         Int
+  mitigation  String?
+  orderIndex  Int       @default(0)
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fmea    Fmea    @relation(fields: [fmeaId], references: [id], onDelete: Cascade)
+
+  @@index([fmeaId, orderIndex])
+  @@index([projectId, deletedAt])
+}
+
+// Join: an FMEA worksheet related to a Hazard. A pure join — no R-1 lattice.
+model FmeaHazardLink {
+  id        String   @id @default(uuid())
+  projectId String
+  fmeaId    String
+  hazardId  String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fmea    Fmea    @relation(fields: [fmeaId], references: [id], onDelete: Cascade)
+  hazard  Hazard  @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+
+  @@unique([fmeaId, hazardId])
+  @@index([projectId])
+  @@index([hazardId])
 }

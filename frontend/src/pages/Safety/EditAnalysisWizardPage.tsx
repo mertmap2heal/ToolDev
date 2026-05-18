@@ -5,7 +5,7 @@ import { MOCK_ANALYSES, MOCK_METHOD_METADATA } from '../../data/mockSafety'
 import FhaForm from '../../components/safety/FhaForm'
 import PssaForm from '../../components/safety/PssaForm'
 import SsaForm from '../../components/safety/SsaForm'
-import FmeaForm from '../../components/safety/FmeaForm'
+import { WizardFmeaWorksheet } from '../../components/safety/FmeaForm'
 import CcaForm from '../../components/safety/CcaForm'
 import type { SafetyMethod } from '../../types/safety.types'
 
@@ -245,7 +245,9 @@ export default function EditAnalysisWizardPage() {
             {methodKey === 'FHA' && <FhaForm />}
             {methodKey === 'PSSA' && <PssaForm />}
             {methodKey === 'SSA' && <SsaForm />}
-            {methodKey === 'FMEA' && <FmeaForm />}
+            {methodKey === 'FMEA' && (
+              <WizardFmeaWorksheet projectId={projectId} title={title} />
+            )}
             {methodKey === 'CCA' && <CcaForm />}
             {(methodKey === 'FTA' || methodKey === 'MARKOV') && (
               <p className="text-sm text-gray-600 dark:text-gray-400">
