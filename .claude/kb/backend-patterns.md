@@ -624,6 +624,74 @@ distinction: `Prisma.DbNull` sets the column to SQL `NULL`, whereas
 different value. The full 11-table unification and a unified `GET /audit`
 read endpoint are deferred "Next" work (ROADMAP §3).
 
+### Migrating an outlier audit table onto `AuditLog`
+
+The codebase carries private per-module audit tables (`VerAuditEvent`,
+`TaskAuditLog`, `CertActivityLogEntry`, `ActivityFeed`, …) being collapsed
+onto `AuditLog` one per sprint (ROADMAP §3 NX-10, the R-8 continuation). NX-10
+migrated the first — `SavedViewAuditEvent` — and codified this **reusable
+8-step playbook**. Every follow-on table migration repeats it.
+`SavedViewAuditEvent` is the worked reference: `traceabilityViews.controller.ts`
+(the writer `createRevisionAndAudit`, the reader `listTraceabilityViewAuditEvents`)
+plus `backfill-saved-view-audit-events.ts`.
+
+1. **Inventory the surface.** Grep every writer (`<table>.create`) and every
+   reader (`<table>.findMany` / `.findFirst`) of the outlier table. A large
+   count means a multi-PR migration — `SavedViewAuditEvent` was the smallest
+   at 1 writer + 1 reader, both in one file.
+2. **Map the columns onto `AuditLog`.** `projectId` -> `projectId`; the actor
+   column -> `userId` (**check nullability — `AuditLog.userId` is NOT NULL**; a
+   nullable legacy actor column forces a skip-or-sentinel decision in the
+   backfill); the timestamp column -> `createdAt`; the action column ->
+   `action`, **rewritten to `<module>:<kebab-verb>` for NEW writes only**;
+   **every remaining column** (foreign keys like `viewId`, value snapshots,
+   free text) folds into `detailsJson` as a structured object. A scoping
+   foreign key MUST move into `detailsJson` — `AuditLog` has no column for it,
+   and the reader scopes on it via a JSON-path filter (step 4).
+3. **Repoint the writer** to the canonical
+   `prisma.auditLog.create({ data: { projectId, userId, action, detailsJson } })`
+   shape. Pass `detailsJson` as a structured object — never `JSON.stringify`
+   it. Any non-`AuditLog` write co-located in the same helper (a
+   revision/snapshot write — e.g. `SavedViewRevision`) is **left alone**; only
+   the audit-table write moves. If the writer was transactional, keep the
+   `$transaction` so the co-located write and the audit row still commit
+   atomically.
+4. **Repoint the reader** to `prisma.auditLog`. Where the outlier table had a
+   scoping column (`viewId`, `entityId`, …) now living inside `detailsJson`,
+   the reader filters with a Prisma JSON-path predicate —
+   `detailsJson: { path: ['<key>'], equals: <value> }` — **plus** an
+   `action: { in: [...] }` predicate so the query returns only this module's
+   events, not every `AuditLog` row that happens to carry that key. Re-key
+   ordering and cursor pagination onto `AuditLog.createdAt` / `AuditLog.id`.
+5. **Decide the response shape.** If the reader's endpoint has a live frontend
+   consumer, **project each `AuditLog` row back into the legacy response shape
+   inside the controller** (the default — lowest blast radius; the frontend TS
+   type and component stay untouched). Reconcile the frontend type to the
+   native `AuditLog` shape only when there is an independent reason to.
+6. **Backfill** with an idempotent, non-destructive, batched script modelled on
+   `backfill-saved-view-audit-events.ts`: copy every legacy row into
+   `AuditLog`, preserve the original `action` string and timestamp **verbatim**
+   (pass `createdAt` explicitly so `@default(now())` does not stamp the
+   backfill date), stamp each new row's `detailsJson` with a
+   `backfilledFrom<Table>Id: <legacy row id>` key so re-runs are idempotent
+   (collect the already-copied ids into a `Set` upfront, skip them), **never
+   update or delete the source rows**, and skip-and-log rows that cannot
+   satisfy `AuditLog`'s NOT NULL constraints (e.g. a null actor) — those rows
+   stay in the frozen legacy table, never deleted (`rules.md` §4). Register an
+   `npm run backfill:<table>` script.
+7. **Freeze the legacy table.** Keep the table, its `@@index`es, its FK
+   relations, and its rows — **no `DROP`, no destructive migration**. After the
+   migration nothing reads or writes it. A separate far-future cleanup ticket
+   drops it once `AuditLog` is proven, exactly as R-8 froze `AuditLog.details`.
+8. **Test** the writer (a new `AuditLog` row with the right `action` +
+   `detailsJson`, and **no** legacy-table row written), the reader (per-scope
+   filtering still correct — a query for scope A returns only scope A's events
+   when scope B events and unrelated `AuditLog` rows also exist; ordering and
+   cursor intact; the `{ success, data, nextCursor }` envelope unchanged), and
+   the backfill (idempotent on a double-run — row count identical after the
+   second run; source rows byte-identical before and after; null-actor rows
+   skipped). Real DB, no Prisma mocks (`testing.md`).
+
 ---
 
 ## Bulk-update convention

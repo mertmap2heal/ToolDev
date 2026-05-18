@@ -1,10 +1,30 @@
 import { Response } from 'express'
+import type { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 
 const VIEW_KIND = 'traceability_matrix'
 const VIEW_TYPE = 'project' // project-shared, per requirement
 const MAX_PAGE_SIZE = 200
+
+/**
+ * NX-10: saved-view audit events are written to the central `AuditLog` table
+ * (the legacy `SavedViewAuditEvent` table is frozen — read-only history, no
+ * new writes). The legacy `createRevisionAndAudit` action values map onto the
+ * R-8 `<module>:<kebab-verb>` convention here. The reader filters `AuditLog`
+ * by `action IN` this set so the per-view audit list shows only saved-view
+ * events. See `.claude/kb/backend-patterns.md` — "Migrating an outlier audit
+ * table onto AuditLog".
+ */
+const AUDIT_ACTION_BY_LEGACY: Record<string, string> = {
+  CREATE_VIEW: 'requirements:saved-view-create',
+  UPDATE_VIEW: 'requirements:saved-view-update',
+  DELETE_VIEW: 'requirements:saved-view-delete',
+  ROLLBACK_VIEW: 'requirements:saved-view-rollback',
+}
+
+/** The four `requirements:saved-view-*` actions — the reader's `action IN` set. */
+const SAVED_VIEW_AUDIT_ACTIONS: string[] = Object.values(AUDIT_ACTION_BY_LEGACY)
 
 function safeJsonStringify(v: unknown): string {
   return JSON.stringify(v ?? null)
@@ -41,6 +61,16 @@ async function ensureInitialRevision(projectId: string, view: any, performedByUs
   })
 }
 
+/** Build the `{ name, folderId, definition }` snapshot a saved-view audit row carries. */
+function viewSnapshot(view: any | null): { name: string; folderId: string | null; definition: any } | null {
+  if (!view) return null
+  return {
+    name: view.name,
+    folderId: view.folderId ?? null,
+    definition: safeJsonParse(view.definitionJson),
+  }
+}
+
 async function createRevisionAndAudit(params: {
   projectId: string
   viewId: string
@@ -51,7 +81,11 @@ async function createRevisionAndAudit(params: {
 }) {
   const { projectId, viewId, action, oldView, newView, performedByUserId } = params
   const revAny = (prisma as any).savedViewRevision
-  const auditAny = (prisma as any).savedViewAuditEvent
+  // NX-10: every caller (create / update / delete / rollback) runs behind
+  // `authenticateToken`, so `performedByUserId` is present — `AuditLog.userId`
+  // is NOT NULL. The guard below is defensive: if there is somehow no actor,
+  // the revision still writes but the audit row is skipped (never crash on a
+  // NOT NULL violation).
   const tx: any[] = []
 
   if (revAny && newView) {
@@ -76,29 +110,19 @@ async function createRevisionAndAudit(params: {
     )
   }
 
-  if (auditAny) {
+  // NX-10: write the audit event to the central `AuditLog` (not the frozen
+  // `SavedViewAuditEvent`). `viewId` has no `AuditLog` column — it lives in
+  // `detailsJson` so the reader can scope to a single view.
+  if (performedByUserId) {
+    const auditAction = AUDIT_ACTION_BY_LEGACY[action] ?? action
+    const detailsJson: Prisma.InputJsonValue = {
+      viewId,
+      old: viewSnapshot(oldView),
+      new: viewSnapshot(newView),
+    }
     tx.push(
-      auditAny.create({
-        data: {
-          projectId,
-          viewId,
-          action,
-          oldValueJson: oldView
-            ? {
-                name: oldView.name,
-                folderId: oldView.folderId ?? null,
-                definition: safeJsonParse(oldView.definitionJson),
-              }
-            : null,
-          newValueJson: newView
-            ? {
-                name: newView.name,
-                folderId: newView.folderId ?? null,
-                definition: safeJsonParse(newView.definitionJson),
-              }
-            : null,
-          performedByUserId: performedByUserId ?? null,
-        },
+      prisma.auditLog.create({
+        data: { projectId, userId: performedByUserId, action: auditAction, detailsJson },
       })
     )
   }
@@ -563,23 +587,58 @@ export async function rollbackTraceabilityView(req: AuthRequest, res: Response) 
   }
 }
 
+/**
+ * NX-10: project a central `AuditLog` row back into the legacy
+ * `TraceabilitySavedViewAuditEvent` shape the frontend consumer expects
+ * (`traceabilityViews.service.ts` — `TraceabilitySavedViewAuditEvent`). The
+ * mapping is mechanical and lossless: `createdAt`->`performedAt`,
+ * `userId`->`performedByUserId`, `detailsJson.{viewId,old,new}` ->
+ * `{viewId, oldValueJson, newValueJson}`. Keeping the projection here means
+ * the frontend type + component are untouched.
+ */
+function projectAuditLogToLegacyShape(row: {
+  id: string
+  projectId: string
+  action: string
+  detailsJson: unknown
+  createdAt: Date
+  userId: string
+}) {
+  const details = (row.detailsJson ?? {}) as Record<string, unknown>
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    viewId: typeof details.viewId === 'string' ? details.viewId : null,
+    action: row.action,
+    oldValueJson: details.old ?? null,
+    newValueJson: details.new ?? null,
+    performedByUserId: row.userId,
+    performedAt: row.createdAt,
+  }
+}
+
 export async function listTraceabilityViewAuditEvents(req: AuthRequest, res: Response) {
   try {
     const { projectId, viewId } = req.params
     const { cursor, limit } = req.query as any
     const pageSize = Math.max(1, Math.min(MAX_PAGE_SIZE, Number(limit) || 50))
-    const auditAny = (prisma as any).savedViewAuditEvent
-    if (!auditAny) return res.status(501).json({ success: false, error: 'Audit not enabled' })
 
-    const where: any = { projectId, viewId }
-    const rows = await auditAny.findMany({
-      where,
-      orderBy: { performedAt: 'desc' },
+    // NX-10: read from the central `AuditLog`. Per-view scoping survives the
+    // loss of the `viewId` column via a `detailsJson` JSON-path filter; the
+    // `action IN [...]` predicate ensures only saved-view events surface (not
+    // any other `AuditLog` row that happens to carry a `viewId` in detail).
+    const rows = await prisma.auditLog.findMany({
+      where: {
+        projectId,
+        action: { in: SAVED_VIEW_AUDIT_ACTIONS },
+        detailsJson: { path: ['viewId'], equals: viewId },
+      },
+      orderBy: { createdAt: 'desc' },
       take: pageSize,
       ...(cursor ? { skip: 1, cursor: { id: String(cursor) } } : {}),
     })
-    const nextCursor = rows.length === pageSize ? rows[rows.length - 1]?.id : null
-    res.json({ success: true, data: rows, nextCursor })
+    const nextCursor = rows.length === pageSize ? rows[rows.length - 1]?.id ?? null : null
+    res.json({ success: true, data: rows.map(projectAuditLogToLegacyShape), nextCursor })
   } catch (e) {
     console.error('TraceabilityViews list audit error:', e)
     res.status(500).json({ success: false, error: 'Internal server error' })
