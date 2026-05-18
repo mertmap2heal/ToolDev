@@ -1,0 +1,5 @@
+{
+  "//": "NX-7 (#460): marks the compiled objective-matrix contract output as ESM. shared/package.json has no `type`, so without this the .js here would be interpreted as CommonJS and the backend's named import would fail. Mirrors shared/incoseEars/_compiled/package.json. Do not delete."
+  ,
+  "type": "module"
+}

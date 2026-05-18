@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../../lib/prisma'
 import type { AuthRequest } from '../../middleware/auth.middleware'
 import * as certExport from '../../services/certificationExport.service'
+import { getObjectiveMatrix as composeObjectiveMatrix } from '../../services/objectiveMatrix.service'
 
 // Issue #163: confirm the authenticated user belongs to the project before
 // accepting an identity-bound action. Returns the ProjectMember row or null.
@@ -1971,6 +1972,54 @@ export async function updateSignOff(req: AuthRequest, res: Response) {
     })
   } catch (e) {
     console.error('Cert updateSignOff error:', e)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+// ----- Objective-completion matrix (NX-7, #460) -----
+//
+// GET /certification/:projectId/objective-matrix?standard=&criticality=
+//
+// A read-only aggregation: one CertObjective per row, with a graph-derived
+// completionState and the linked-requirement / verification / evidence /
+// signature counts. The projectId is resolved + membership-checked by the
+// route file's `projectIdParam` param middleware — no extra tenant filter is
+// needed (and a redundant one would double the DB hit). It mutates nothing,
+// so it writes no AuditLog row. The `standard` / `criticality` filters are
+// applied in-memory after the constant-query-count graph walk.
+export async function getObjectiveMatrix(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const standardFilter =
+      typeof req.query.standard === 'string' && req.query.standard.trim()
+        ? req.query.standard.trim()
+        : null
+    const criticalityFilter =
+      typeof req.query.criticality === 'string' && req.query.criticality.trim()
+        ? req.query.criticality.trim()
+        : null
+
+    const matrix = await composeObjectiveMatrix(projectId)
+
+    let objectives = matrix.objectives
+    if (standardFilter) {
+      objectives = objectives.filter((o) => o.standard === standardFilter)
+    }
+    if (criticalityFilter) {
+      objectives = objectives.filter((o) => o.criticality === criticalityFilter)
+    }
+
+    res.json({
+      success: true,
+      data: {
+        objectives,
+        // availableStandards reflects the WHOLE project, not the filtered
+        // subset — so the filter dropdown never loses its own selected option.
+        availableStandards: matrix.availableStandards,
+      },
+    })
+  } catch (e) {
+    console.error('Cert getObjectiveMatrix error:', e)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }

@@ -181,10 +181,63 @@ test.describe('Requirements', () => {
     await expect(page).toHaveURL(/requirements\/settings/)
   })
 
-  test('requirements dashboard page loads', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements/dashboard`)
-    await page.waitForLoadState('domcontentloaded')
-    await expect(page).toHaveURL(/requirements\/dashboard/)
+  // NX-7 (#460): the Requirements dashboard is the objective-completion matrix
+  // (design-system.md §8.2), replacing the old count tiles. These tests cover
+  // both the populated and the no-objectives state — the e2e seed project may
+  // carry zero CertObjective rows.
+  test.describe('Requirements dashboard — objective-completion matrix', () => {
+    test('dashboard renders the objective matrix surface', async ({ page, projectId }) => {
+      await page.goto(`/projects/${projectId}/requirements/dashboard`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page).toHaveURL(/requirements\/dashboard/)
+      // The objective-completion heading is always present.
+      await expect(page.getByRole('heading', { name: /objective completion/i })).toBeVisible({
+        timeout: 5_000,
+      })
+      // The matrix renders either a table (objectives exist) or the
+      // engineer-voice empty state — never a spinner left hanging.
+      const table = page.locator('table')
+      const emptyState = page.getByText(/no certification objectives for this project/i)
+      await expect(table.or(emptyState).first()).toBeVisible({ timeout: 8_000 })
+      // The old count-tile dashboard copy is gone.
+      await expect(page.getByText(/total requirements/i)).toHaveCount(0)
+    })
+
+    test('the standard filter is present and re-queries', async ({ page, projectId }) => {
+      await page.goto(`/projects/${projectId}/requirements/dashboard`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('heading', { name: /objective completion/i })).toBeVisible({
+        timeout: 5_000,
+      })
+      // The Standard + Criticality <select> filters are always rendered.
+      const standardFilter = page.locator('label', { hasText: /standard/i }).locator('select')
+      await expect(standardFilter).toBeVisible({ timeout: 8_000 })
+      // It always carries at least the "All standards" option.
+      await expect(standardFilter.locator('option')).not.toHaveCount(0)
+      // Selecting "All standards" is a no-op re-query and keeps the surface stable.
+      await standardFilter.selectOption('')
+      await expect(page.getByRole('heading', { name: /objective completion/i })).toBeVisible()
+    })
+
+    test('an objective row drill-down navigates to the certification module', async ({
+      page,
+      projectId,
+    }) => {
+      await page.goto(`/projects/${projectId}/requirements/dashboard`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('heading', { name: /objective completion/i })).toBeVisible({
+        timeout: 5_000,
+      })
+      const rows = page.locator('table tbody tr')
+      const rowCount = await rows.count().catch(() => 0)
+      if (rowCount === 0) {
+        // No objectives seeded — the drill-down has nothing to exercise here.
+        test.skip(true, 'No certification objectives in the seed project')
+        return
+      }
+      await rows.first().click()
+      await expect(page).toHaveURL(/\/certification/, { timeout: 8_000 })
+    })
   })
 
   test('Columns picker affects both Table and Document views', async ({ page, projectId }) => {

@@ -489,6 +489,57 @@ router.post('/:projectId/objectives', ctrl.createObjective)
 
 /**
  * @openapi
+ * /certification/{projectId}/objective-matrix:
+ *   get:
+ *     tags: [Certification]
+ *     summary: Get the objective-completion matrix
+ *     description: >-
+ *       Return one row per certification objective with a graph-derived
+ *       completion state (open | partial | closed | signed) and the
+ *       linked-requirement / verification / evidence / signature counts.
+ *       Read-only — composes the project's CURRENT state. Optional
+ *       `standard` (a regRef-classified bucket) and `criticality` filters.
+ *     parameters:
+ *       - $ref: '#/components/parameters/CertProjectId'
+ *       - in: query
+ *         name: standard
+ *         schema: { type: string }
+ *         description: Filter to one classified standard bucket (e.g. DO-178C, CS-25/23, Other).
+ *       - in: query
+ *         name: criticality
+ *         schema: { type: string, enum: [Low, Medium, High] }
+ *         description: Filter to one objective criticality.
+ *     responses:
+ *       '200':
+ *         description: The objective-completion matrix.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         objectives: { type: array, items: { type: object } }
+ *                         availableStandards: { type: array, items: { type: string } }
+ *             example:
+ *               success: true
+ *               data:
+ *                 objectives: [{ id: obj_1, objId: 'OBJ-1', completionState: 'partial' }]
+ *                 availableStandards: ['DO-178C', 'Other']
+ *       '401':
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       '403':
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       '500':
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get('/:projectId/objective-matrix', ctrl.getObjectiveMatrix)
+
+/**
+ * @openapi
  * /certification/{projectId}/objectives/{id}:
  *   patch:
  *     tags: [Certification]

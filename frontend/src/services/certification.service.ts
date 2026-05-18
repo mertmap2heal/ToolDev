@@ -1,5 +1,6 @@
 import { apiClient } from './api'
 import type { ApiResponse } from 'shared/types/api.types'
+import type { ObjectiveMatrixResponse } from 'shared/objectiveMatrix'
 import type {
   CertificationContext,
   CertificationObjective,
@@ -474,4 +475,24 @@ export async function downloadAuditPackage(
   } catch (e: unknown) {
     return { success: false, error: (e as { message?: string })?.message ?? 'Export failed' }
   }
+}
+
+/**
+ * NX-7 (#460) — the objective-completion matrix.
+ *
+ * Returns one row per CertObjective with a graph-derived completion state and
+ * the linked-requirement / verification / evidence / signature counts. The
+ * `standard` (a regRef-classified bucket) and `criticality` filters are
+ * optional — omit them for all objectives.
+ */
+export async function getObjectiveMatrix(
+  projectId: string,
+  filters?: { standard?: string; criticality?: string }
+): Promise<ApiResponse<ObjectiveMatrixResponse>> {
+  const params: Record<string, string> = {}
+  if (filters?.standard) params.standard = filters.standard
+  if (filters?.criticality) params.criticality = filters.criticality
+  return apiClient.get<ObjectiveMatrixResponse>(`${BASE}/${projectId}/objective-matrix`, {
+    params,
+  })
 }
