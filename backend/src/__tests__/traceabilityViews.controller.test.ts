@@ -53,6 +53,9 @@ describe('Traceability views — /api/v1/traceability-views', () => {
   })
 
   afterAll(async () => {
+    // NX-10: saved-view audit events now write to the central AuditLog
+    // (AuditLog FKs Project, so it must clear before the project delete).
+    await prisma.auditLog.deleteMany({ where: { projectId } }).catch(() => {})
     await (prisma as any).savedViewAuditEvent.deleteMany({ where: { projectId } }).catch(() => {})
     await (prisma as any).savedViewRevision.deleteMany({ where: { projectId } }).catch(() => {})
     await prisma.savedView.deleteMany({ where: { projectId } }).catch(() => {})

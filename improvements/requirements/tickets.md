@@ -475,7 +475,7 @@ The following are appended to `improvements/_shared/cross-cutting.md` because th
 | CC3 | Signature event table | REQ-M5 (this package's first user) |
 | CC4 | `AiInvocation` ↔ artefact join | REQ-M1, REQ-M2 (override audit) |
 | CC5 | `AdminRole` expansion for engineering roles | None in this package |
-| CC6 | 11 audit tables → 1 universal provenance log | None in this package — wait until CC1 is in production for 6 months |
+| CC6 | 11 audit tables → 1 universal provenance log | NX-10 (R-8 continuation) — the `SavedViewAuditEvent` reference migration manifests in *this* package: the table is written + read by `backend/src/controllers/traceabilityViews.controller.ts` (a Requirements / traceability-views surface). Status: NX-10 shipped — Issue [#471](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/471). The `SavedViewAuditEvent` writer + reader are repointed onto the central `AuditLog`, history backfilled by `backfill-saved-view-audit-events.ts`, the legacy table kept frozen, and the reusable per-table audit-migration playbook codified in `.claude/kb/backend-patterns.md`. The other 9 outlier audit tables are named `NX-10-followon-*` tickets, one per sprint; `InventoryAuditLog` is dropped with the Inventory sunset, not migrated. |
 
 ---
 
