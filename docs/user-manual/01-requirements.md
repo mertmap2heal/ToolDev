@@ -148,6 +148,23 @@ Close the drawer with the × button or by pressing **Escape**.
 
 ---
 
+### Requirements Dashboard
+
+A separate **Dashboard** view summarises the project's certification progress rather than the requirement list. Its main body is the **objective-completion matrix** — a row per certification objective showing how far each one is satisfied by the current requirements, verifications, evidence, and sign-offs. The matrix replaced the old count tiles.
+
+Each row shows:
+
+| Column | Description |
+|--------|-------------|
+| Objective | The objective code and title |
+| Reg. reference | The standard or airworthiness paragraph the objective comes from (e.g. `DO-178C`, `CS 25.1309`) |
+| Criticality | Low / Medium / High |
+| Completion state | **Open**, **Partial**, **Closed**, or **Signed** — derived from the linked artifacts |
+
+Use the **standard filter** at the top to narrow the matrix to one standard; the filter options are built from the objectives actually present in the project. Click any row to drill down to the requirements, verifications, and evidence behind that objective.
+
+---
+
 ### Modals
 
 | Modal | Triggered by |
@@ -368,6 +385,17 @@ See the import template in the wizard for the required column format.
 1. Open **Analysis → Quality Panel** in the toolbar.
 2. The panel shows completeness and consistency metrics for the current requirement set.
 3. Click on any metric to drill down to the affected requirements.
+
+---
+
+### How to read the objective-completion matrix
+
+1. Open the **Dashboard** view.
+2. The **objective-completion matrix** lists every certification objective with its completion state — Open, Partial, Closed, or Signed.
+3. Use the **standard filter** to show only the objectives belonging to one standard.
+4. Click a row to drill down to the requirements, verifications, and evidence linked to that objective.
+
+**Result:** You see at a glance which objectives are fully satisfied and which still need work — the certification view of the project, not a requirement count.
 
 ---
 
