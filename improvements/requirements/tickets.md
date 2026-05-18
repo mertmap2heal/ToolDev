@@ -194,6 +194,19 @@ change, NO new npm dependency (`crypto.randomUUID()` is a Node built-in). Per th
 #447 Architecture comment, Excel round-trip was split to a separate co-ticket (Option A) —
 NX-4 ships ONLY the `/bulk` convention + cell-level multi-select + `<BulkEditDrawer>`.
 
+**Excel co-ticket — Shipped (NX-4-followup, Issue [#450](https://github.com/chriertcafdle-beep/ToolDevelopment/issues/450)).**
+The Excel-round-trip half of gap-summary #9. Moved `.xlsx` import parsing server-side: a new
+`backend/src/services/requirementXlsxImport.service.ts` parses uploads with `exceljs` (already
+a backend dependency — no new npm package), XXE/formula-injection/sheet-bomb safe (formula cells
+read as the cached value never evaluated, 8 MB multer cap, 10 000-row cap). Two endpoints —
+`POST /requirements/:projectId/import/xlsx/parse` (upload) + `.../commit` (commit) — tenant-scoped
+by the existing router chain. The commit reuses the `bulkImportRequirements` validate-and-`$transaction`
+substrate (extracted as `runBulkImport`) and returns a per-cell `{ rowNumber, column, field, severity,
+reason }` report; partial success (validation-invalid rows skipped, valid subset commits), a DB-fault
+rolls the batch back. INCOSE/EARS findings on imported descriptions surface as advisory `warning`-severity
+rows, never blocking. `ImportWizard.tsx`'s Excel branch re-points its parse step to the server endpoint;
+steps 3+4 gain the per-cell validation table + partial-success banner. NO schema change.
+
 Backend — `bulkUpdateRequirements` rewritten in place to the convention: a `BULK_EDITABLE_FIELDS`
 whitelist (non-whitelisted keys silently dropped — forward-compatible) + a `BULK_PRIVILEGED_FIELDS`
 sub-set (`lifecycleId`/`statusId`) gated by an in-controller project-owner/admin check (403 with

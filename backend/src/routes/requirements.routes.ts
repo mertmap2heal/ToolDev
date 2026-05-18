@@ -1,5 +1,6 @@
-import { Router } from 'express'
-import { authenticateToken } from '../middleware/auth.middleware'
+import { Router, NextFunction, Response } from 'express'
+import multer from 'multer'
+import { authenticateToken, AuthRequest } from '../middleware/auth.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrAdmin.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
@@ -11,6 +12,8 @@ import {
   getProjectAuditEvents,
   getRequirementsDashboard,
   importReqif,
+  importRequirementsXlsxParse,
+  importRequirementsXlsxCommit,
   createRequirement,
   updateRequirement,
   deleteRequirement,
@@ -41,6 +44,43 @@ const router = Router()
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
 router.use('/:projectId', requireProjectMember)
+
+/**
+ * multer instance for the Excel-import upload endpoint (#450).
+ * memoryStorage keeps the `.xlsx` in a Buffer (no disk write); the 8 MB cap
+ * matches the N-2.4 test-result ingest cap and bounds the parser workload
+ * against a sheet-bomb. Copied from `verification.routes.ts:40-58`.
+ */
+const xlsxUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+})
+
+/**
+ * Wrap multer's single-file middleware so a multer error (e.g. the file
+ * exceeding the 8 MB cap) becomes a clean 400 instead of Express's default
+ * 500. A successful parse passes control to the controller.
+ */
+function uploadXlsxFile(req: AuthRequest, res: Response, next: NextFunction): void {
+  xlsxUpload.single('file')(req, res, (err: unknown) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        const msg =
+          err.code === 'LIMIT_FILE_SIZE'
+            ? 'That file is over the 8 MB limit. Split it and import in parts.'
+            : `Upload error: ${err.message}`
+        res.status(400).json({ success: false, error: msg })
+        return
+      }
+      res.status(400).json({
+        success: false,
+        error: `Upload error: ${(err as Error)?.message || 'invalid upload'}`,
+      })
+      return
+    }
+    next()
+  })
+}
 
 /**
  * @openapi
@@ -251,6 +291,98 @@ router.get('/:projectId/dashboard', getRequirementsDashboard)
  *         $ref: '#/components/responses/ServerError'
  */
 router.post('/:projectId/import/reqif', importReqif)
+
+/**
+ * @openapi
+ * /requirements/{projectId}/import/xlsx/parse:
+ *   post:
+ *     tags: [Requirements]
+ *     summary: Parse an uploaded .xlsx for the requirements import wizard
+ *     description: >-
+ *       Upload phase of the Excel import (#450). Parses the uploaded `.xlsx`
+ *       server-side with exceljs and returns the first worksheet's header row
+ *       and data rows for the column-mapping step. No requirements are written.
+ *     parameters:
+ *       - $ref: '#/components/parameters/RequirementsProjectId'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file: { type: string, format: binary, description: 'The .xlsx workbook.' }
+ *     responses:
+ *       '200':
+ *         description: The parsed header row and data rows.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data: { type: object }
+ *       '400':
+ *         $ref: '#/components/responses/ValidationError'
+ *       '401':
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       '403':
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       '422':
+ *         description: The file could not be parsed as an .xlsx workbook.
+ *       '500':
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.post('/:projectId/import/xlsx/parse', uploadXlsxFile, importRequirementsXlsxParse)
+
+/**
+ * @openapi
+ * /requirements/{projectId}/import/xlsx/commit:
+ *   post:
+ *     tags: [Requirements]
+ *     summary: Commit a mapped Excel import with per-cell validation
+ *     description: >-
+ *       Commit phase of the Excel import (#450). Accepts the wizard's mapped
+ *       create/update rows, runs them through the bulk-import substrate, and
+ *       returns a per-cell validation report. Validation-invalid rows are
+ *       skipped (partial success); a DB-level fault rolls the batch back.
+ *     parameters:
+ *       - $ref: '#/components/parameters/RequirementsProjectId'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               create: { type: array, items: { type: object } }
+ *               update: { type: array, items: { type: object } }
+ *               columnMap: { type: object }
+ *               filename: { type: string }
+ *     responses:
+ *       '200':
+ *         description: Import complete. Returns counts and a per-cell error report.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data: { type: object }
+ *       '400':
+ *         $ref: '#/components/responses/ValidationError'
+ *       '401':
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       '403':
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       '409':
+ *         description: A target row was locked; the import was rolled back.
+ *       '500':
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.post('/:projectId/import/xlsx/commit', importRequirementsXlsxCommit)
 
 /**
  * @openapi
