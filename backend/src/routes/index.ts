@@ -60,6 +60,7 @@ import validationRoutes from './validation.routes'
 import configItemsRoutes from './configItems.routes'
 import deviationsWaiversRoutes from './deviationsWaivers.routes'
 import ccbDecisionsRoutes from './ccbDecisions.routes'
+import stakeholdersRoutes from './stakeholders.routes'
 
 const router = Router()
 
@@ -146,5 +147,8 @@ router.use('/validation', validationRoutes)
 router.use('/config-items', configItemsRoutes)
 router.use('/deviations-waivers', deviationsWaiversRoutes)
 router.use('/ccb-decisions', ccbDecisionsRoutes)
+// NX-8 (#463) — Stakeholders governance: committees + RACI. Mounted on
+// /projects so the URLs are /api/v1/projects/:projectId/committees|raci.
+router.use('/projects', stakeholdersRoutes)
 
 export default router

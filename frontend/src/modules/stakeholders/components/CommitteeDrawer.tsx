@@ -1,19 +1,33 @@
 import { useEffect, useState } from 'react'
-import { X, UserPlus, UserMinus, Play } from 'lucide-react'
+import { X, UserPlus, UserMinus } from 'lucide-react'
 import clsx from 'clsx'
-import type { Committee, DefaultReviewerFor } from '../types'
-import { useStakeholdersStore } from '../store'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  addCommitteeMember,
+  removeCommitteeMember,
+  setDefaultReviewer,
+  unsetDefaultReviewer,
+  type Committee,
+  type CommitteeRole,
+  type BaselineKind,
+} from '../../../services/stakeholders.service'
+import { getProjectUsersWithRoles } from '../../../services/stakeholderRoles.service'
 import ConfirmModal from './ConfirmModal'
 
-const DEFAULT_REVIEWER_OPTIONS: DefaultReviewerFor[] = [
-  'Baseline',
-  'Release',
-  'CertificationPackage',
-  'SafetyGate',
-  'VerificationReview',
+// The six per-committee organisational seats (NX-8: a FOURTH role concept,
+// distinct from engineering / admin / simulation roles).
+const COMMITTEE_ROLES: CommitteeRole[] = [
+  'Chair',
+  'Voting',
+  'NonVoting',
+  'Observer',
+  'Secretary',
+  'Auditor',
 ]
+const BASELINE_KINDS: BaselineKind[] = ['VER', 'CERT', 'PARAM', 'VALIDATION', 'CM']
 
 interface CommitteeDrawerProps {
+  projectId: string
   committee: Committee | null
   isOpen: boolean
   onClose: () => void
@@ -21,16 +35,29 @@ interface CommitteeDrawerProps {
   canEdit: boolean
 }
 
+/**
+ * NX-8 (#463): the committee detail panel — design-system.md §6.1 object panel.
+ * Members are grouped into a seat grid by `committeeRole`; the default-reviewer
+ * baselineKind set is its own section. React Query-backed; tokens only.
+ */
 export default function CommitteeDrawer({
+  projectId,
   committee,
   isOpen,
   onClose,
   onShowToast,
   canEdit,
 }: CommitteeDrawerProps) {
-  const { state, dispatch } = useStakeholdersStore()
-  const [addMemberId, setAddMemberId] = useState('')
-  const [removeConfirm, setRemoveConfirm] = useState<{ stakeholderId: string; name: string } | null>(null)
+  const qc = useQueryClient()
+  const [addUserId, setAddUserId] = useState('')
+  const [addRole, setAddRole] = useState<CommitteeRole>('Voting')
+  const [removeConfirm, setRemoveConfirm] = useState<{ memberId: string; name: string } | null>(null)
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['project', projectId, 'usersWithRoles'],
+    queryFn: () => getProjectUsersWithRoles(projectId),
+    enabled: !!projectId && isOpen,
+  })
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -42,55 +69,60 @@ export default function CommitteeDrawer({
     }
   }, [isOpen, onClose])
 
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['committees', projectId] })
+
+  const addMemberMut = useMutation({
+    mutationFn: (input: { userId: string; committeeRole: CommitteeRole }) =>
+      addCommitteeMember(projectId, committee!.id, input),
+    onSuccess: () => {
+      invalidate()
+      setAddUserId('')
+      onShowToast('Member added.')
+    },
+    onError: (e: Error) => onShowToast(e.message),
+  })
+
+  const removeMemberMut = useMutation({
+    mutationFn: (memberId: string) => removeCommitteeMember(projectId, committee!.id, memberId),
+    onSuccess: () => {
+      invalidate()
+      setRemoveConfirm(null)
+      onShowToast('Member removed.')
+    },
+    onError: (e: Error) => onShowToast(e.message),
+  })
+
+  const setReviewerMut = useMutation({
+    mutationFn: (kind: BaselineKind) => setDefaultReviewer(projectId, committee!.id, kind),
+    onSuccess: () => {
+      invalidate()
+      onShowToast('Default reviewer updated.')
+    },
+    onError: (e: Error) => onShowToast(e.message),
+  })
+
+  const unsetReviewerMut = useMutation({
+    mutationFn: (reviewerId: string) => unsetDefaultReviewer(projectId, committee!.id, reviewerId),
+    onSuccess: () => {
+      invalidate()
+      onShowToast('Default reviewer updated.')
+    },
+    onError: (e: Error) => onShowToast(e.message),
+  })
+
   if (!committee) return null
 
-  const getStakeholderName = (id: string) => state.stakeholders.find((s) => s.stakeholderId === id)?.displayName ?? id
-  const availableToAdd = state.stakeholders.filter((s) => !committee.members.includes(s.stakeholderId))
-
-  const handleAddMember = () => {
-    if (!addMemberId) return
-    dispatch({ type: 'ADD_MEMBER', payload: { groupId: committee.groupId, stakeholderId: addMemberId } })
-    setAddMemberId('')
-    onShowToast('Member added.')
-  }
-
-  const handleRemoveMember = (stakeholderId: string) => {
-    dispatch({ type: 'REMOVE_MEMBER', payload: { groupId: committee.groupId, stakeholderId } })
-    setRemoveConfirm(null)
-    onShowToast('Member removed.')
-  }
-
-  const handleUpdateDefaultReviewers = (value: DefaultReviewerFor, checked: boolean) => {
-    const next = checked
-      ? [...committee.defaultReviewersFor, value]
-      : committee.defaultReviewersFor.filter((x) => x !== value)
-    dispatch({
-      type: 'UPDATE_GROUP',
-      payload: { ...committee, defaultReviewersFor: next },
-    })
-  }
-
-  const handleStartReviewSession = () => {
-    const commId = `COMM-${state.communicationLog.length + 1}`
-    dispatch({
-      type: 'CREATE_COMM',
-      payload: {
-        commId,
-        type: 'ReviewRequest',
-        audience: { type: 'Group', ref: committee.groupId },
-        timestamp: new Date().toISOString(),
-        summary: `Review session started for ${committee.name}`,
-        createdBy: state.role,
-      },
-    })
-    onShowToast('Review session started (placeholder). Communication log entry created.')
-  }
+  const userName = (id: string) => users.find((u) => u.id === id)?.name ?? id
+  const userRoleChips = (id: string) => users.find((u) => u.id === id)?.engineeringRoles ?? []
+  const memberUserIds = new Set(committee.members.map((m) => m.userId))
+  const availableUsers = users.filter((u) => !memberUserIds.has(u.id))
+  const wiredKinds = new Set(committee.defaultReviewers.map((r) => r.baselineKind))
 
   return (
     <>
       <div
         className={clsx(
-          'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden fixed right-0 top-0 z-40',
+          'h-full bg-surface-base shadow-md border-l border-default flex flex-col transition-all duration-200 ease-out overflow-hidden fixed right-0 top-0 z-40',
           isOpen ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
         )}
         style={{ height: 'calc(100vh - 4rem)', top: '4rem' }}
@@ -98,127 +130,174 @@ export default function CommitteeDrawer({
         aria-label="Committee details"
       >
         <div className="flex flex-col h-full overflow-y-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          {/* §6.1 object-panel header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-default bg-surface-raised">
             <div>
-              {committee.type === 'AuthorityInterface' && (
-                <span className="inline-block px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded text-xs font-medium mb-2">
-                  Authority Interface
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-ink-muted">{committee.id.slice(0, 8)}</span>
+                <span className="px-2 py-0.5 rounded-xs text-xs font-medium bg-surface-inset text-ink-muted">
+                  {committee.kind}
                 </span>
+              </div>
+              <h2 className="mt-1 text-xl font-medium text-ink-primary">{committee.name}</h2>
+              {committee.meetingFrequency && (
+                <p className="text-sm text-ink-muted">Cadence: {committee.meetingFrequency}</p>
               )}
-              <div className="font-mono text-sm text-gray-600 dark:text-gray-400">{committee.groupId}</div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{committee.name}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{committee.type}</p>
             </div>
-            <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 hover:bg-surface-inset rounded-sm"
+              aria-label="Close committee details"
+            >
+              <X size={18} className="text-ink-muted" />
             </button>
           </div>
+
           <div className="px-6 py-4 space-y-6">
+            {/* Seat grid — members grouped by committeeRole */}
             <section>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Chair</h3>
-              <p className="text-sm text-gray-900 dark:text-white">
-                {committee.chair ? getStakeholderName(committee.chair) : '—'}
-              </p>
-            </section>
-            <section>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Members</h3>
-              <ul className="space-y-2">
-                {committee.members.map((id) => (
-                  <li key={id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-900 dark:text-white">{getStakeholderName(id)}</span>
-                    {canEdit && (
-                      <button
-                        type="button"
-                        onClick={() => setRemoveConfirm({ stakeholderId: id, name: getStakeholderName(id) })}
-                        className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                      >
-                        <UserMinus size={14} />
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {canEdit && availableToAdd.length > 0 && (
-                <div className="mt-3 flex gap-2">
+              <h3 className="text-sm font-semibold text-ink-muted uppercase mb-3">Seats</h3>
+              {committee.members.length === 0 ? (
+                <p className="text-sm text-ink-muted">
+                  No members yet. Add a chair and voting members so this committee can route
+                  approvals.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {COMMITTEE_ROLES.map((role) => {
+                    const seats = committee.members.filter((m) => m.committeeRole === role)
+                    if (seats.length === 0) return null
+                    return (
+                      <div key={role} className="space-y-1">
+                        <h4 className="text-xs font-medium text-ink-faint uppercase">{role}</h4>
+                        <ul className="space-y-1">
+                          {seats.map((m) => (
+                            <li
+                              key={m.id}
+                              className="flex items-center justify-between text-sm py-1"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="text-ink-primary">{userName(m.userId)}</span>
+                                {userRoleChips(m.userId).map((r) => (
+                                  <span
+                                    key={r.id}
+                                    className="px-1.5 py-0.5 rounded-xs text-xs bg-surface-inset text-ink-muted"
+                                  >
+                                    {r.name}
+                                  </span>
+                                ))}
+                              </span>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setRemoveConfirm({ memberId: m.id, name: userName(m.userId) })
+                                  }
+                                  className="p-1 text-status-danger hover:bg-surface-inset rounded-sm"
+                                  aria-label={`Remove ${userName(m.userId)}`}
+                                >
+                                  <UserMinus size={14} />
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {canEdit && (
+                <div className="mt-3 flex flex-wrap gap-2">
                   <select
-                    value={addMemberId}
-                    onChange={(e) => setAddMemberId(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    value={addUserId}
+                    onChange={(e) => setAddUserId(e.target.value)}
+                    className="flex-1 min-w-[12rem] px-3 py-2 border border-default rounded-sm bg-surface-base text-ink-primary text-sm"
                   >
                     <option value="">Add member…</option>
-                    {availableToAdd.map((s) => (
-                      <option key={s.stakeholderId} value={s.stakeholderId}>
-                        {s.displayName} ({s.stakeholderId})
+                    {availableUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={addRole}
+                    onChange={(e) => setAddRole(e.target.value as CommitteeRole)}
+                    className="px-3 py-2 border border-default rounded-sm bg-surface-base text-ink-primary text-sm"
+                    aria-label="Committee seat"
+                  >
+                    {COMMITTEE_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
                       </option>
                     ))}
                   </select>
                   <button
                     type="button"
-                    onClick={handleAddMember}
-                    disabled={!addMemberId}
-                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 text-sm"
+                    onClick={() =>
+                      addUserId && addMemberMut.mutate({ userId: addUserId, committeeRole: addRole })
+                    }
+                    disabled={!addUserId || addMemberMut.isPending}
+                    className="flex items-center gap-1 px-3 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-sm disabled:opacity-50 text-sm"
                   >
                     <UserPlus size={14} /> Add
                   </button>
                 </div>
               )}
             </section>
+
+            {/* Default reviewers */}
             <section>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Default reviewers for</h3>
+              <h3 className="text-sm font-semibold text-ink-muted uppercase mb-3">
+                Default reviewers
+              </h3>
+              <p className="text-xs text-ink-faint mb-2">
+                Baseline kinds this committee reviews by default.
+              </p>
               <div className="flex flex-wrap gap-3">
-                {DEFAULT_REVIEWER_OPTIONS.map((opt) => (
-                  <label key={opt} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={committee.defaultReviewersFor.includes(opt)}
-                      onChange={(e) => handleUpdateDefaultReviewers(opt, e.target.checked)}
-                      disabled={!canEdit}
-                      className="rounded border-gray-300 dark:border-gray-600"
-                    />
-                    {opt}
-                  </label>
-                ))}
+                {BASELINE_KINDS.map((kind) => {
+                  const reviewer = committee.defaultReviewers.find((r) => r.baselineKind === kind)
+                  const wired = wiredKinds.has(kind)
+                  return (
+                    <label
+                      key={kind}
+                      className="flex items-center gap-2 text-sm text-ink-primary"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={wired}
+                        disabled={!canEdit || setReviewerMut.isPending || unsetReviewerMut.isPending}
+                        onChange={(e) => {
+                          if (e.target.checked) setReviewerMut.mutate(kind)
+                          else if (reviewer) unsetReviewerMut.mutate(reviewer.id)
+                        }}
+                        className="rounded-sm border-default"
+                      />
+                      {kind}
+                    </label>
+                  )
+                })}
               </div>
             </section>
-            <section>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Meeting cadence</h3>
-              <p className="text-sm text-gray-900 dark:text-white">{committee.meetingCadence}</p>
-            </section>
+
             {committee.notes && (
               <section>
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Notes</h3>
-                <p className="text-sm text-gray-700 dark:text-gray-300">{committee.notes}</p>
+                <h3 className="text-sm font-semibold text-ink-muted uppercase mb-2">Notes</h3>
+                <p className="text-sm text-ink-muted">{committee.notes}</p>
               </section>
             )}
-            <section>
-              <button
-                type="button"
-                onClick={handleStartReviewSession}
-                disabled={!canEdit}
-                title={!canEdit ? 'Read-only or insufficient permissions' : undefined}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 text-sm"
-              >
-                <Play size={16} />
-                Start Review Session
-              </button>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Creates a Communication Log entry and audit event (placeholder).
-              </p>
-            </section>
           </div>
         </div>
       </div>
       <ConfirmModal
         isOpen={!!removeConfirm}
         title="Remove member"
-        message={
-          removeConfirm
-            ? `Remove ${removeConfirm.name} from this committee?`
-            : ''
-        }
+        message={removeConfirm ? `Remove ${removeConfirm.name} from this committee?` : ''}
         confirmLabel="Remove"
         variant="danger"
-        onConfirm={() => removeConfirm && handleRemoveMember(removeConfirm.stakeholderId)}
+        onConfirm={() => removeConfirm && removeMemberMut.mutate(removeConfirm.memberId)}
         onCancel={() => setRemoveConfirm(null)}
       />
     </>

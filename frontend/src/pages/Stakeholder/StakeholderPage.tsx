@@ -38,7 +38,7 @@ import AuditTrailTable from '../../modules/stakeholders/components/AuditTrailTab
 import SettingsRolesTab from '../../modules/stakeholders/components/SettingsRolesTab'
 import EngineeringRolesManagementTab from '../../modules/stakeholders/components/EngineeringRolesManagementTab'
 import CreateCommitteeModal from '../../modules/stakeholders/components/CreateCommitteeModal'
-import type { Committee } from '../../modules/stakeholders/types'
+import type { Committee } from '../../services/stakeholders.service'
 
 const TABS = [
   { id: 'directory', label: 'Directory', icon: Users },
@@ -472,29 +472,38 @@ function StakeholdersContent() {
                 </div>
               </div>
             )}
-            <AddToCommitteeModal
-              isOpen={addToCommitteeIds.length > 0}
-              onClose={() => setAddToCommitteeIds([])}
-              stakeholderIds={addToCommitteeIds}
-              onDone={() => {
-                setAddToCommitteeIds([])
-                showToast('Members added to committee.')
-              }}
-            />
+            {projectId && (
+              <AddToCommitteeModal
+                isOpen={addToCommitteeIds.length > 0}
+                projectId={projectId}
+                onClose={() => setAddToCommitteeIds([])}
+                userIds={addToCommitteeIds}
+                onDone={() => {
+                  setAddToCommitteeIds([])
+                  showToast('Members added to committee.')
+                }}
+              />
+            )}
           </>
         )}
-        <CreateCommitteeModal
-          isOpen={createCommitteeOpen}
-          onClose={() => setCreateCommitteeOpen(false)}
-          onSaved={() => {
-            setCreateCommitteeOpen(false)
-            showToast('Committee created.')
-          }}
-        />
-        {activeTab === 'raci' && <RaciMatrix onShowToast={showToast} canEdit={canEdit} />}
-        {activeTab === 'committees' && (
+        {projectId && (
+          <CreateCommitteeModal
+            isOpen={createCommitteeOpen}
+            projectId={projectId}
+            onClose={() => setCreateCommitteeOpen(false)}
+            onSaved={() => {
+              setCreateCommitteeOpen(false)
+              showToast('Committee created.')
+            }}
+          />
+        )}
+        {activeTab === 'raci' && projectId && (
+          <RaciMatrix projectId={projectId} onShowToast={showToast} canEdit={canEdit} />
+        )}
+        {activeTab === 'committees' && projectId && (
           <>
             <CommitteeTable
+              projectId={projectId}
               onSelectCommittee={(c) => {
                 setSelectedCommittee(c)
                 setCommitteeDrawerOpen(true)
@@ -503,6 +512,7 @@ function StakeholdersContent() {
               canEdit={canEditGov}
             />
             <CommitteeDrawer
+              projectId={projectId}
               committee={selectedCommittee}
               isOpen={committeeDrawerOpen}
               onClose={() => {
@@ -519,7 +529,7 @@ function StakeholdersContent() {
         )}
         {activeTab === 'requests' && <RequestsBoard onShowToast={showToast} canEdit={canEdit} />}
         {activeTab === 'communication' && <CommunicationTimeline onShowToast={showToast} canEdit={canEdit} />}
-        {activeTab === 'audit' && <AuditTrailTable onShowToast={showToast} />}
+        {activeTab === 'audit' && projectId && <AuditTrailTable projectId={projectId} />}
         {activeTab === 'roles' && projectId && (
           <EngineeringRolesManagementTab projectId={projectId} canEdit={canEdit} onShowToast={showToast} />
         )}

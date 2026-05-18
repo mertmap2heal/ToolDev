@@ -1,13 +1,75 @@
 // --- Enterprise Features ---
+/**
+ * GET /projects/:id/audit-logs
+ *
+ * Returns the project's central AuditLog rows, newest-first.
+ *
+ * NX-8 (#463) extended this shared endpoint with two OPTIONAL query params:
+ *   - `modules` — a comma-separated list of action-prefix tokens (e.g.
+ *     `stakeholder,committee,raci`). A row matches if its `action` string
+ *     starts with `<token>:` or `<token>.` for any requested token. The dot
+ *     form keeps the legacy `stakeholder.role.assign` verbs visible alongside
+ *     the new `committee:*` / `raci:*` colon-kebab verbs.
+ *   - `page` / `pageSize` — 1-based pagination. When `page` is present the
+ *     response carries a `pagination` object.
+ *
+ * Back-compat: with NEITHER `modules` NOR `page` the behaviour is
+ * byte-identical to the original — every row, no pagination wrapper.
+ */
 export const getProjectAuditLogs = async (req: AuthRequest, res: Response) => {
   try {
     const { id: projectId } = req.params;
-    const logs = await prisma.auditLog.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-      include: { user: true },
+
+    const modulesRaw = typeof req.query.modules === 'string' ? req.query.modules : '';
+    const modules = modulesRaw
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean);
+
+    const where: Prisma.AuditLogWhereInput = { projectId };
+    if (modules.length > 0) {
+      // A row matches if action begins with `<token>:` or `<token>.`.
+      where.OR = modules.flatMap((m) => [
+        { action: { startsWith: `${m}:` } },
+        { action: { startsWith: `${m}.` } },
+      ]);
+    }
+
+    const pageRaw = typeof req.query.page === 'string' ? parseInt(req.query.page, 10) : NaN;
+    const paginated = !Number.isNaN(pageRaw) && pageRaw >= 1;
+
+    if (!paginated) {
+      // Original code path — unbounded, no wrapper. Preserved byte-for-byte
+      // when no `modules` and no `page` are passed.
+      const logs = await prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { user: true },
+      });
+      res.json({ success: true, data: logs });
+      return;
+    }
+
+    const pageSizeRaw = typeof req.query.pageSize === 'string' ? parseInt(req.query.pageSize, 10) : NaN;
+    const pageSize = !Number.isNaN(pageSizeRaw) && pageSizeRaw >= 1 ? Math.min(pageSizeRaw, 200) : 50;
+    const page = pageRaw;
+
+    const [total, logs] = await Promise.all([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { user: true },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: logs,
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     });
-    res.json({ success: true, data: logs });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch audit logs.' });
   }
@@ -149,6 +211,7 @@ export const importProjects = async (req: AuthRequest, res: Response) => {
   }
 };
 import { Response } from 'express'
+import type { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 

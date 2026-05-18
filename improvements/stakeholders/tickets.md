@@ -84,6 +84,7 @@ Identifiers: `STK-<Q|N|L><n>` (Q quick, N near-term, L long-term).
 
 ### STK-N1 · Promote Committee + CommitteeMember + CommitteeDefaultReviewer to Prisma
 **Priority:** P0 · **Effort:** L
+**Status:** Shipped — NX-8 / Issue #463 / code commit `34ace5e`. Migration adds `Committee`, `CommitteeMember`, `CommitteeDefaultReviewer` with the R-1 8-column provenance lattice + `deletedAt`. New `stakeholders.{routes,controller,service}.ts` trio expose project-scoped CRUD; audit writes use `committee:<verb>` / `committee-member:<verb>` / `committee-default-reviewer:<verb>` to the central `AuditLog`. The Committees tab swaps the reducer for React Query (`['committees', projectId]`); the `committeeRole` seat enum (`Chair / Voting / NonVoting / Observer / Secretary / Auditor`) replaces the flat `members[]`. No Preview banner.
 
 **Problem.** Committees tab is load-bearing — it produces the default-reviewer chain for every baseline / release / cert package / safety gate sign-off. Today it persists nothing.
 
@@ -95,6 +96,7 @@ Identifiers: `STK-<Q|N|L><n>` (Q quick, N near-term, L long-term).
 
 ### STK-N2 · Promote RaciEntry + RaciAssignment to Prisma; bind to live entities
 **Priority:** P1 · **Effort:** L
+**Status:** Shipped — NX-8 / Issue #463 / code commit `34ace5e`. Migration adds `RaciEntry` + `RaciAssignment` with the polymorphic subject ref (the `TraceLink` pattern). `subjectType` is constrained to `SystemFunction | Requirement | CertObjective | Component | Deliverable`; the service resolves the subject against the live project row at write time (the four model-backed types; `Deliverable` is a free string). The R/A/C/I picker uses `usersWithRoles` and renders engineering-role chips. Doctrine validation runs service-side inside a `prisma.$transaction`: 0 Accountable -> 422, >1 -> succeeds with a `warnings[]`. The RACI tab ships the 2D `role="grid"` matrix (rows = subjects, columns = users) with arrow-key cell nav + an Enter/Space cell-editor popover.
 
 **Problem.** RACI matrix is reducer-driven; subjects are free-text; R/A/C/I are arrays of mock IDs.
 
@@ -122,6 +124,7 @@ Identifiers: `STK-<Q|N|L><n>` (Q quick, N near-term, L long-term).
 
 ### STK-N5 · Wire Audit Trail tab to central `AuditLog`
 **Priority:** P1 · **Effort:** S
+**Status:** Shipped — NX-8 / Issue #463 / code commit `34ace5e`. The shared `GET /projects/:projectId/audit-logs` endpoint was extended with an optional `modules=` action-prefix filter (matches `<token>:` and the legacy `<token>.` form) + pagination; the no-param path stays byte-identical for back-compat. The Audit Trail tab queries it via React Query and renders the new `committee:*` / `raci:*` rows; the `modules=` filter is a chip multi-select. The mock `AuditEvent` / `AuditAction` enum / `auditEvents` state / `nextEventId` / `appendAudit` were deleted from `store.ts` and `MOCK_AUDIT_EVENTS` from `mockData.ts`. (The endpoint is `audit-logs`, not the `audit` the original AC sketched.)
 
 **Problem.** Audit Trail reads from mock reducer. Real `AuditLog` rows (engineering-role assigns/unassigns plus future governance writes) are invisible (`frontend.md` §9).
 
