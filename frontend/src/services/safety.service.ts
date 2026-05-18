@@ -18,7 +18,7 @@ function unwrap<T>(res: ApiResponse<T>): T {
   if (res.success === false || res.data === undefined) {
     throw new Error(res.error ?? 'Request failed')
   }
-  return unwrap(res)
+  return res.data
 }
 
 // --- Controlled vocabularies (mirror backend safety.service.ts) -------------

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import LoadingSpinner from '../common/LoadingSpinner'
+import ErrorMessage from '../common/ErrorMessage'
 import {
   listFmeaRows,
   createFmeaRow,
@@ -122,16 +124,16 @@ function PersistentFmeaWorksheet({
   }
 
   if (isLoading) {
-    return (
-      <div className="text-sm text-ink-muted py-6">Loading FMEA worksheet…</div>
-    )
+    return <LoadingSpinner inline label="Loading FMEA worksheet…" />
   }
   if (isError) {
     return (
-      <div className="text-sm text-status-danger py-6">
-        Could not load the FMEA worksheet. {(error as Error)?.message ?? 'Unknown error'}.
-        Retry.
-      </div>
+      <ErrorMessage
+        inline
+        message={`Could not load the FMEA worksheet. ${
+          (error as Error)?.message ?? 'Unknown error'
+        }. Retry.`}
+      />
     )
   }
 
@@ -546,13 +548,14 @@ export function WizardFmeaWorksheet({
   }
   if (failed) {
     return (
-      <div className="text-sm text-status-danger py-6">
-        Could not start the FMEA worksheet. {failed}. Retry.
-      </div>
+      <ErrorMessage
+        inline
+        message={`Could not start the FMEA worksheet. ${failed}. Retry.`}
+      />
     )
   }
   if (!fmeaId) {
-    return <div className="text-sm text-ink-muted py-6">Loading FMEA worksheet…</div>
+    return <LoadingSpinner inline label="Loading FMEA worksheet…" />
   }
   return <FmeaForm fmeaId={fmeaId} projectId={projectId} />
 }

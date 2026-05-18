@@ -6,6 +6,8 @@ import { format } from 'date-fns'
 import clsx from 'clsx'
 import type { Hazard as MockHazard } from '../../types/safety.types'
 import HazardDetailDrawer from '../../components/safety/HazardDetailDrawer'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ErrorMessage from '../../components/common/ErrorMessage'
 import {
   listHazards,
   createHazard,
@@ -204,14 +206,13 @@ export default function HazardsPage() {
 
         <div className="flex-1 overflow-auto bg-surface-raised border border-default rounded-md">
           {isLoading ? (
-            <div className="text-center py-12 text-ink-muted text-sm">
-              Loading hazards…
-            </div>
+            <LoadingSpinner label="Loading hazards…" />
           ) : isError ? (
-            <div className="text-center py-12 text-status-danger text-sm">
-              Could not load hazards. {(error as Error)?.message ?? 'Unknown error'}. Retry,
-              or check the project is selected.
-            </div>
+            <ErrorMessage
+              message={`Could not load hazards. ${
+                (error as Error)?.message ?? 'Unknown error'
+              }. Retry, or check the project is selected.`}
+            />
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-inset sticky top-0">

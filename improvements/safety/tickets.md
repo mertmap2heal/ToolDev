@@ -290,6 +290,8 @@ Sequence assumes a one full-stack engineer plus one frontend specialist working 
 
 **Status:** Partially shipped — NX-9 / Issue #466. `frontend/src/services/safety.service.ts` created; `HazardsPage` reads `useQuery(['hazards', projectId], …)` (no `MOCK_HAZARDS` import), and the `FmeaForm` worksheet persists rows to the real FMEA-row backend rendering the server `rpn`. Wiring the remaining ~15 mock Safety pages (Overview, Analyses landing/list/wizard, Traceability matrix, Impact, Libraries, Reviews, Audit Log, Exports, Settings) is deferred to NX-9-followup-D.
 
+**Follow-up — orphan `Fmea` on an abandoned wizard (deferred to NX-9-followup-D).** `WizardFmeaWorksheet` (`frontend/src/components/safety/FmeaForm.tsx`) lazily creates a real persisted `Fmea` row on first mount of wizard step 5, because the wizard's analysis entity is itself still mock (no stored analysis row to anchor a `Fmea` to). A user who opens the FMEA wizard step and abandons the wizard leaves an orphan (soft-deletable) `Fmea`. A correct fix needs real wizard-lifecycle rework — a draft-until-first-save promotion state machine plus a create-trigger wired to the wizard's Next action across `CreateAnalysisWizardPage` / `EditAnalysisWizardPage` — which is out of the NX-9 foundational slice's scope (`.claude/rules.md` §10). NX-9-followup-D lands the real analysis entity, which removes the lazy-create hack entirely; fix this there.
+
 **Goal:** Wire `frontend/src/services/safety.service.ts` to the new backend, replace all 18 `MOCK_*` imports with React Query hooks.
 
 **Steps:**
