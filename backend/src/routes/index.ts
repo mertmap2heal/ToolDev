@@ -73,9 +73,14 @@ router.use('/admin/user-roles', adminUserRoleRoutes)
 router.use('/organization', organizationRoutes)
 router.use('/platform-admin', platformAdminRoutes)
 router.use('/notifications', notificationsRoutes)
-// Mount components (PBS) before project so /projects/:projectId/components is matched
-router.use('/projects', componentsRoutes)
+// projectRoutes must mount before componentsRoutes. componentsRoutes applies a
+// blanket `router.use('/:projectId', ...)` that treats the first path segment as
+// a project id; mounted first it swallows the static POST /projects/import,
+// /bulk-update and /export routes and 404s them (#154). componentsRoutes' own
+// routes are all two-segment `/:projectId/components...`, which projectRoutes
+// does not shadow, so this order is safe both ways.
 router.use('/projects', projectRoutes)
+router.use('/projects', componentsRoutes)
 router.use('/projects', requirementsViewPreferencesRoutes)
 router.use('/workflow', workflowRoutes)
 router.use('/requirements', requirementsRoutes)
