@@ -1,59 +1,113 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import {
-  Search,
-  Filter,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-} from 'lucide-react'
-import { MOCK_HAZARDS } from '../../data/mockSafety'
-import type { Hazard } from '../../types/safety.types'
-import HazardDetailDrawer from '../../components/safety/HazardDetailDrawer'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Search, Filter, ChevronDown, ChevronUp, Plus, X } from 'lucide-react'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+import type { Hazard as MockHazard } from '../../types/safety.types'
+import HazardDetailDrawer from '../../components/safety/HazardDetailDrawer'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ErrorMessage from '../../components/common/ErrorMessage'
+import {
+  listHazards,
+  createHazard,
+  HAZARD_SEVERITIES,
+  HAZARD_STATUSES,
+  type SafetyHazard,
+  type HazardSeverity,
+} from '../../services/safety.service'
+
+// Severity rank for ordering (Catastrophic worst -> NoSafetyEffect best).
+// design-system.md §9: colour is not the only signal — the list sorts by this
+// rank so a colour-blind reader resolves severity by order + the pill word.
+const SEVERITY_RANK: Record<HazardSeverity, number> = {
+  Catastrophic: 0,
+  Hazardous: 1,
+  Major: 2,
+  Minor: 3,
+  NoSafetyEffect: 4,
+}
+
+// Severity pill — danger/warning status tokens, opacity-gradated (no new hues).
+const SEVERITY_PILL: Record<HazardSeverity, string> = {
+  Catastrophic: 'bg-status-danger/15 text-status-danger',
+  Hazardous: 'bg-status-danger/10 text-status-danger',
+  Major: 'bg-status-warning/15 text-status-warning',
+  Minor: 'bg-status-warning/10 text-status-warning',
+  NoSafetyEffect: 'bg-surface-inset text-ink-muted',
+}
+
+const SEVERITY_LABEL: Record<HazardSeverity, string> = {
+  Catastrophic: 'Catastrophic',
+  Hazardous: 'Hazardous',
+  Major: 'Major',
+  Minor: 'Minor',
+  NoSafetyEffect: 'No Safety Effect',
+}
+
+/**
+ * Adapt an API hazard to the shape HazardDetailDrawer (still mock-bodied,
+ * NX-9-followup-D) expects. Link counts are zero — a fresh real hazard has no
+ * cross-module links yet; that wiring is deferred.
+ */
+function toDrawerHazard(h: SafetyHazard): MockHazard {
+  return {
+    id: h.id,
+    identifier: h.identifier,
+    title: h.title,
+    description: h.description,
+    severity: SEVERITY_LABEL[h.severity] as MockHazard['severity'],
+    status: h.status as MockHazard['status'],
+    linkedRequirementsCount: 0,
+    linkedInterfacesCount: 0,
+    linkedVerificationCount: 0,
+    linkedChangeRequestsCount: 0,
+    updatedAt: h.updatedAt,
+  }
+}
 
 export default function HazardsPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const queryClient = useQueryClient()
+
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [severityFilter, setSeverityFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [missingReqs, setMissingReqs] = useState(false)
-  const [missingVer, setMissingVer] = useState(false)
-  const [missingIface, setMissingIface] = useState(false)
-  const [selectedHazard, setSelectedHazard] = useState<Hazard | null>(null)
+  const [selectedHazard, setSelectedHazard] = useState<SafetyHazard | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  const filteredHazards = useMemo(() => {
-    return MOCK_HAZARDS.filter((h) => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase()
-        if (
-          !h.title.toLowerCase().includes(q) &&
-          !h.identifier.toLowerCase().includes(q) &&
-          !h.description.toLowerCase().includes(q)
-        )
-          return false
-      }
-      if (severityFilter !== 'all' && h.severity !== severityFilter) return false
-      if (statusFilter !== 'all' && h.status !== statusFilter) return false
-      if (missingReqs && h.linkedRequirementsCount > 0) return false
-      if (missingVer && h.linkedVerificationCount > 0) return false
-      if (missingIface && h.linkedInterfacesCount > 0) return false
-      return true
-    })
-  }, [
-    searchQuery,
-    severityFilter,
-    statusFilter,
-    missingReqs,
-    missingVer,
-    missingIface,
-  ])
+  const {
+    data: hazards = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ['hazards', projectId, severityFilter, statusFilter],
+    queryFn: () =>
+      listHazards(projectId ?? '', {
+        severity: severityFilter === 'all' ? undefined : severityFilter,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+      }),
+    enabled: !!projectId,
+  })
 
-  const handleRowClick = (h: Hazard) => {
+  // Client-side text search over the server-filtered set.
+  const visibleHazards = hazards
+    .filter((h) => {
+      if (!searchQuery) return true
+      const q = searchQuery.toLowerCase()
+      return (
+        h.title.toLowerCase().includes(q) ||
+        h.identifier.toLowerCase().includes(q) ||
+        h.description.toLowerCase().includes(q)
+      )
+    })
+    .slice()
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+
+  const openDrawer = (h: SafetyHazard) => {
     setSelectedHazard(h)
     setIsDrawerOpen(true)
   }
@@ -62,22 +116,20 @@ export default function HazardsPage() {
     <div className="flex h-[calc(100vh-12rem)]">
       <div className="flex-1 flex flex-col overflow-hidden space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Hazards
-          </h2>
+          <h2 className="text-2xl font-bold text-ink-primary">Hazards</h2>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded text-sm font-medium transition-colors"
           >
-            <Plus size={16} />
+            <Plus size={14} />
             Create Hazard
           </button>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div className="bg-surface-raised border border-default rounded-md p-4">
           <div className="relative mb-4">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"
               size={18}
             />
             <input
@@ -85,187 +137,148 @@ export default function HazardsPage() {
               placeholder="Search hazards..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              aria-label="Search hazards"
+              className="w-full pl-10 pr-4 py-2 border border-default rounded bg-surface-base text-ink-primary"
             />
           </div>
 
           <button
             onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-            className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+            className="w-full flex items-center justify-between p-3 hover:bg-surface-inset rounded transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Filter size={16} className="text-gray-600 dark:text-gray-400" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Filters
-              </span>
+              <Filter size={14} className="text-ink-muted" />
+              <span className="text-sm font-medium text-ink-primary">Filters</span>
             </div>
             {isFiltersExpanded ? (
-              <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
+              <ChevronUp size={14} className="text-ink-muted" />
             ) : (
-              <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
+              <ChevronDown size={14} className="text-ink-muted" />
             )}
           </button>
           {isFiltersExpanded && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="mt-3 pt-3 border-t border-default grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <label
+                  htmlFor="hazard-severity-filter"
+                  className="block text-xs font-medium text-ink-muted mb-1"
+                >
                   Severity
                 </label>
                 <select
+                  id="hazard-severity-filter"
                   value={severityFilter}
                   onChange={(e) => setSeverityFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-default rounded bg-surface-base text-ink-primary text-sm"
                 >
                   <option value="all">All</option>
-                  <option value="Catastrophic">Catastrophic</option>
-                  <option value="Hazardous">Hazardous</option>
-                  <option value="Major">Major</option>
-                  <option value="Minor">Minor</option>
-                  <option value="No Safety Effect">No Safety Effect</option>
+                  {HAZARD_SEVERITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {SEVERITY_LABEL[s]}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <label
+                  htmlFor="hazard-status-filter"
+                  className="block text-xs font-medium text-ink-muted mb-1"
+                >
                   Status
                 </label>
                 <select
+                  id="hazard-status-filter"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-default rounded bg-surface-base text-ink-primary text-sm"
                 >
                   <option value="all">All</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Open">Open</option>
-                  <option value="Mitigated">Mitigated</option>
-                  <option value="Verified">Verified</option>
-                  <option value="Closed">Closed</option>
+                  {HAZARD_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div className="space-y-2">
-                <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                  Missing links
-                </span>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={missingReqs}
-                      onChange={(e) => setMissingReqs(e.target.checked)}
-                      className="rounded"
-                    />
-                    Missing Req links
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={missingVer}
-                      onChange={(e) => setMissingVer(e.target.checked)}
-                      className="rounded"
-                    />
-                    Missing Verification
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={missingIface}
-                      onChange={(e) => setMissingIface(e.target.checked)}
-                      className="rounded"
-                    />
-                    Missing Interfaces
-                  </label>
-                </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex-1 overflow-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
-              <tr>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  ID
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Title
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Severity
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Status
-                </th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Reqs
-                </th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Ifaces
-                </th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Verification
-                </th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  CRs
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                  Updated
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredHazards.map((h) => (
-                <tr
-                  key={h.id}
-                  onClick={() => handleRowClick(h)}
-                  className={clsx(
-                    'border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer',
-                    selectedHazard?.id === h.id && 'bg-blue-50 dark:bg-blue-900/20'
-                  )}
-                >
-                  <td className="py-3 px-4 text-gray-900 dark:text-white font-mono">
-                    {h.identifier}
-                  </td>
-                  <td className="py-3 px-4 text-gray-900 dark:text-white">{h.title}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={clsx(
-                        'px-2 py-0.5 rounded text-xs font-medium',
-                        h.severity === 'Catastrophic' &&
-                          'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-                        h.severity === 'Hazardous' &&
-                          'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400',
-                        h.severity === 'Major' &&
-                          'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400',
-                        (h.severity === 'Minor' || h.severity === 'No Safety Effect') &&
-                          'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                      )}
-                    >
-                      {h.severity}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-700 dark:text-gray-300">{h.status}</td>
-                  <td className="py-3 px-4 text-right text-gray-700 dark:text-gray-300">
-                    {h.linkedRequirementsCount}
-                  </td>
-                  <td className="py-3 px-4 text-right text-gray-700 dark:text-gray-300">
-                    {h.linkedInterfacesCount}
-                  </td>
-                  <td className="py-3 px-4 text-right text-gray-700 dark:text-gray-300">
-                    {h.linkedVerificationCount}
-                  </td>
-                  <td className="py-3 px-4 text-right text-gray-700 dark:text-gray-300">
-                    {h.linkedChangeRequestsCount}
-                  </td>
-                  <td className="py-3 px-4 text-gray-500 dark:text-gray-400">
-                    {format(new Date(h.updatedAt), 'PP')}
-                  </td>
+        <div className="flex-1 overflow-auto bg-surface-raised border border-default rounded-md">
+          {isLoading ? (
+            <LoadingSpinner label="Loading hazards…" />
+          ) : isError ? (
+            <ErrorMessage
+              message={`Could not load hazards. ${
+                (error as Error)?.message ?? 'Unknown error'
+              }. Retry, or check the project is selected.`}
+            />
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-surface-inset sticky top-0">
+                <tr>
+                  <th className="text-left py-3 px-4 font-medium text-ink-primary">ID</th>
+                  <th className="text-left py-3 px-4 font-medium text-ink-primary">Title</th>
+                  <th className="text-left py-3 px-4 font-medium text-ink-primary">
+                    Severity
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-ink-primary">DAL</th>
+                  <th className="text-left py-3 px-4 font-medium text-ink-primary">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-ink-primary">
+                    Updated
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredHazards.length === 0 && (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              No hazards match filters.
+              </thead>
+              <tbody>
+                {visibleHazards.map((h) => (
+                  <tr
+                    key={h.id}
+                    tabIndex={0}
+                    onClick={() => openDrawer(h)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') openDrawer(h)
+                    }}
+                    className={clsx(
+                      'border-t border-default hover:bg-surface-inset cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-border-strong',
+                      selectedHazard?.id === h.id && 'bg-surface-inset',
+                    )}
+                  >
+                    <td className="py-3 px-4 text-ink-primary font-mono text-xs">
+                      {h.identifier}
+                    </td>
+                    <td className="py-3 px-4 text-ink-primary">{h.title}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={clsx(
+                          'px-1.5 py-0.5 rounded-sm text-xs font-medium',
+                          SEVERITY_PILL[h.severity],
+                        )}
+                      >
+                        {SEVERITY_LABEL[h.severity]}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      {h.dal ? (
+                        <span className="px-1.5 py-0.5 rounded-sm bg-surface-inset text-ink-muted font-mono text-xs">
+                          {h.dal}
+                        </span>
+                      ) : (
+                        <span className="text-ink-faint">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-ink-muted">{h.status}</td>
+                    <td className="py-3 px-4 text-ink-faint">
+                      {format(new Date(h.updatedAt), 'PP')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!isLoading && !isError && visibleHazards.length === 0 && (
+            <div className="text-center py-12 text-ink-muted text-sm">
+              No hazards. Start the FHA with an aircraft-level hazard, then classify its
+              severity.
             </div>
           )}
         </div>
@@ -273,7 +286,7 @@ export default function HazardsPage() {
 
       <HazardDetailDrawer
         isOpen={isDrawerOpen}
-        hazard={selectedHazard}
+        hazard={selectedHazard ? toDrawerHazard(selectedHazard) : null}
         projectId={projectId ?? ''}
         onClose={() => {
           setIsDrawerOpen(false)
@@ -282,23 +295,142 @@ export default function HazardsPage() {
       />
 
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Create Hazard (placeholder)
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Create Hazard will be implemented later. UI stub only.
-            </p>
-            <button
-              onClick={() => setIsCreateModalOpen(false)}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+        <CreateHazardModal
+          projectId={projectId ?? ''}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ['hazards', projectId] })
+            setIsCreateModalOpen(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// --- Create modal -----------------------------------------------------------
+
+interface CreateHazardModalProps {
+  projectId: string
+  onClose: () => void
+  onCreated: (hazard: SafetyHazard) => void
+}
+
+function CreateHazardModal({ projectId, onClose, onCreated }: CreateHazardModalProps) {
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [severity, setSeverity] = useState<HazardSeverity>('Major')
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      createHazard(projectId, { title: title.trim(), description: description.trim(), severity }),
+    onSuccess: (hazard) => onCreated(hazard),
+  })
+
+  const canSubmit = title.trim().length > 0 && description.trim().length > 0
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-surface-raised rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-ink-primary">New hazard</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 text-ink-muted hover:bg-surface-inset rounded"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (canSubmit) mutation.mutate()
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label
+              htmlFor="hazard-title"
+              className="block text-xs font-medium text-ink-muted mb-1"
             >
-              Close
+              Title
+            </label>
+            <input
+              id="hazard-title"
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-default rounded bg-surface-base text-ink-primary text-sm"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="hazard-description"
+              className="block text-xs font-medium text-ink-muted mb-1"
+            >
+              Description
+            </label>
+            <textarea
+              id="hazard-description"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-default rounded bg-surface-base text-ink-primary text-sm"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="hazard-severity"
+              className="block text-xs font-medium text-ink-muted mb-1"
+            >
+              Severity
+            </label>
+            <select
+              id="hazard-severity"
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value as HazardSeverity)}
+              className="w-full px-3 py-2 border border-default rounded bg-surface-base text-ink-primary text-sm"
+            >
+              {HAZARD_SEVERITIES.map((s) => (
+                <option key={s} value={s}>
+                  {SEVERITY_LABEL[s]}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-ink-faint">
+              Severity sets the DAL (Catastrophic = DAL A … No Safety Effect = DAL E, per
+              DO-178C §6.3).
+            </p>
+          </div>
+
+          {mutation.isError && (
+            <p className="text-xs text-status-danger">
+              Could not create the hazard. {(mutation.error as Error)?.message ?? 'Retry.'}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-default rounded text-sm text-ink-primary hover:bg-surface-inset"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit || mutation.isPending}
+              className="px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded text-sm font-medium disabled:opacity-50"
+            >
+              {mutation.isPending ? 'Creating…' : 'Create hazard'}
             </button>
           </div>
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   )
 }

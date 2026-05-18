@@ -58,6 +58,7 @@ import searchRoutes from './search.routes'
 import requirementsViewPreferencesRoutes from './requirementsViewPreferences.routes'
 import validationRoutes from './validation.routes'
 import configItemsRoutes from './configItems.routes'
+import safetyRoutes from './safety.routes'
 import deviationsWaiversRoutes from './deviationsWaivers.routes'
 import ccbDecisionsRoutes from './ccbDecisions.routes'
 import stakeholdersRoutes from './stakeholders.routes'
@@ -145,6 +146,8 @@ router.use('/search', searchRoutes)
 router.use('/validation', validationRoutes)
 // NX-3 (#443) — Configuration Management primitives.
 router.use('/config-items', configItemsRoutes)
+// NX-9 (#466) — Safety Analysis: Hazard + FMEA foundation.
+router.use('/safety-analysis', safetyRoutes)
 router.use('/deviations-waivers', deviationsWaiversRoutes)
 router.use('/ccb-decisions', ccbDecisionsRoutes)
 // NX-8 (#463) — Stakeholders governance: committees + RACI. Mounted on
