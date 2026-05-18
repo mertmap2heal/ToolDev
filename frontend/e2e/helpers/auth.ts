@@ -8,6 +8,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const CREDS_FILE = path.join(__dirname, '../.auth/creds.json')
 
+/**
+ * Dedicated Playwright e2e test account — the default credential the suite
+ * authenticates with. This account is seeded into the dev DB by
+ * `backend/src/scripts/seed-e2e-user.ts` (run automatically by `start.ps1`),
+ * so a fresh checkout authenticates with zero hand-config.
+ *
+ * THE CREDENTIAL CONTRACT: these two constants MUST stay byte-identical to
+ * `E2E_USER_EMAIL` / `E2E_USER_PASSWORD` in
+ * `backend/src/scripts/seed-e2e-user.ts`. They cannot share an import — that
+ * file lives in the `backend/` package. Change one, change the other.
+ *
+ * This is a deliberate, non-secret test fixture, not a real account: it is
+ * safe to commit and only ever exists in a dev/test DB.
+ */
+const E2E_DEFAULT_USERNAME = 'e2e@example.com'
+const E2E_DEFAULT_PASSWORD = 'e2e-test-password-123'
+
 function loadCreds() {
   if (fs.existsSync(CREDS_FILE)) {
     try { return JSON.parse(fs.readFileSync(CREDS_FILE, 'utf8')) } catch (_e) {}
@@ -15,17 +32,19 @@ function loadCreds() {
   return null
 }
 
+/**
+ * Resolve the login credential, in priority order:
+ *   1. E2E_USERNAME / E2E_PASSWORD env vars      (CI / custom account)
+ *   2. frontend/e2e/.auth/creds.json             (a prior password rotation)
+ *   3. the dedicated e2e@example.com test account (default — self-seeded)
+ *
+ * The fallback to (3) means the suite never fails for "missing credentials":
+ * the seed script guarantees that account exists in any dev/test DB.
+ */
 function resolveCreds(): { username: string; password: string } {
   const fromFile = loadCreds()
-  const username = process.env.E2E_USERNAME ?? fromFile?.username
-  const password = process.env.E2E_PASSWORD ?? fromFile?.password
-  if (!username || !password) {
-    throw new Error(
-      'E2E credentials missing. Set E2E_USERNAME and E2E_PASSWORD environment variables, ' +
-      'or create frontend/e2e/.auth/creds.json with {"username":"...","password":"..."} ' +
-      '(see backend/.env.example for documentation).',
-    )
-  }
+  const username = process.env.E2E_USERNAME ?? fromFile?.username ?? E2E_DEFAULT_USERNAME
+  const password = process.env.E2E_PASSWORD ?? fromFile?.password ?? E2E_DEFAULT_PASSWORD
   return { username, password }
 }
 
@@ -60,9 +79,16 @@ export async function loginViaUI(page: Page): Promise<void> {
     await page.getByRole('button', { name: /update password/i }).click()
     await expect(changePasswordModal).not.toBeVisible({ timeout: 10_000 })
     TEST_USER.password = newPass
-    // Persist so the next `npm run test:e2e` uses the updated password
-    fs.mkdirSync(path.dirname(CREDS_FILE), { recursive: true })
-    fs.writeFileSync(CREDS_FILE, JSON.stringify({ username: TEST_USER.username, password: newPass }))
+    // Persist the rotated password so the next run reuses it — but ONLY for a
+    // custom (env-var / file) account. The self-seeded e2e@example.com account
+    // owns its password in the seed script (re-applied every `start.ps1`); a
+    // stale creds.json would override the seeded password and break the next
+    // run. That account has mustChangePasswordOnFirstLogin=false so it never
+    // reaches this branch — this guard is belt-and-braces.
+    if (TEST_USER.username !== E2E_DEFAULT_USERNAME) {
+      fs.mkdirSync(path.dirname(CREDS_FILE), { recursive: true })
+      fs.writeFileSync(CREDS_FILE, JSON.stringify({ username: TEST_USER.username, password: newPass }))
+    }
   }
 
   fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true })

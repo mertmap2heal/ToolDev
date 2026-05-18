@@ -13,6 +13,7 @@
     "prisma:studio": "prisma studio",
     "check-db": "tsx src/scripts/check-and-fix-projects.ts",
     "seed:users": "tsx src/scripts/seed-users.ts",
+    "seed:e2e-user": "tsx src/scripts/seed-e2e-user.ts",
     "seed:engineering-roles": "tsx src/scripts/seed-engineering-roles.ts",
     "seed:mocs": "tsx prisma/seed-mocs.ts",
     "seed:test-case": "tsx src/scripts/seed-test-case.ts",
