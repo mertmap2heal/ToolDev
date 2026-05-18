@@ -44,7 +44,7 @@ export const getProjectAuditLogs = async (req: AuthRequest, res: Response) => {
       const logs = await prisma.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        include: { user: true },
+        include: { user: { select: SAFE_USER_SELECT } },
       });
       res.json({ success: true, data: logs });
       return;
@@ -59,7 +59,7 @@ export const getProjectAuditLogs = async (req: AuthRequest, res: Response) => {
       prisma.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        include: { user: true },
+        include: { user: { select: SAFE_USER_SELECT } },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -214,6 +214,7 @@ import { Response } from 'express'
 import type { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import { SAFE_USER_SELECT } from '../lib/safeUserSelect'
 
 
 function slugFromName(name: string): string {
