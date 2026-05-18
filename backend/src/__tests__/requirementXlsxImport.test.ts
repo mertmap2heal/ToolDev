@@ -310,6 +310,81 @@ describe('Requirements Excel import (NX-4-followup, #450)', () => {
       expect(res.body.data.errors).toHaveLength(0)
     })
 
+    it('drops hostile / protected columns — a commit row cannot mass-assign id, projectId, or provenance fields', async () => {
+      // Regression for the mass-assignment allowlist (PR #458 security review).
+      // validateCreateRow builds the tx.requirement.create data object
+      // field-by-field — it never spreads ...row — so a hostile spreadsheet
+      // column named after a protected field (the Prisma primary key, the
+      // server-set projectId, createdAt, or an R-1 provenance-lattice field)
+      // must NOT reach the DB. The row still imports; the hostile values are
+      // silently dropped and the requirement is stamped to the route's project
+      // with the schema-default provenance.
+      const HOSTILE_PROJECT_ID = '00000000-0000-0000-0000-000000000000'
+      const HOSTILE_ID = 'hostile-primary-key-value'
+      const uniqueTitle = `Mass-assign attempt ${stamp}`
+      const res = await request(app)
+        .post(`/api/v1/requirements/${projectId}/import/xlsx/commit`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({
+          create: [
+            {
+              title: uniqueTitle,
+              description: 'When the system arms, the system shall confirm the state within 100ms.',
+              _rowNumber: 2,
+              // ── hostile columns — every one must be dropped ──
+              id: HOSTILE_ID,
+              projectId: HOSTILE_PROJECT_ID,
+              authorType: 'ai_applied',
+              authorAiModel: 'evil-model',
+              provenanceReviewStatus: 'signed_off',
+              reviewerUserId: outsiderUserId,
+              userId: outsiderUserId,
+              createdAt: '2000-01-01T00:00:00.000Z',
+              updatedAt: '2000-01-01T00:00:00.000Z',
+              version: 999,
+              isLocked: true,
+              deletedAt: '2000-01-01T00:00:00.000Z',
+            },
+          ],
+          columnMap: { title: 'Title', description: 'Description' },
+          filename: 'mass-assign.xlsx',
+        })
+
+      // The row imported — hostile columns do not break the commit.
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.created).toBe(1)
+      expect(res.body.data.errors).toHaveLength(0)
+
+      // The created requirement is found ONLY under the route's project — the
+      // hostile projectId did not redirect the write to another tenant.
+      const hostileScoped = await prisma.requirement.findFirst({
+        where: { projectId: HOSTILE_PROJECT_ID, title: uniqueTitle },
+      })
+      expect(hostileScoped).toBeNull()
+
+      const created = await prisma.requirement.findFirst({
+        where: { projectId, title: uniqueTitle },
+      })
+      expect(created).not.toBeNull()
+      // projectId is the route param, never the spreadsheet cell.
+      expect(created?.projectId).toBe(projectId)
+      // The primary key is a fresh server UUID, not the hostile string.
+      expect(created?.id).not.toBe(HOSTILE_ID)
+      // The R-1 provenance lattice carries its schema defaults — a spreadsheet
+      // column cannot stamp the row as AI-authored or pre-signed-off.
+      expect(created?.authorType).toBe('human')
+      expect(created?.authorAiModel).toBeNull()
+      expect(created?.provenanceReviewStatus).toBe('drafted')
+      expect(created?.reviewerUserId).toBeNull()
+      // version starts at 1, not the hostile 999; the row is not soft-deleted
+      // and not locked; createdAt is recent, not the hostile epoch date.
+      expect(created?.version).toBe(1)
+      expect(created?.deletedAt).toBeNull()
+      expect(created?.isLocked).toBe(false)
+      expect(created!.createdAt.getTime()).toBeGreaterThan(stamp - 60_000)
+    })
+
     it('partial success: a mix of valid and invalid rows imports the valid subset and reports the invalid per-cell', async () => {
       // 5 rows, 2 invalid (rows 3 and 5 have no description).
       const res = await request(app)
