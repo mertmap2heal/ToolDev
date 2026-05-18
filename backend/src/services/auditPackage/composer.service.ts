@@ -1,19 +1,23 @@
 // N-2.2 (#425) — the opinionated audit-package content composer.
 //
 // `composePsac(projectId)` is a pure function: a project id in, a structured
-// `ComposedAuditPackage` out. No rendering, no Prisma writes. It walks the
-// artefact graph CertObjective -> CertObjectiveRequirementLink -> Requirement
-// -> TraceLink -> VerTestResult -> VerEvidence -> SignatureEvent.
+// `ComposedAuditPackage` out. No rendering, no Prisma writes.
 //
-// Every cross-table join uses ONE batched `findMany({ where: { id: { in } } })`
-// and is then joined in-memory with a Map. There is no per-row query — the
-// query count is constant (~9), independent of the requirement count. This is
-// what makes the <=30s SLA for ~1k requirements hold.
+// The artefact-graph walk (CertObjective -> CertObjectiveRequirementLink ->
+// Requirement -> TraceLink -> VerTestResult -> VerEvidence -> SignatureEvent)
+// was extracted to the shared `certGraph.service.ts` (NX-7, #460) so this PSAC
+// composer AND the objective-completion matrix consume ONE traversal. The walk
+// runs a constant number of batched `findMany({ where: { id: { in } } })`
+// queries — independent of the requirement count — which is what makes the
+// <=30s SLA for ~1k requirements hold. This composer adds only its own
+// PSAC-specific in-memory assembly on top of the resolved graph (plus one
+// extra CertMilestone query the matrix does not need).
 //
 // It tolerates empty SignatureEvent chains: requirement sign-off is not wired
 // to SignatureEvent yet (R-3 is a primitive; consumers wire it per ticket), so
 // a requirement's signatureChain is simply an empty array where unsigned.
 import { prisma } from '../../lib/prisma'
+import { walkObjectiveGraph } from '../certGraph.service'
 import type {
   ComposedAuditPackage,
   ComposedEvidence,
@@ -22,18 +26,6 @@ import type {
   ComposedSignature,
   ComposedMilestone,
 } from './types'
-
-/** Group an array into a Map keyed by a derived value. */
-function groupBy<T, K>(items: T[], keyOf: (item: T) => K): Map<K, T[]> {
-  const map = new Map<K, T[]>()
-  for (const item of items) {
-    const key = keyOf(item)
-    const bucket = map.get(key)
-    if (bucket) bucket.push(item)
-    else map.set(key, [item])
-  }
-  return map
-}
 
 /** Distinct, order-preserving. */
 function distinct(values: string[]): string[] {
@@ -63,88 +55,22 @@ export async function composePsac(projectId: string): Promise<ComposedAuditPacka
     standards: (ctx?.standards as string[] | undefined) ?? ['ARP4754A', 'DO-178C'],
   }
 
-  // --- Step 2: objectives + their requirement links (1 query, include) ---
-  const objectives = await prisma.certObjective.findMany({
-    where: { projectId },
-    orderBy: { objId: 'asc' },
-    include: { requirementLinks: true },
-  })
+  // --- Step 2: the certification artefact graph (shared traversal) ---
+  // One constant-query-count walk; the composer reuses every resolved index.
+  const graph = await walkObjectiveGraph(projectId)
+  const {
+    objectives,
+    requirementById,
+    traceLinksBySource,
+    testResultById,
+    evidenceById,
+    evidenceLinksByRequirement,
+    signaturesByRequirement,
+    supersededSignatureIds: supersededIds,
+    signerNameById,
+  } = graph
 
-  // Collect every linked requirement id across all objectives.
-  const requirementIds = distinct(
-    objectives.flatMap((o) => o.requirementLinks.map((l) => l.requirementId)),
-  )
-
-  // --- Step 3: the linked requirements in one batched query ---
-  const requirements = requirementIds.length
-    ? await prisma.requirement.findMany({
-        where: { id: { in: requirementIds } },
-      })
-    : []
-  const requirementById = new Map(requirements.map((r) => [r.id, r]))
-
-  // --- Step 4: trace links + their test results ---
-  // Requirement -> verification trace links (one query, scoped to the project).
-  const traceLinks = requirementIds.length
-    ? await prisma.traceLink.findMany({
-        where: { projectId, sourceId: { in: requirementIds } },
-      })
-    : []
-  const traceLinksBySource = groupBy(traceLinks, (t) => t.sourceId)
-
-  // The trace-link targets that are test results. linkType 'verifies' or a
-  // target type naming a test result; we keep every distinct target id and
-  // resolve which are real VerTestResult rows with one batched query.
-  const traceTargetIds = distinct(traceLinks.map((t) => t.targetId))
-  const testResults = traceTargetIds.length
-    ? await prisma.verTestResult.findMany({
-        where: { projectId, id: { in: traceTargetIds } },
-      })
-    : []
-  const testResultById = new Map(testResults.map((tr) => [tr.id, tr]))
-
-  // --- Step 5: evidence index — VerEvidenceLink -> VerEvidence ---
-  // Evidence linked directly to a requirement (linkedEntityId is the requirement id).
-  const evidenceLinks = requirementIds.length
-    ? await prisma.verEvidenceLink.findMany({
-        where: { linkedEntityId: { in: requirementIds } },
-      })
-    : []
-  const evidenceIds = distinct(evidenceLinks.map((l) => l.evidenceId))
-  const evidenceRows = evidenceIds.length
-    ? await prisma.verEvidence.findMany({
-        where: { projectId, id: { in: evidenceIds } },
-      })
-    : []
-  const evidenceById = new Map(evidenceRows.map((e) => [e.id, e]))
-  // requirementId -> evidence id[]
-  const evidenceIdsByRequirement = groupBy(evidenceLinks, (l) => l.linkedEntityId)
-
-  // --- Step 6: signature chains — one batched SignatureEvent query ---
-  const signatureRows = requirementIds.length
-    ? await prisma.signatureEvent.findMany({
-        where: { linkedEntityType: 'Requirement', linkedEntityId: { in: requirementIds } },
-        orderBy: { signedAt: 'asc' },
-      })
-    : []
-  // The set of signature rows that have been superseded (their id appears as
-  // someone else's supersededById).
-  const supersededIds = new Set(
-    signatureRows.map((s) => s.supersededById).filter((v): v is string => Boolean(v)),
-  )
-  const signaturesByRequirement = groupBy(signatureRows, (s) => s.linkedEntityId)
-
-  // Resolve signer display names in one batched query.
-  const signerIds = distinct(signatureRows.map((s) => s.signerUserId))
-  const signers = signerIds.length
-    ? await prisma.user.findMany({
-        where: { id: { in: signerIds } },
-        select: { id: true, name: true },
-      })
-    : []
-  const signerNameById = new Map(signers.map((u) => [u.id, u.name]))
-
-  // --- Step 7: milestones for the Schedule section (1 query) ---
+  // --- Step 3: milestones for the Schedule section (1 query) ---
   const milestoneRows = await prisma.certMilestone.findMany({
     where: { projectId },
     orderBy: { date: 'asc' },
@@ -156,7 +82,7 @@ export async function composePsac(projectId: string): Promise<ComposedAuditPacka
     status: m.status,
   }))
 
-  // --- Step 8: assemble in-memory — no I/O past this point ---
+  // --- Step 4: assemble in-memory — no I/O past this point ---
   let signatureCount = 0
   const composedObjectives: ComposedObjective[] = objectives.map((obj) => {
     const composedRequirements: ComposedRequirement[] = obj.requirementLinks
@@ -202,7 +128,7 @@ export async function composePsac(projectId: string): Promise<ComposedAuditPacka
     // satisfying requirements, de-duplicated.
     const objEvidenceIds = distinct(
       obj.requirementLinks.flatMap((link) =>
-        (evidenceIdsByRequirement.get(link.requirementId) ?? []).map((l) => l.evidenceId),
+        (evidenceLinksByRequirement.get(link.requirementId) ?? []).map((l) => l.evidenceId),
       ),
     )
     const evidence: ComposedEvidence[] = objEvidenceIds
