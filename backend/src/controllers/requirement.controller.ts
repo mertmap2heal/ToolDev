@@ -33,6 +33,13 @@ import {
   type ValidatedCreate,
   type ValidatedUpdate,
 } from '../services/requirementBulkImport.helpers'
+import {
+  parseRequirementsXlsx,
+  substrateErrorToCellError,
+  qualityWarningsForRow,
+  XlsxParseError,
+  type CellError,
+} from '../services/requirementXlsxImport.service'
 import fs from 'fs'
 import path from 'path'
 
@@ -160,7 +167,17 @@ const checkLock = (requirement: any, userId: string | undefined): boolean => {
 
 
 // Helper function to generate requirement ID based on classification
-async function generateRequirementId(projectId: string): Promise<string> {
+//
+// `reservedIds` (lowercased) lets a multi-row batch hand out distinct ids:
+// `generateRequirementId` reads MAX() of COMMITTED rows, so within one
+// uncommitted bulk-import batch every call would otherwise return the same
+// `REQ-NNN` and collide on the unique (projectId, requirementId) index at
+// commit time. The caller threads the set of ids already reserved this batch,
+// and this function bumps the counter past any of them.
+async function generateRequirementId(
+  projectId: string,
+  reservedIds?: Set<string>,
+): Promise<string> {
   // Single O(1) query — avoids the full-table-scan + JS iteration that caused the
   // race condition documented in GitHub issue #91.
   const rows = await prisma.$queryRaw<Array<{ max: number | null }>>`
@@ -173,7 +190,14 @@ async function generateRequirementId(projectId: string): Promise<string> {
   `
   const raw = rows[0]?.max
   const current = raw == null ? 0 : (typeof raw === 'bigint' ? Number(raw) : Number(raw))
-  return `REQ-${(current + 1).toString().padStart(3, '0')}`
+  let next = current + 1
+  // Skip past any id already handed out (but not yet committed) this batch.
+  if (reservedIds && reservedIds.size > 0) {
+    while (reservedIds.has(`req-${next.toString().padStart(3, '0')}`)) {
+      next += 1
+    }
+  }
+  return `REQ-${next.toString().padStart(3, '0')}`
 }
 
 // Helper function to check for circular references
@@ -3192,6 +3216,144 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
   }
 }
 
+/**
+ * The phase-1-validate + phase-2-commit core of a requirements bulk import,
+ * extracted (#450) so both `bulkImportRequirements` (the existing JSON
+ * `/bulk-import` endpoint) and the new `.xlsx` import path share one
+ * substrate. It performs NO audit logging and sends NO HTTP response — the
+ * caller owns both.
+ *
+ * Behaviour, unchanged from the original inline body:
+ *  - Phase 1 validates every row with `validateCreateRow` / `validateUpdateRow`;
+ *    validation-invalid rows are collected into `errors[]` and skipped while
+ *    valid rows proceed (the documented partial-success model).
+ *  - Phase 2 commits all valid rows in ONE `prisma.$transaction`, so a
+ *    DB-level fault (a locked row P2025, a slipped-through unique collision)
+ *    rolls back the WHOLE batch — `#92`'s "no partial imports on a DB fault".
+ *
+ * Throws on a DB-level fault (the caller maps P2025 -> 4xx). Returns the
+ * `{ created, updated, skipped, errors }` counts on success; `errors` carries
+ * the substrate's `{ row, errors }` shape where `row` is the 0-based index
+ * into the combined create-then-update sequence.
+ */
+async function runBulkImport(
+  projectId: string,
+  userId: string | undefined,
+  createRows: CreateRowInput[],
+  updateRows: UpdateRowInput[],
+): Promise<{ created: number; updated: number; skipped: number; errors: RowError[] }> {
+  const errors: RowError[] = []
+
+  // ─── Phase 1: pre-fetch lookup state once, then validate every row ────────
+  const allProjectReqs = await prisma.requirement.findMany({
+    where: { projectId },
+    select: { id: true, requirementId: true },
+  })
+  const existingRequirementIds = new Set(
+    allProjectReqs.map((r) => (r.requirementId ?? '').toLowerCase()).filter(Boolean),
+  )
+  const existingRequirementUuids = new Set(allProjectReqs.map((r) => r.id))
+
+  const updateIds = updateRows.map((r) => r.id).filter(Boolean)
+  const existingUpdateRows = updateIds.length
+    ? await prisma.requirement.findMany({ where: { projectId, id: { in: updateIds } } })
+    : []
+  const existingByUuid = new Map(existingUpdateRows.map((r) => [r.id, r]))
+
+  const validCreates: ValidatedCreate[] = []
+  const validUpdates: ValidatedUpdate[] = []
+
+  const createCtx: CreateRowContext = {
+    projectId,
+    existingRequirementIds,
+    existingRequirementUuids,
+    // Pass the running set of reserved ids so two create rows in the same
+    // batch — neither carrying its own requirementId — get distinct generated
+    // ids and do not collide on the unique index at commit time. The loop
+    // below adds each handed-out id to `existingRequirementIds`.
+    generateRequirementId: () => generateRequirementId(projectId, existingRequirementIds),
+    checkCircularReference,
+  }
+  const updateCtx: UpdateRowContext = {
+    projectId,
+    existingByUuid,
+    existingRequirementUuids,
+    checkCircularReference,
+  }
+
+  for (let i = 0; i < createRows.length; i++) {
+    const result = await validateCreateRow(createRows[i], i, createCtx)
+    if ('valid' in result) {
+      validCreates.push(result.valid)
+      // Reserve the new id locally so a duplicate later in the same batch is caught.
+      const newId = result.valid.data.requirementId as string
+      if (newId) existingRequirementIds.add(newId.toLowerCase())
+    } else {
+      errors.push({ row: i, errors: result.invalid })
+    }
+  }
+  for (let i = 0; i < updateRows.length; i++) {
+    const result = await validateUpdateRow(updateRows[i], i, updateCtx)
+    if ('valid' in result) {
+      validUpdates.push(result.valid)
+    } else {
+      errors.push({ row: createRows.length + i, errors: result.invalid })
+    }
+  }
+
+  let createdCount = 0
+  let updatedCount = 0
+  const skippedCount = errors.length
+
+  // ─── Phase 2: commit every valid row in a single transaction (#226) ──────
+  // Any DB-level failure (locked row P2025, unique-constraint collision, etc.)
+  // throws here and rolls back the entire batch — no partial imports (#92).
+  const updateNotifications: Array<() => void> = []
+  if (validCreates.length || validUpdates.length) {
+    await prisma.$transaction(async (tx) => {
+      for (const c of validCreates) {
+        await tx.requirement.create({ data: c.data as any })
+        createdCount++
+      }
+      for (const u of validUpdates) {
+        // Snapshot threaded with tx (#224) — rolls back with the parent batch.
+        await createVersionSnapshot(
+          u.existing.id,
+          projectId,
+          userId,
+          undefined,
+          'Updated via bulk import',
+          tx,
+        )
+        // isLocked: false guard preserves #34 behaviour — locked rows abort the tx.
+        const updatedRequirement = await tx.requirement.update({
+          where: { id: u.existing.id, isLocked: false },
+          data: u.data as any,
+        })
+        const changes = buildRequirementChangeSummary(u.existing, updatedRequirement as any)
+        updateNotifications.push(() => {
+          notifyRequirementSubscribers({
+            projectId,
+            requirementId: updatedRequirement.id,
+            actorUserId: userId,
+            changes,
+            requirementSnapshot: {
+              id: updatedRequirement.id,
+              requirementId: updatedRequirement.requirementId,
+              title: updatedRequirement.title,
+            },
+          }).catch(console.error)
+        })
+        updatedCount++
+      }
+    })
+  }
+  // Notifications fire only after commit — never publish state that rolled back.
+  for (const fn of updateNotifications) fn()
+
+  return { created: createdCount, updated: updatedCount, skipped: skippedCount, errors }
+}
+
 export const bulkImportRequirements = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
@@ -3222,110 +3384,8 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
       performedByUserId: req.userId,
     })
 
-    const errors: RowError[] = []
-
-    // ─── Phase 1: pre-fetch lookup state once, then validate every row ────────
-    const allProjectReqs = await prisma.requirement.findMany({
-      where: { projectId },
-      select: { id: true, requirementId: true },
-    })
-    const existingRequirementIds = new Set(
-      allProjectReqs.map((r) => (r.requirementId ?? '').toLowerCase()).filter(Boolean),
-    )
-    const existingRequirementUuids = new Set(allProjectReqs.map((r) => r.id))
-
-    const updateIds = updateRows.map((r) => r.id).filter(Boolean)
-    const existingUpdateRows = updateIds.length
-      ? await prisma.requirement.findMany({ where: { projectId, id: { in: updateIds } } })
-      : []
-    const existingByUuid = new Map(existingUpdateRows.map((r) => [r.id, r]))
-
-    const validCreates: ValidatedCreate[] = []
-    const validUpdates: ValidatedUpdate[] = []
-
-    const createCtx: CreateRowContext = {
-      projectId,
-      existingRequirementIds,
-      existingRequirementUuids,
-      generateRequirementId: () => generateRequirementId(projectId),
-      checkCircularReference,
-    }
-    const updateCtx: UpdateRowContext = {
-      projectId,
-      existingByUuid,
-      existingRequirementUuids,
-      checkCircularReference,
-    }
-
-    for (let i = 0; i < createRows.length; i++) {
-      const result = await validateCreateRow(createRows[i], i, createCtx)
-      if ('valid' in result) {
-        validCreates.push(result.valid)
-        // Reserve the new id locally so a duplicate later in the same batch is caught.
-        const newId = result.valid.data.requirementId as string
-        if (newId) existingRequirementIds.add(newId.toLowerCase())
-      } else {
-        errors.push({ row: i, errors: result.invalid })
-      }
-    }
-    for (let i = 0; i < updateRows.length; i++) {
-      const result = await validateUpdateRow(updateRows[i], i, updateCtx)
-      if ('valid' in result) {
-        validUpdates.push(result.valid)
-      } else {
-        errors.push({ row: createRows.length + i, errors: result.invalid })
-      }
-    }
-
-    let createdCount = 0
-    let updatedCount = 0
-    const skippedCount = errors.length
-
-    // ─── Phase 2: commit every valid row in a single transaction (#226) ──────
-    // Any DB-level failure (locked row P2025, unique-constraint collision, etc.)
-    // throws here and rolls back the entire batch — no partial imports (#92).
-    const updateNotifications: Array<() => void> = []
-    if (validCreates.length || validUpdates.length) {
-      await prisma.$transaction(async (tx) => {
-        for (const c of validCreates) {
-          await tx.requirement.create({ data: c.data as any })
-          createdCount++
-        }
-        for (const u of validUpdates) {
-          // Snapshot threaded with tx (#224) — rolls back with the parent batch.
-          await createVersionSnapshot(
-            u.existing.id,
-            projectId,
-            req.userId,
-            undefined,
-            'Updated via bulk import',
-            tx,
-          )
-          // isLocked: false guard preserves #34 behaviour — locked rows abort the tx.
-          const updatedRequirement = await tx.requirement.update({
-            where: { id: u.existing.id, isLocked: false },
-            data: u.data as any,
-          })
-          const changes = buildRequirementChangeSummary(u.existing, updatedRequirement as any)
-          updateNotifications.push(() => {
-            notifyRequirementSubscribers({
-              projectId,
-              requirementId: updatedRequirement.id,
-              actorUserId: req.userId,
-              changes,
-              requirementSnapshot: {
-                id: updatedRequirement.id,
-                requirementId: updatedRequirement.requirementId,
-                title: updatedRequirement.title,
-              },
-            }).catch(console.error)
-          })
-          updatedCount++
-        }
-      })
-    }
-    // Notifications fire only after commit — never publish state that rolled back.
-    for (const fn of updateNotifications) fn()
+    const { created: createdCount, updated: updatedCount, skipped: skippedCount, errors } =
+      await runBulkImport(projectId, req.userId, createRows, updateRows)
 
     res.json({
       success: true,
@@ -3378,6 +3438,264 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
     }
 
     res.status(500).json({
+      success: false,
+      error: errorMsg,
+    })
+  }
+}
+
+/**
+ * POST /requirements/:projectId/import/xlsx/parse  (#450)
+ *
+ * The UPLOAD phase of the Excel import. Accepts a `multipart/form-data` body
+ * with a `file` field, parses the `.xlsx` SERVER-SIDE with `exceljs`, and
+ * returns the first worksheet's header row + data rows so the wizard can run
+ * its column-mapping step. No requirements are written here.
+ *
+ * Tenant scope is inherited from the `requirements.routes.ts` router chain
+ * (`authenticateToken` -> `projectIdParam` -> `requireProjectMember`).
+ *
+ * Parse-level failure is all-or-nothing: a non-`.xlsx`, a header-less sheet,
+ * or an over-row file (> 10 000 data rows) returns 422 with nothing parsed —
+ * you cannot partially trust a file you cannot parse.
+ */
+export const importRequirementsXlsxParse = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    // multer.memoryStorage() attaches the uploaded file at req.file.
+    const file = (req as unknown as { file?: { buffer: Buffer; originalname: string } }).file
+    if (!file || !file.buffer) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded. Attach an .xlsx file in the "file" field.',
+      })
+    }
+
+    let parsed
+    try {
+      parsed = await parseRequirementsXlsx(file.buffer)
+    } catch (e) {
+      if (e instanceof XlsxParseError) {
+        // Parse-level failure -> 422. Nothing was imported.
+        return res.status(422).json({ success: false, error: e.message })
+      }
+      throw e
+    }
+
+    if (parsed.rows.length === 0) {
+      return res.status(422).json({
+        success: false,
+        error:
+          'This spreadsheet has no data rows. Add at least one requirement row below the header and re-upload.',
+      })
+    }
+
+    // Audit: a parse is the start of an import attempt (project-wide).
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'REQUIREMENTS_IMPORT_STARTED',
+      oldValue: null,
+      newValue: {
+        kind: 'xlsx_import',
+        phase: 'parse',
+        filename: file.originalname,
+        rowCount: parsed.rows.length,
+      },
+      performedByUserId: req.userId,
+    })
+
+    return res.json({
+      success: true,
+      data: {
+        headers: parsed.headers,
+        sheetName: parsed.sheetName,
+        // Each row keeps its 1-based spreadsheet row number so a downstream
+        // per-cell error can name the cell the way Excel shows it.
+        rows: parsed.rows.map((r) => ({ rowNumber: r.rowNumber, cells: r.cells })),
+      },
+    })
+  } catch (error: any) {
+    console.error('XLSX import parse error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Internal server error',
+    })
+  }
+}
+
+/**
+ * A row in the `.xlsx` commit-phase payload. The wizard has already applied
+ * its (client-side) column mapping, so each row carries the requirement
+ * fields plus `_rowNumber` — the 1-based spreadsheet row the cell came from,
+ * used only to address per-cell errors back to the user's file.
+ */
+interface XlsxCommitCreateRow extends CreateRowInput {
+  _rowNumber?: number
+}
+interface XlsxCommitUpdateRow {
+  id: string
+  data: CreateRowInput
+  _rowNumber?: number
+}
+
+/**
+ * POST /requirements/:projectId/import/xlsx/commit  (#450)
+ *
+ * The COMMIT phase of the Excel import. Accepts the wizard's mapped
+ * `{ create, update }` rows (each carrying `_rowNumber` + the resolved
+ * `columnMap`), runs them through the SAME `runBulkImport` substrate the JSON
+ * `/bulk-import` endpoint uses, and returns a PER-CELL validation report.
+ *
+ * Two-tier success model:
+ *  - Row-level: validation-invalid rows are reported per-cell and skipped;
+ *    validation-valid rows commit (partial success).
+ *  - DB-level: a genuine DB fault (a locked target row) rolls the whole batch
+ *    back and returns a 4xx — nothing is partially written.
+ *
+ * INCOSE/EARS quality findings on imported descriptions are folded into the
+ * report as `warning`-severity entries; they never block the import.
+ */
+export const importRequirementsXlsxCommit = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { create, update, columnMap, filename } = req.body as {
+      create?: XlsxCommitCreateRow[]
+      update?: XlsxCommitUpdateRow[]
+      columnMap?: Record<string, string>
+      filename?: string
+    }
+
+    const createRows: XlsxCommitCreateRow[] = Array.isArray(create) ? create : []
+    const updateRows: XlsxCommitUpdateRow[] = Array.isArray(update) ? update : []
+
+    if (createRows.length === 0 && updateRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No requirements to import',
+      })
+    }
+
+    // field -> file-header map, so a substrate error can name the user's
+    // actual spreadsheet column (e.g. a "priority" error -> "Priority").
+    const headerByField = new Map<string, string>(Object.entries(columnMap ?? {}))
+    const descriptionColumn = headerByField.get('description') ?? 'Description'
+
+    // The 0-based index runBulkImport reports in errors[].row -> the
+    // 1-based spreadsheet row number. Create rows come first, then updates.
+    const rowNumberByIndex: number[] = [
+      ...createRows.map((r, i) => r._rowNumber ?? i + 2),
+      ...updateRows.map((r, i) => r._rowNumber ?? createRows.length + i + 2),
+    ]
+
+    // Audit: commit phase started (project-wide).
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'REQUIREMENTS_IMPORT_STARTED',
+      oldValue: null,
+      newValue: {
+        kind: 'xlsx_import',
+        phase: 'commit',
+        filename: filename ?? null,
+        createCount: createRows.length,
+        updateCount: updateRows.length,
+      },
+      performedByUserId: req.userId,
+    })
+
+    // INCOSE/EARS advisory pass — runs on every row's description, BEFORE the
+    // substrate, and never affects whether a row commits.
+    const qualityWarnings: CellError[] = []
+    createRows.forEach((row, i) => {
+      qualityWarnings.push(
+        ...qualityWarningsForRow(row.description, rowNumberByIndex[i], descriptionColumn),
+      )
+    })
+    updateRows.forEach((row, i) => {
+      qualityWarnings.push(
+        ...qualityWarningsForRow(
+          row.data?.description,
+          rowNumberByIndex[createRows.length + i],
+          descriptionColumn,
+        ),
+      )
+    })
+
+    // Reuse the existing validate-and-transaction substrate.
+    const substrate = await runBulkImport(
+      projectId,
+      req.userId,
+      createRows as CreateRowInput[],
+      updateRows.map((r) => ({ id: r.id, data: r.data })),
+    )
+
+    // Map each substrate row error to a per-cell CellError addressed to the
+    // user's spreadsheet row + column.
+    const cellErrors: CellError[] = []
+    for (const rowErr of substrate.errors) {
+      const spreadsheetRow = rowNumberByIndex[rowErr.row] ?? rowErr.row + 2
+      for (const message of rowErr.errors) {
+        cellErrors.push(substrateErrorToCellError(message, spreadsheetRow, headerByField))
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        created: substrate.created,
+        updated: substrate.updated,
+        skipped: substrate.skipped,
+        errors: cellErrors,
+        qualityWarnings,
+      },
+    })
+
+    // Audit: commit phase completed (project-wide).
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'REQUIREMENTS_IMPORT_COMPLETED',
+      oldValue: null,
+      newValue: {
+        kind: 'xlsx_import',
+        filename: filename ?? null,
+        created: substrate.created,
+        updated: substrate.updated,
+        skipped: substrate.skipped,
+        errorCount: cellErrors.length,
+        warningCount: qualityWarnings.length,
+      },
+      performedByUserId: req.userId,
+    })
+  } catch (error: any) {
+    // P2025: a row was locked between phase 1 and the tx — surface as user
+    // error (DB-fault rollback), not 500. Mirrors bulkImportRequirements.
+    const isLocked = error?.code === 'P2025'
+    const errorMsg = isLocked
+      ? 'A requirement was locked and the import was rolled back. No rows were written.'
+      : error?.message || 'Internal server error'
+    console.error('XLSX import commit error:', error)
+
+    try {
+      const { projectId } = req.params
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'PROJECT',
+        entityId: projectId,
+        action: 'REQUIREMENTS_IMPORT_FAILED',
+        oldValue: null,
+        newValue: { kind: 'xlsx_import', error: errorMsg },
+        performedByUserId: req.userId,
+      })
+    } catch {
+      // ignore audit failures
+    }
+
+    return res.status(isLocked ? 409 : 500).json({
       success: false,
       error: errorMsg,
     })

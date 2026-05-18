@@ -5789,6 +5789,159 @@
         }
       }
     },
+    "/requirements/{projectId}/import/xlsx/parse": {
+      "post": {
+        "tags": [
+          "Requirements"
+        ],
+        "summary": "Parse an uploaded .xlsx for the requirements import wizard",
+        "description": "Upload phase of the Excel import (#450). Parses the uploaded `.xlsx` server-side with exceljs and returns the first worksheet's header row and data rows for the column-mapping step. No requirements are written.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequirementsProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The .xlsx workbook."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The parsed header row and data rows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "description": "The file could not be parsed as an .xlsx workbook."
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/requirements/{projectId}/import/xlsx/commit": {
+      "post": {
+        "tags": [
+          "Requirements"
+        ],
+        "summary": "Commit a mapped Excel import with per-cell validation",
+        "description": "Commit phase of the Excel import (#450). Accepts the wizard's mapped create/update rows, runs them through the bulk-import substrate, and returns a per-cell validation report. Validation-invalid rows are skipped (partial success); a DB-level fault rolls the batch back.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequirementsProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "create": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "update": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "columnMap": {
+                    "type": "object"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import complete. Returns counts and a per-cell error report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "409": {
+            "description": "A target row was locked; the import was rolled back."
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
     "/requirements/{projectId}": {
       "get": {
         "tags": [

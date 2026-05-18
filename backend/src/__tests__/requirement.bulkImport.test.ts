@@ -138,6 +138,61 @@ describe('Requirement bulk-import controller', () => {
     expect(inDb?.title).toBe('New imported requirement')
   })
 
+  it('POST /bulk-import gives distinct generated ids to multiple create rows with no requirementId', async () => {
+    // Regression for the latent generateRequirementId collision (PR #458 review).
+    // generateRequirementId reads MAX() of COMMITTED rows only. Before the
+    // reserved-id fix, two create rows in one batch that BOTH omit their
+    // requirementId each read the identical MAX -> each is handed the same
+    // REQ-NNN -> the phase-2 prisma.$transaction collides on the unique
+    // (projectId, requirementId) index and the whole batch rolls back (409).
+    // This test FAILS against the pre-fix behaviour and passes now.
+    const titleA = `BI-${stamp}-NOID-A`
+    const titleB = `BI-${stamp}-NOID-B`
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/bulk-import`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        create: [
+          {
+            // No requirementId — server must auto-generate.
+            title: titleA,
+            description: 'First requirement with a server-generated id.',
+            priority: 'medium',
+            status: 'draft',
+            stage: '',
+          },
+          {
+            // No requirementId — server must auto-generate a DISTINCT id.
+            title: titleB,
+            description: 'Second requirement with a server-generated id.',
+            priority: 'medium',
+            status: 'draft',
+            stage: '',
+          },
+        ],
+      })
+
+    // Both rows committed — no unique-index collision, no batch rollback.
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.created).toBe(2)
+    expect(res.body.data.skipped).toBe(0)
+    expect(res.body.data.errors).toHaveLength(0)
+
+    // Both landed in the DB and received DISTINCT, non-null requirement ids.
+    const rowA = await prisma.requirement.findFirst({
+      where: { projectId, title: titleA },
+    })
+    const rowB = await prisma.requirement.findFirst({
+      where: { projectId, title: titleB },
+    })
+    expect(rowA).not.toBeNull()
+    expect(rowB).not.toBeNull()
+    expect(rowA?.requirementId).toBeTruthy()
+    expect(rowB?.requirementId).toBeTruthy()
+    expect(rowA?.requirementId).not.toBe(rowB?.requirementId)
+  })
+
   it('POST /bulk-import updates an existing row (UpdateRowInput shape: { id, data })', async () => {
     const res = await request(app)
       .post(`/api/v1/requirements/${projectId}/bulk-import`)

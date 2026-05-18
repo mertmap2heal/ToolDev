@@ -20,6 +20,55 @@ export interface BulkUpdateResult {
   skippedDueToConflict: number
 }
 
+/** NX-4-followup (#450) — a server-parsed `.xlsx` worksheet. */
+export interface XlsxParseResult {
+  /** The first worksheet's header-row cells, in column order. */
+  headers: string[]
+  /** Informational worksheet name. */
+  sheetName: string
+  /** One entry per data row; `rowNumber` is the 1-based spreadsheet row. */
+  rows: Array<{ rowNumber: number; cells: Record<string, string> }>
+}
+
+/**
+ * NX-4-followup (#450) — a single per-cell validation finding. `error` rows
+ * are skipped on commit; `warning` rows (INCOSE/EARS findings) import anyway.
+ */
+export interface XlsxCellError {
+  /** 1-based spreadsheet row (header = 1, first data row = 2). */
+  rowNumber: number
+  /** Excel cell reference, e.g. `C7`, when the finding is column-scoped. */
+  sheetCell?: string
+  /** The file column header the finding is about. */
+  column: string
+  /** The mapped requirement field the finding is about. */
+  field: string
+  /** `error` blocks the row; `warning` is advisory only. */
+  severity: 'error' | 'warning'
+  /** Engineer-voice reason for the finding. */
+  reason: string
+}
+
+/** NX-4-followup (#450) — the Excel-import commit-phase request body. */
+export interface XlsxCommitRequest {
+  create?: Array<Record<string, unknown> & { _rowNumber?: number }>
+  update?: Array<{ id: string; data: Record<string, unknown>; _rowNumber?: number }>
+  /** field -> file-header map, so a server error can name the user's column. */
+  columnMap?: Record<string, string>
+  filename?: string
+}
+
+/** NX-4-followup (#450) — the Excel-import commit-phase result. */
+export interface XlsxImportResult {
+  created: number
+  updated: number
+  skipped: number
+  /** Per-cell `error`-severity findings; their rows were skipped. */
+  errors: XlsxCellError[]
+  /** Per-cell `warning`-severity findings (INCOSE/EARS); their rows imported. */
+  qualityWarnings: XlsxCellError[]
+}
+
 export interface RequirementFilters {
   page?: number
   pageSize?: number
@@ -250,6 +299,32 @@ export const requirementService = {
 
   async bulkImportRequirements(projectId: string, data: BulkImportRequest): Promise<ApiResponse<BulkImportResult>> {
     return apiClient.post<BulkImportResult>(`/requirements/${projectId}/bulk-import`, data)
+  },
+
+  /**
+   * NX-4-followup (#450) — UPLOAD phase of the Excel import. POSTs the
+   * `.xlsx` as multipart/form-data; the backend parses it with exceljs and
+   * returns the first worksheet's header row + data rows for the mapping step.
+   */
+  async parseXlsxImport(
+    projectId: string,
+    file: File,
+  ): Promise<ApiResponse<XlsxParseResult>> {
+    const form = new FormData()
+    form.append('file', file)
+    return apiClient.postForm<XlsxParseResult>(`/requirements/${projectId}/import/xlsx/parse`, form)
+  },
+
+  /**
+   * NX-4-followup (#450) — COMMIT phase of the Excel import. Sends the
+   * wizard's mapped create/update rows; the backend validates each row through
+   * the bulk-import substrate and returns a per-cell validation report.
+   */
+  async commitXlsxImport(
+    projectId: string,
+    data: XlsxCommitRequest,
+  ): Promise<ApiResponse<XlsxImportResult>> {
+    return apiClient.post<XlsxImportResult>(`/requirements/${projectId}/import/xlsx/commit`, data)
   },
 
   /** Import requirements from ReqIF XML. Body: { content: string }. Returns created, skipped, linksCreated, errors. */

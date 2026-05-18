@@ -1329,3 +1329,80 @@ test.describe('Requirements — bulk edit (NX-4)', () => {
     expect(lockedRow?.priority).toBe('low')
   })
 })
+
+test.describe('Requirements — Excel import (NX-4-followup)', () => {
+  test('upload an .xlsx through the wizard, see the column map + per-cell report, complete the import', async ({
+    page,
+    projectId,
+  }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /requirements/i }).first()).toBeVisible({
+      timeout: 10_000,
+    })
+
+    // Open the wizard: Manage menu -> Import.
+    await page.getByRole('button', { name: /^Manage$/ }).click()
+    await page.getByRole('button', { name: /^Import$/ }).click()
+
+    const wizard = page.locator(MODAL_OVERLAY).last()
+    await expect(wizard.getByRole('heading', { name: /import requirements/i })).toBeVisible({
+      timeout: 5_000,
+    })
+
+    // Step 1 — upload the .xlsx fixture (committed at e2e/fixtures/).
+    await wizard
+      .locator('input#file-upload')
+      .setInputFiles('e2e/fixtures/requirements-import.xlsx')
+    await expect(wizard.getByText('requirements-import.xlsx')).toBeVisible({ timeout: 5_000 })
+
+    // The button is a *parse* action — it POSTs the .xlsx server-side.
+    await wizard.getByRole('button', { name: /parse spreadsheet/i }).click()
+
+    // Step 2 — column mapping. The wizard auto-mapped the headers.
+    await expect(wizard.getByRole('heading', { name: /map columns to fields/i })).toBeVisible({
+      timeout: 10_000,
+    })
+    await wizard.getByRole('button', { name: /next: preview/i }).click()
+
+    // Step 3 — preview with the per-cell validation table + partial banner.
+    await expect(wizard.getByRole('heading', { name: /preview & review/i })).toBeVisible({
+      timeout: 5_000,
+    })
+    // The validation summary names how many rows will import.
+    await expect(wizard.getByText(/rows will import/i)).toBeVisible({ timeout: 5_000 })
+    // The per-cell table is a real <table> with the documented caption.
+    const reportTable = wizard.locator('table').filter({
+      has: page.getByText('Per-cell validation findings'),
+    })
+    // The "fast" row produces an INCOSE/EARS advisory warning row.
+    await expect(reportTable.getByText(/Warning/).first()).toBeVisible({ timeout: 5_000 })
+
+    // Import the 3 rows.
+    await wizard.getByRole('button', { name: /import 3 requirements/i }).click()
+
+    // Step 4 — result. All 3 rows import (the vague one is a warning, not a block).
+    await expect(wizard.getByRole('heading', { name: /import complete/i })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(wizard.getByText(/all 3 rows imported/i)).toBeVisible({ timeout: 5_000 })
+
+    await wizard.getByRole('button', { name: /^close$/i }).click()
+    await expect(page.locator(MODAL_OVERLAY)).toHaveCount(0, { timeout: 5_000 })
+
+    // The three imported requirements are now in the project.
+    const token = await readAuthToken(page)
+    const listResp = await page.request.get(
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=200`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    expect(listResp.ok()).toBe(true)
+    const body = await listResp.json()
+    const items: Array<{ title?: string }> =
+      body?.data?.items ?? body?.data?.requirements ?? []
+    const titles = items.map((r) => r.title ?? '')
+    expect(titles).toContain('E2E xlsx import alpha')
+    expect(titles).toContain('E2E xlsx import beta')
+    expect(titles).toContain('E2E xlsx import gamma')
+  })
+})
