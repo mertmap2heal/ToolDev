@@ -2,7 +2,7 @@
 title: "Requirements"
 description: "Capture, organise, and trace engineering requirements through the full project lifecycle"
 status: "published"
-lastUpdated: "2026-05-17"
+lastUpdated: "2026-05-18"
 version: "1.0"
 audience: "all"
 relatedPages:
@@ -347,6 +347,19 @@ The file downloads to your browser's default download location.
 4. Click **Import**.
 
 See the import template in the wizard for the required column format.
+
+---
+
+### How to import requirements from Excel
+
+1. Open **Data → Import Wizard**.
+2. Upload an **Excel** (`.xlsx`) file. The file is parsed on the server — the workbook is read for its values only; cell formulas are never evaluated.
+3. Review the **validation table**. Each flagged cell shows its spreadsheet row, column, the field it maps to, a severity, and the reason. Fix flagged cells in your source file and re-upload, or proceed to import the valid rows.
+4. Click **Import**.
+
+**Result:** Valid rows are imported. Any rows with a validation error are skipped and listed in the **partial-success banner** — the import does not fail as a whole. If the workbook itself cannot be read, the import is rejected entirely with no rows created.
+
+> **Note:** Quality findings (vague or non-atomic wording) on an imported requirement's description are shown as advisory warnings — they do not block the import.
 
 ---
 
