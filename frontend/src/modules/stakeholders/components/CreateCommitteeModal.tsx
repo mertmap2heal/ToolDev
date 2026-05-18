@@ -1,45 +1,72 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { Committee, CommitteeType, DefaultReviewerFor } from '../types'
-import { useStakeholdersStore } from '../store'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createCommittee, type CommitteeKind } from '../../../services/stakeholders.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
 
-const COMMITTEE_TYPES: CommitteeType[] = ['CCB', 'ReviewBoard', 'AuthorityInterface', 'SupplierPanel', 'ProgramGovernance']
-const DEFAULT_REVIEWER_OPTIONS: DefaultReviewerFor[] = [
-  'Baseline',
-  'Release',
-  'CertificationPackage',
-  'SafetyGate',
-  'VerificationReview',
+const COMMITTEE_KINDS: CommitteeKind[] = [
+  'CCB',
+  'ReviewBoard',
+  'AuthorityInterface',
+  'SupplierPanel',
+  'ProgramGovernance',
 ]
 
 interface CreateCommitteeModalProps {
+  projectId: string
   isOpen: boolean
   onClose: () => void
   onSaved: () => void
 }
 
-export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: CreateCommitteeModalProps) {
+/**
+ * NX-8 (#463): create a committee via the real backend. Members and default
+ * reviewers are wired afterwards in the committee detail drawer.
+ */
+export default function CreateCommitteeModal({
+  projectId,
+  isOpen,
+  onClose,
+  onSaved,
+}: CreateCommitteeModalProps) {
+  const qc = useQueryClient()
   const onDiscardRef = useRef<() => void>()
-  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const { state, dispatch, nextGroupId } = useStakeholdersStore()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(
+    onClose,
+    isOpen,
+    () => onDiscardRef.current?.()
+  )
   const [name, setName] = useState('')
-  const [type, setType] = useState<CommitteeType>('CCB')
-  const [chair, setChair] = useState('')
-  const [memberIds, setMemberIds] = useState<string[]>([])
-  const [defaultReviewersFor, setDefaultReviewersFor] = useState<DefaultReviewerFor[]>([])
-  const [meetingCadence, setMeetingCadence] = useState('')
+  const [kind, setKind] = useState<CommitteeKind>('CCB')
+  const [meetingFrequency, setMeetingFrequency] = useState('')
   const [notes, setNotes] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   onDiscardRef.current = () => {
     setName('')
-    setType('CCB')
-    setChair('')
-    setMemberIds([])
-    setDefaultReviewersFor([])
-    setMeetingCadence('')
+    setKind('CCB')
+    setMeetingFrequency('')
     setNotes('')
+    setError(null)
   }
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      createCommittee(projectId, {
+        name: name.trim(),
+        kind,
+        meetingFrequency: meetingFrequency.trim() || null,
+        notes: notes.trim() || null,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['committees', projectId] })
+      onSaved()
+      resetDirty()
+      onClose()
+      onDiscardRef.current?.()
+    },
+    onError: (e: Error) => setError(e.message),
+  })
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -49,175 +76,128 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
       document.addEventListener('keydown', handleEsc)
       return () => document.removeEventListener('keydown', handleEsc)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, guardClose])
 
   if (!isOpen) return null
 
-  const toggleMember = (id: string) => {
-    setMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-    markDirty()
-  }
-
-  const toggleDefaultReviewer = (opt: DefaultReviewerFor) => {
-    setDefaultReviewersFor((prev) =>
-      prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
-    )
-    markDirty()
-  }
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const groupId = nextGroupId()
-    const committee: Committee = {
-      groupId,
-      name,
-      type,
-      members: memberIds,
-      chair: chair || undefined,
-      defaultReviewersFor,
-      meetingCadence: meetingCadence || 'TBD',
-      notes: notes || undefined,
-    }
-    dispatch({ type: 'CREATE_GROUP', payload: committee })
-    onSaved()
-    resetDirty()
-    onClose()
-    setName('')
-    setType('CCB')
-    setChair('')
-    setMemberIds([])
-    setDefaultReviewersFor([])
-    setMeetingCadence('')
-    setNotes('')
+    setError(null)
+    createMut.mutate()
   }
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) guardClose()
+      }}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col"
+        className="bg-surface-base rounded-lg border border-default w-full max-w-lg mx-4 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Committee / Board</h2>
+        <div className="flex items-center justify-between p-6 border-b border-default">
+          <h2 className="text-xl font-medium text-ink-primary">Create committee / board</h2>
           <div className="flex items-center gap-2">
             {draftBanner}
-            <button type="button" onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            <button
+              type="button"
+              onClick={guardClose}
+              className="p-2 hover:bg-surface-inset rounded-sm"
+              aria-label="Close"
+            >
+              <X size={18} className="text-ink-muted" />
             </button>
           </div>
         </div>
         <form id="create-committee-form" onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name *</label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => { setName(e.target.value); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
-            <select
-              value={type}
-              onChange={(e) => { setType(e.target.value as CommitteeType); markDirty() }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-            >
-              {COMMITTEE_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Chair</label>
-            <select
-              value={chair}
-              onChange={(e) => setChair(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-            >
-              <option value="">None</option>
-              {state.stakeholders.map((s) => (
-                <option key={s.stakeholderId} value={s.stakeholderId}>
-                  {s.displayName} ({s.stakeholderId})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Members</label>
-            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-              {state.stakeholders.map((s) => (
-                <label key={s.stakeholderId} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={memberIds.includes(s.stakeholderId)}
-                    onChange={() => toggleMember(s.stakeholderId)}
-                    className="rounded border-gray-300 dark:border-gray-600"
-                  />
-                  {s.displayName}
-                </label>
-              ))}
+          <div className="p-6 overflow-y-auto flex-1 space-y-4">
+            {error && (
+              <p className="text-sm text-status-danger" role="alert">
+                {error}
+              </p>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-ink-primary mb-1">Name *</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  markDirty()
+                }}
+                className="w-full px-3 py-2 border border-default rounded-sm bg-surface-base text-ink-primary text-sm"
+              />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Default reviewers for</label>
-            <div className="flex flex-wrap gap-2">
-              {DEFAULT_REVIEWER_OPTIONS.map((opt) => (
-                <label key={opt} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={defaultReviewersFor.includes(opt)}
-                    onChange={() => toggleDefaultReviewer(opt)}
-                    className="rounded border-gray-300 dark:border-gray-600"
-                  />
-                  {opt}
-                </label>
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-ink-primary mb-1">Kind</label>
+              <select
+                value={kind}
+                onChange={(e) => {
+                  setKind(e.target.value as CommitteeKind)
+                  markDirty()
+                }}
+                className="w-full px-3 py-2 border border-default rounded-sm bg-surface-base text-ink-primary text-sm"
+              >
+                {COMMITTEE_KINDS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-primary mb-1">
+                Meeting frequency
+              </label>
+              <input
+                type="text"
+                value={meetingFrequency}
+                onChange={(e) => {
+                  setMeetingFrequency(e.target.value)
+                  markDirty()
+                }}
+                placeholder="e.g. Weekly Tue 10:00"
+                className="w-full px-3 py-2 border border-default rounded-sm bg-surface-base text-ink-primary text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink-primary mb-1">Notes</label>
+              <textarea
+                value={notes}
+                onChange={(e) => {
+                  setNotes(e.target.value)
+                  markDirty()
+                }}
+                rows={2}
+                className="w-full px-3 py-2 border border-default rounded-sm bg-surface-base text-ink-primary text-sm"
+              />
+            </div>
+            <p className="text-xs text-ink-faint">
+              Add members and default reviewers after creating — open the committee from the list.
+            </p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Meeting cadence</label>
-            <input
-              type="text"
-              value={meetingCadence}
-              onChange={(e) => { setMeetingCadence(e.target.value); markDirty() }}
-              placeholder="e.g. Weekly Tue 10:00"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-            />
+          <div className="p-6 border-t border-default flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={guardClose}
+              className="px-4 py-2 border border-default text-ink-primary rounded-sm hover:bg-surface-raised text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-committee-form"
+              disabled={createMut.isPending}
+              className="px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-sm disabled:opacity-50 text-sm"
+            >
+              {createMut.isPending ? 'Creating…' : 'Create'}
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-            />
-          </div>
-        </div>
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={guardClose}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="create-committee-form"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-          >
-            Create
-          </button>
-        </div>
         </form>
       </div>
       {warningDialog}

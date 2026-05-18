@@ -182,36 +182,9 @@ export interface CommunicationLogEntry {
   createdBy: string
 }
 
-// Audit Event
-export type AuditAction =
-  | 'CREATE_STAKEHOLDER'
-  | 'UPDATE_STAKEHOLDER'
-  | 'CREATE_GROUP'
-  | 'UPDATE_GROUP'
-  | 'ADD_MEMBER'
-  | 'REMOVE_MEMBER'
-  | 'CREATE_RACI'
-  | 'UPDATE_RACI'
-  | 'CREATE_RULE'
-  | 'UPDATE_RULE'
-  | 'CREATE_REQUEST'
-  | 'UPDATE_REQUEST'
-  | 'CREATE_COMM'
-  | 'EXPORT_PLACEHOLDER'
-
-export interface ObjectRef {
-  kind: string
-  id: string
-}
-
-export interface AuditEvent {
-  eventId: string
-  timestamp: string
-  actor: string
-  action: AuditAction
-  objectRef: ObjectRef
-  details: string
-}
+// NX-8 (#463): the mock `AuditAction` / `ObjectRef` / `AuditEvent` types were
+// deleted — the Audit Trail tab now reads central `AuditLog` via React Query
+// (see frontend/src/services/stakeholders.service.ts).
 
 // Module role (Settings)
 export type StakeholderRole = 'Admin' | 'ProgramManager' | 'Auditor' | 'Engineer'

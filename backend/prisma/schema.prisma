@@ -54,6 +54,8 @@ model User {
   validationBaselinesDeleted          ValidationBaseline[]              @relation("ValidationBaselineDeletedBy")
   signatureEvents                     SignatureEvent[]
   baselineRootsCreated                BaselineRoot[]                    @relation("BaselineRootCreatedBy")
+  committeeMemberships                CommitteeMember[]
+  raciAssignments                     RaciAssignment[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -288,6 +290,8 @@ model Project {
   configItems                 ConfigItem[]
   deviations                  Deviation[]
   ccbDecisions                CcbDecision[]
+  committees                  Committee[]
+  raciEntries                 RaciEntry[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -4591,4 +4595,158 @@ model BaselineRootItem {
   baselineRoot BaselineRoot @relation(fields: [baselineRootId], references: [id], onDelete: Cascade)
 
   @@index([baselineRootId])
+}
+
+// =============================================================================
+// NX-8 (#463) — Stakeholders backend build-out.
+//
+// Five governance models: Committee, CommitteeMember, CommitteeDefaultReviewer,
+// RaciEntry, RaciAssignment. Each carries the R-1 8-column AI-provenance
+// lattice (ai-ready-vision.md §6.1) copied verbatim from TraceLink. RaciEntry /
+// RaciAssignment use the TraceLink polymorphic-subject pattern (subjectType +
+// subjectId tagged strings, no FK — inventory-models.md gap #5 trade-off).
+// =============================================================================
+
+/// A governance body — CCB, review board, authority interface, supplier panel,
+/// or program-governance group. Owns its members and default-reviewer mappings.
+model Committee {
+  id               String    @id @default(uuid())
+  projectId        String
+  name             String
+  kind             String // CCB | ReviewBoard | AuthorityInterface | SupplierPanel | ProgramGovernance
+  meetingFrequency String?
+  nextMeetingAt    DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  project          Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  members          CommitteeMember[]
+  defaultReviewers CommitteeDefaultReviewer[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  @@index([projectId])
+  @@index([projectId, deletedAt])
+}
+
+/// A seat on a committee. `committeeRole` is a per-committee organisational
+/// seat — a FOURTH role concept, distinct from EngineeringRole (discipline),
+/// AdminRole (permission), and the Stakeholders simulation role.
+model CommitteeMember {
+  id            String    @id @default(uuid())
+  committeeId   String
+  userId        String
+  committeeRole String // Chair | Voting | NonVoting | Observer | Secretary | Auditor
+  validFrom     DateTime?
+  validUntil    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  committee Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  @@unique([committeeId, userId])
+  @@index([committeeId])
+  @@index([userId])
+}
+
+/// A default-reviewer mapping: this committee reviews baselines of this kind.
+/// `baselineKind` aligns to the R-4 BaselineRoot.kind vocabulary.
+model CommitteeDefaultReviewer {
+  id           String   @id @default(uuid())
+  committeeId  String
+  baselineKind String // VER | CERT | PARAM | VALIDATION | CM
+  createdAt    DateTime @default(now())
+
+  committee Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  @@unique([committeeId, baselineKind])
+  @@index([committeeId])
+}
+
+/// A RACI responsibility entry for one subject artefact. Polymorphic subject
+/// ref mirrors TraceLink (subjectType + subjectId, no FK).
+model RaciEntry {
+  id          String    @id @default(uuid())
+  projectId   String
+  subjectType String // SystemFunction | Requirement | CertObjective | Component | Deliverable
+  subjectId   String
+  riskFlag    Boolean   @default(false)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments RaciAssignment[]
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  @@unique([projectId, subjectType, subjectId])
+  @@index([projectId])
+}
+
+/// One R/A/C/I letter assigned to one user on a RACI entry.
+model RaciAssignment {
+  id        String   @id @default(uuid())
+  raciId    String
+  userId    String
+  letter    String // R | A | C | I
+  createdAt DateTime @default(now())
+
+  raci RaciEntry @relation(fields: [raciId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // AI-provenance lattice (R-1; ai-ready-vision.md §6.1)
+  authorType             String    @default("human")
+  authorAiModel          String?
+  authorAiVersion        String?
+  authorAiPromptId       String?
+  authorAiContextHash    String?
+  provenanceReviewStatus String    @default("drafted")
+  reviewerUserId         String?
+  reviewTimestamp        DateTime?
+
+  @@unique([raciId, userId, letter])
+  @@index([raciId])
+  @@index([userId])
 }

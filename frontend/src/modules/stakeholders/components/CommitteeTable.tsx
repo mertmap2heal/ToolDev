@@ -1,33 +1,44 @@
 import { useState, useMemo } from 'react'
 import { Filter, ChevronDown, ChevronUp, Plus } from 'lucide-react'
-import { useStakeholdersStore } from '../store'
-import type { Committee } from '../types'
+import { useQuery } from '@tanstack/react-query'
+import { listCommittees, type Committee } from '../../../services/stakeholders.service'
 
-const COMMITTEE_TYPES = ['CCB', 'ReviewBoard', 'AuthorityInterface', 'SupplierPanel', 'ProgramGovernance']
+const COMMITTEE_KINDS = ['CCB', 'ReviewBoard', 'AuthorityInterface', 'SupplierPanel', 'ProgramGovernance']
 
 interface CommitteeTableProps {
-  onSelectCommittee: (c: Committee | null) => void
-  typeFilter?: string
+  projectId: string
+  onSelectCommittee: (c: Committee) => void
   onCreateCommittee?: () => void
   canEdit?: boolean
 }
 
-export default function CommitteeTable({ onSelectCommittee, typeFilter: initialTypeFilter, onCreateCommittee, canEdit }: CommitteeTableProps) {
-  const { state } = useStakeholdersStore()
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(
-    initialTypeFilter ? new Set([initialTypeFilter]) : new Set()
-  )
+/**
+ * NX-8 (#463): Committees list. React Query-backed (`['committees', projectId]`)
+ * against /projects/:projectId/committees. design-system.md §6.2 list
+ * primitive; §2.4 progressive-disclosure kind filter. Tokens only.
+ */
+export default function CommitteeTable({
+  projectId,
+  onSelectCommittee,
+  onCreateCommittee,
+  canEdit,
+}: CommitteeTableProps) {
+  const [kindFilter, setKindFilter] = useState<Set<string>>(new Set())
   const [filtersExpanded, setFiltersExpanded] = useState(false)
 
+  const { data: committees = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ['committees', projectId],
+    queryFn: () => listCommittees(projectId),
+    enabled: !!projectId,
+  })
+
   const filtered = useMemo(() => {
-    if (typeFilter.size === 0) return state.committees
-    return state.committees.filter((c) => typeFilter.has(c.type))
-  }, [state.committees, typeFilter])
+    if (kindFilter.size === 0) return committees
+    return committees.filter((c) => kindFilter.has(c.kind))
+  }, [committees, kindFilter])
 
-  const getStakeholderName = (id: string) => state.stakeholders.find((s) => s.stakeholderId === id)?.displayName ?? id
-
-  const toggleType = (t: string) => {
-    setTypeFilter((prev) => {
+  const toggleKind = (t: string) => {
+    setKindFilter((prev) => {
       const next = new Set(prev)
       if (next.has(t)) next.delete(t)
       else next.add(t)
@@ -41,83 +52,111 @@ export default function CommitteeTable({ onSelectCommittee, typeFilter: initialT
         <button
           type="button"
           onClick={() => setFiltersExpanded((x) => !x)}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300"
+          className="flex items-center gap-2 px-3 py-2 border border-default rounded-sm text-sm text-ink-primary hover:bg-surface-raised"
         >
-          <Filter size={16} />
+          <Filter size={14} />
           Filters
-          {filtersExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {filtersExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
         {canEdit && onCreateCommittee && (
           <button
             type="button"
             onClick={onCreateCommittee}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-sm text-sm"
           >
-            <Plus size={16} />
+            <Plus size={14} />
             Create committee
           </button>
         )}
       </div>
       {filtersExpanded && (
-        <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex flex-wrap gap-2">
-          {COMMITTEE_TYPES.map((t) => (
-            <label key={t} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+        <div className="p-4 bg-surface-raised border border-default rounded-md flex flex-wrap gap-3">
+          {COMMITTEE_KINDS.map((t) => (
+            <label key={t} className="flex items-center gap-2 text-sm text-ink-primary">
               <input
                 type="checkbox"
-                checked={typeFilter.has(t)}
-                onChange={() => toggleType(t)}
-                className="rounded border-gray-300 dark:border-gray-600"
+                checked={kindFilter.has(t)}
+                onChange={() => toggleKind(t)}
+                className="rounded-sm border-default"
               />
               {t}
             </label>
           ))}
         </div>
       )}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <table className="w-full text-sm text-gray-900 dark:text-white">
-          <thead className="bg-gray-50 dark:bg-gray-900">
-            <tr>
-              <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">ID</th>
-              <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Name</th>
-              <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Type</th>
-              <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Members</th>
-              <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Chair</th>
-              <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Cadence</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {filtered.length === 0 ? (
+
+      {isLoading ? (
+        <div className="border border-default rounded-md p-8 text-sm text-ink-muted">
+          Loading committees…
+        </div>
+      ) : isError ? (
+        <div className="border border-default rounded-md p-8 text-sm text-status-danger">
+          Could not load committees — retry, or check your connection.{' '}
+          <button type="button" onClick={() => refetch()} className="underline text-accent-primary">
+            Retry
+          </button>
+        </div>
+      ) : committees.length === 0 ? (
+        <div className="border border-default rounded-md p-8 text-center">
+          <p className="text-sm text-ink-muted">
+            No committees. Add a CCB, review board, or authority interface group to route baseline
+            and sign-off approvals through named members.
+          </p>
+          {canEdit && onCreateCommittee && (
+            <button
+              type="button"
+              onClick={onCreateCommittee}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-sm text-sm"
+            >
+              <Plus size={14} />
+              Create committee
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="bg-surface-base border border-default rounded-md overflow-hidden">
+          <table className="w-full text-sm text-ink-primary">
+            <thead className="bg-surface-raised">
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                  No committees match the filters.
-                </td>
+                <th className="px-4 py-2 text-left text-ink-muted font-medium">ID</th>
+                <th className="px-4 py-2 text-left text-ink-muted font-medium">Name</th>
+                <th className="px-4 py-2 text-left text-ink-muted font-medium">Kind</th>
+                <th className="px-4 py-2 text-left text-ink-muted font-medium">Members</th>
+                <th className="px-4 py-2 text-left text-ink-muted font-medium">Default reviewers</th>
+                <th className="px-4 py-2 text-left text-ink-muted font-medium">Cadence</th>
               </tr>
-            ) : (
-              filtered.map((c) => (
-                <tr
-                  key={c.groupId}
-                  onClick={() => onSelectCommittee(c)}
-                  className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                >
-                  <td className="px-4 py-2 font-mono text-xs text-gray-900 dark:text-white">{c.groupId}</td>
-                  <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">
-                    {c.name}
-                    {c.type === 'AuthorityInterface' && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded text-xs">
-                        Authority Interface
-                      </span>
-                    )}
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-ink-muted">
+                    No committees match the filters.
                   </td>
-                  <td className="px-4 py-2 text-gray-900 dark:text-white">{c.type}</td>
-                  <td className="px-4 py-2 text-gray-900 dark:text-white">{c.members.length}</td>
-                  <td className="px-4 py-2 text-gray-900 dark:text-white">{c.chair ? getStakeholderName(c.chair) : '—'}</td>
-                  <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{c.meetingCadence}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                filtered.map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => onSelectCommittee(c)}
+                    className="cursor-pointer border-t border-default hover:bg-surface-raised"
+                  >
+                    <td className="px-4 py-2 font-mono text-xs text-ink-muted">{c.id.slice(0, 8)}</td>
+                    <td className="px-4 py-2 font-medium text-ink-primary">{c.name}</td>
+                    <td className="px-4 py-2 text-ink-primary">{c.kind}</td>
+                    <td className="px-4 py-2 text-ink-primary">{c.members.length}</td>
+                    <td className="px-4 py-2 text-ink-muted">
+                      {c.defaultReviewers.length > 0
+                        ? c.defaultReviewers.map((r) => r.baselineKind).join(', ')
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-ink-muted">{c.meetingFrequency || '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

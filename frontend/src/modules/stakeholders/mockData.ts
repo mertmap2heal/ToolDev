@@ -5,7 +5,6 @@ import type {
   ApprovalRule,
   Request,
   CommunicationLogEntry,
-  AuditEvent,
 } from './types'
 
 const now = new Date().toISOString()
@@ -394,29 +393,5 @@ export const MOCK_COMMUNICATION_LOG: CommunicationLogEntry[] = [
   },
 ]
 
-export const MOCK_AUDIT_EVENTS: AuditEvent[] = [
-  {
-    eventId: 'EVT-001',
-    timestamp: past(120),
-    actor: 'system',
-    action: 'CREATE_STAKEHOLDER',
-    objectRef: { kind: 'Stakeholder', id: 'SH-0001' },
-    details: 'Stakeholder created',
-  },
-  {
-    eventId: 'EVT-002',
-    timestamp: past(100),
-    actor: 'system',
-    action: 'CREATE_GROUP',
-    objectRef: { kind: 'Group', id: 'GR-CCB-SYS' },
-    details: 'Committee created',
-  },
-  {
-    eventId: 'EVT-003',
-    timestamp: past(30),
-    actor: 'SH-0004',
-    action: 'UPDATE_REQUEST',
-    objectRef: { kind: 'Request', id: 'REQ-ACT-002' },
-    details: 'Status changed to InProgress',
-  },
-]
+// NX-8 (#463): MOCK_AUDIT_EVENTS deleted — the Audit Trail tab now reads
+// central AuditLog via React Query.
