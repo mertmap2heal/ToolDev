@@ -160,3 +160,87 @@ export interface DashboardSummary {
   /** Recent activity across the caller's visible projects. */
   activityFeed: ActivityItem[]
 }
+
+// ---------------------------------------------------------------------------
+// RF-3 (#487) — Project landing aggregate.
+//
+// `GET /api/v1/projects/:id/landing-summary` returns one composed,
+// membership-scoped payload for the Verum-refresh Project-landing page
+// (`02-project-landing-A.html`). It is the single-project sibling of
+// `DashboardSummary` — the same no-N+1 batched-aggregate technique, but every
+// query is `where: { projectId }` (no `in:` fan-out), and the scope is project
+// membership (`requireProjectMember`), not the caller's visible-project set.
+//
+// These three interfaces are ADDITIVE — they do not reshape `ProjectRollup`
+// or `DashboardSummary`.
+// ---------------------------------------------------------------------------
+
+/**
+ * One of the five discipline progress bars in the project-landing hero.
+ *
+ * `pct` is `null` when the discipline has no real signal yet (e.g. a project
+ * with zero requirements has no Requirements completion percentage) — the
+ * frontend renders an em-dash, NEVER `0%`. The bands are documented in the
+ * service; the frontend renders the tint, derives nothing.
+ */
+export interface DisciplineProgress {
+  /** Discipline key, fixed identity. */
+  key: 'overall' | 'requirements' | 'verification' | 'safety' | 'certification'
+  /** Display label, e.g. `Requirements`. */
+  label: string
+  /** Completion percentage 0-100, or `null` when there is no real signal. */
+  pct: number | null
+  /** Service-derived verdict — drives the bar tint. */
+  health: HealthLevel
+}
+
+/**
+ * A per-module health sub-row on a `ModuleCard`. `moduleId` matches the
+ * `ModuleConfiguration` `ModuleDefinition.id`. A module with no real signal is
+ * simply absent from `ProjectLandingSummary.moduleHealth` — the card then
+ * renders no stats value and no sub-row (the deliberately asymmetric card set).
+ * `segments` empty likewise renders no sub-row.
+ */
+export interface ModuleHealthRow {
+  /** Module id — matches `ModuleConfiguration` `ModuleDefinition.id`. */
+  moduleId: string
+  /**
+   * The headline stat value rendered in the card's stats slot (e.g. `1247`,
+   * `72%`, `6`). `null` -> the card renders no stats value.
+   */
+  headline: string | null
+  /** Health verdict of the headline value — drives the stats-value tint. */
+  headlineHealth: HealthLevel
+  /** The sub-row segments. Empty -> no sub-row. */
+  segments: { text: string; health: HealthLevel }[]
+}
+
+/** The full project-landing-summary payload. */
+export interface ProjectLandingSummary {
+  projectId: string
+  /** Route key — the project slug, falling back to the id. */
+  slug: string
+  name: string
+  /** Free-text business descriptor (`Project.domain`). */
+  domain: string
+  status: string
+  /**
+   * Project Development Assurance Level, derived from the highest-DAL hazard
+   * (`A` highest). `null` when the project has no DAL-bearing hazard.
+   */
+  dal: string | null
+  /** Current lifecycle-phase name, or `null` when no phase is set. */
+  phase: string | null
+  /** Lifecycle-gate chip. */
+  gate: GateState
+  /** Project owner resolved to a display summary. */
+  owner: RollupTeamMember | null
+  /** Accepted + pending team members. */
+  teamMembers: RollupTeamMember[]
+  /** ISO timestamp — `Project.updatedAt`. */
+  updatedAt: string
+  /** The five discipline progress bars, fixed order. */
+  disciplines: DisciplineProgress[]
+  /** Per-module health rows — only for modules with a real signal. */
+  moduleHealth: ModuleHealthRow[]
+}

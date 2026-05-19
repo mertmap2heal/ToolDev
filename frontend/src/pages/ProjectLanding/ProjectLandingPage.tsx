@@ -1,46 +1,191 @@
+/**
+ * Project Landing page — RF-3 (#487).
+ *
+ * Restyled to `improvements/verum-design-system/project/refresh/02-project-landing-A.html`
+ * (variant A): a hero card carrying the project identity, a metadata grid, and
+ * five discipline progress bars; below it the 3-column V-model navigator the
+ * page has always had — enriched, not replaced — with per-module health
+ * sub-rows.
+ *
+ * Built on the RF-1 `@/components/ui` primitives + `--theme-*` tokens — no raw
+ * hex, no `blue-*`/`indigo-*`/`purple-*`. Data source: the RF-3 aggregate
+ * `GET /api/v1/projects/:id/landing-summary` (membership-scoped server-side).
+ *
+ * Every pre-existing behaviour is preserved: `useFeaturePackage().isEnabled()`
+ * per-module filtering, module navigation/routing, the `MODULES` / `CATEGORIES`
+ * config, and deep links.
+ */
 import { useNavigate, useParams } from 'react-router-dom'
-import { type LucideIcon } from 'lucide-react'
-import { MODULES, CATEGORIES } from '../../config/ModuleConfiguration'
+import { ChevronRight, type LucideIcon } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { MODULES, CATEGORIES, type ModuleCategory } from '../../config/ModuleConfiguration'
 import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
-import { useProjectStore } from '../../store/projectStore'
+import { projectService } from '../../services/project.service'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ErrorMessage from '../../components/common/ErrorMessage'
+import { Card, Avatar, DalChip, MonoChip, Button, MONO_FONT, FOCUS_RING } from '../../components/ui'
+import type { Dal } from '../../components/ui'
+import type {
+  ProjectLandingSummary,
+  DisciplineProgress,
+  ModuleHealthRow,
+  HealthLevel,
+  GateState,
+} from 'shared/types/dashboard/index'
 
 // ---------------------------------------------------------------------------
-// Short descriptions per module
+// Module metadata — terse engineer-voice phrases for the card sub-line.
 // ---------------------------------------------------------------------------
 
 const MODULE_DESCRIPTIONS: Record<string, string> = {
-  'requirements':               'Define, trace and manage requirements',
-  'tasks':                      'Track work items and assignments',
-  'change-requests':            'Propose and review change requests',
-  'issues':                     'Capture and resolve project issues',
-  'documentation':              'Author and manage documents',
-  'lifecycle-status':           'Monitor phase gates and lifecycle state',
-  'configuration-management':   'Manage baselines, releases and CIs',
-  'archive':                    'Browse archived items',
-  'stakeholder':                'Manage stakeholders and RACI matrix',
-  'product-breakdown-structure':'Define and navigate product structure',
-  'mbse-models':                'MBSE models, diagrams and use cases',
-  'functions':                  'Define system and sub-system functions',
-  'interface-management':       'Manage internal and external interfaces',
-  'parameters':                 'Define and track system parameters',
-  'verification':               'Plan and execute verification activities',
-  'validation':                 'Validate system against objectives',
-  'safety-analysis':            'Identify and analyse safety hazards',
-  'risk-management':            'Track and mitigate project risks',
-  'compliance-check':           'Verify compliance against standards',
-  'certification':              'Manage certification objectives and evidence',
-  'audit':                      'Browse the full project audit log',
-}
-
-// Column accent colors per category
-const CATEGORY_ACCENT: Record<string, string> = {
-  development: 'var(--theme-accent)',
-  system:      '#8b5cf6',
-  assurance:   '#10b981',
+  'requirements': 'define · trace · review',
+  'tasks': 'backlog · in progress',
+  'change-requests': 'propose · review',
+  'issues': 'defects · blockers',
+  'documentation': 'SDP · SVP · evidence packs',
+  'lifecycle-status': 'phase gates · transitions',
+  'configuration-management': 'baselines · CIs · releases',
+  'archive': 'archived items · retention',
+  'stakeholder': 'RACI · roles',
+  'product-breakdown-structure': 'PBS · sub-systems',
+  'mbse-models': 'SysML · diagrams',
+  'functions': 'behaviour · allocation',
+  'interface-management': 'ICDs · contracts',
+  'parameters': 'numeric inputs · formulas',
+  'verification': 'A/T/I/D · test runs',
+  'validation': 'objectives · sign-off',
+  'safety-analysis': 'FHA · FTA · Markov',
+  'risk-management': '5×5 · ALARP',
+  'compliance-check': 'standards objectives',
+  'certification': 'objectives · evidence',
+  'audit': 'project audit log',
 }
 
 // ---------------------------------------------------------------------------
-// ModuleCard — compact row style for columns
+// Category accent tokens — V-model column tones (no raw hex, R-9).
+// ---------------------------------------------------------------------------
+
+interface CategoryTone {
+  accent: string
+  accentTint: string
+}
+
+const CATEGORY_TONE: Record<ModuleCategory, CategoryTone> = {
+  development: { accent: 'var(--theme-accent)', accentTint: 'var(--theme-info-tint)' },
+  system: { accent: 'var(--theme-purple)', accentTint: 'var(--theme-purple-tint)' },
+  assurance: { accent: 'var(--theme-teal)', accentTint: 'var(--theme-teal-tint)' },
+}
+
+// ---------------------------------------------------------------------------
+// Page-local presentational helpers.
+// ---------------------------------------------------------------------------
+
+/** Health verdict -> a discipline-bar / sub-row text colour token. */
+function healthInk(health: HealthLevel): string {
+  if (health === 'warn') return 'var(--theme-warning-ink)'
+  if (health === 'danger') return 'var(--status-danger)'
+  return 'var(--theme-teal)'
+}
+
+/** Health verdict -> a progress-bar FILL colour token. */
+function barFill(health: HealthLevel): string {
+  if (health === 'warn') return 'var(--theme-warning-ink)'
+  if (health === 'danger') return 'var(--status-danger)'
+  return 'var(--theme-accent)'
+}
+
+/** Health verdict -> a module-card stats-value colour token. */
+function statsInk(health: HealthLevel): string {
+  if (health === 'warn') return 'var(--theme-warning-ink)'
+  if (health === 'danger') return 'var(--status-danger)'
+  return 'var(--theme-text)'
+}
+
+/** A status string -> the hero status-dot colour. */
+function statusDotColor(status: string): string {
+  if (status === 'active') return 'var(--theme-teal)'
+  if (status === 'planning') return 'var(--theme-warning-ink)'
+  return 'var(--theme-text-muted)'
+}
+
+/** Gate state -> the `MonoChip` tint for the "Next gate" metadata chip. */
+function gateChipTint(state: GateState['state']): 'default' | 'green' | 'amber' | 'red' {
+  if (state === 'released' || state === 'cleared') return 'green'
+  if (state === 'at-risk') return 'red'
+  if (state === 'current') return 'amber'
+  return 'default'
+}
+
+/** A compact relative-time string for the "Last sync" metadata cell. */
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const min = Math.floor(diff / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} h ago`
+  const d = Math.floor(hr / 24)
+  if (d < 7) return `${d} d ago`
+  return new Date(iso).toLocaleDateString()
+}
+
+// ---------------------------------------------------------------------------
+// ProgressBar — page-local, health-tinted, null-aware.
+//
+// NOT the RF-2 `atRisk` ProgressBar — a discipline percentage can be `null`
+// (no real signal yet), which renders an em-dash and an empty track. Kept
+// page-local per the visual spec; do not promote to `components/ui/`.
+// ---------------------------------------------------------------------------
+
+function ProgressBar({
+  pct,
+  health,
+  label,
+}: {
+  pct: number | null
+  health: HealthLevel
+  label: string
+}) {
+  const known = pct !== null
+  const clamped = known ? Math.max(0, Math.min(100, pct)) : 0
+  return (
+    <span
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      {...(known
+        ? { 'aria-valuenow': clamped }
+        : { 'aria-label': `${label} progress — no data` })}
+      style={{
+        width: 160,
+        height: 5,
+        borderRadius: 3,
+        overflow: 'hidden',
+        position: 'relative',
+        display: 'inline-block',
+        background: known ? 'var(--theme-surface)' : 'var(--theme-neutral-tint)',
+      }}
+    >
+      {known && (
+        <span
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${clamped}%`,
+            borderRadius: 3,
+            background: barFill(health),
+          }}
+        />
+      )}
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ModuleCard — a plain bordered card with a tinted icon tile + optional
+// per-module health sub-row.
 // ---------------------------------------------------------------------------
 
 interface ModuleCardProps {
@@ -48,133 +193,394 @@ interface ModuleCardProps {
   label: string
   description: string
   to: string
-  active: boolean
   accent: string
+  accentTint: string
+  /** The module-health row for this module, when one exists. */
+  health?: ModuleHealthRow
 }
 
-function ModuleCard({ icon: Icon, label, description, to, active, accent }: ModuleCardProps) {
+function ModuleCard({
+  icon: Icon,
+  label,
+  description,
+  to,
+  accent,
+  accentTint,
+  health,
+}: ModuleCardProps) {
   const navigate = useNavigate()
+  const segments = health?.segments ?? []
   return (
-    <button
-      onClick={() => navigate(to)}
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: '10px 12px',
-        borderRadius: 6,
-        border: '1px solid var(--theme-border)',
-        borderLeft: `3px solid ${active ? accent : 'var(--theme-border)'}`,
-        backgroundColor: active ? 'var(--theme-accent-subtle)' : 'var(--theme-surface)',
-        cursor: 'pointer',
-        textAlign: 'left',
-        width: '100%',
-        transition: 'border-left-color 0.12s, box-shadow 0.12s, background-color 0.12s',
-      }}
-      onMouseEnter={e => {
-        const el = e.currentTarget as HTMLElement
-        el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.10)'
-        el.style.borderLeftColor = accent
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget as HTMLElement
-        el.style.boxShadow = 'none'
-        el.style.borderLeftColor = active ? accent : 'var(--theme-border)'
-      }}
-    >
-      <div style={{
-        width: 26,
-        height: 26,
-        borderRadius: 5,
-        backgroundColor: active ? accent : 'var(--theme-sidebar-item-active)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        marginTop: 1,
-      }}>
-        <Icon size={13} style={{ color: active ? '#fff' : accent }} />
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--theme-text)', lineHeight: 1.3, marginBottom: 2 }}>
-          {label}
+    <div>
+      <button
+        type="button"
+        onClick={() => navigate(to)}
+        aria-label={`Open ${label}`}
+        onMouseEnter={(e) => {
+          const el = e.currentTarget
+          el.style.background = 'var(--theme-surface)'
+          el.style.borderColor = 'var(--border-strong)'
+        }}
+        onMouseLeave={(e) => {
+          const el = e.currentTarget
+          el.style.background = 'var(--theme-bg)'
+          el.style.borderColor = 'var(--theme-border)'
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.boxShadow = FOCUS_RING
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.boxShadow = 'none'
+        }}
+        style={{
+          width: '100%',
+          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '9px 12px',
+          border: '1px solid var(--theme-border)',
+          borderRadius: 6,
+          background: 'var(--theme-bg)',
+          cursor: 'pointer',
+          transition: 'background-color 80ms ease-out, border-color 80ms ease-out',
+        }}
+      >
+        {/* Tinted icon tile */}
+        <span
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 5,
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: accentTint,
+          }}
+        >
+          <Icon size={15} color={accent} strokeWidth={1.75} />
+        </span>
+        {/* Body */}
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span
+            style={{
+              display: 'block',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--theme-text)',
+              lineHeight: 1.3,
+            }}
+          >
+            {label}
+          </span>
+          <span
+            style={{
+              display: 'block',
+              fontSize: 11,
+              color: 'var(--theme-text-muted)',
+              lineHeight: 1.4,
+            }}
+          >
+            {description}
+          </span>
+        </span>
+        {/* Stats — headline value (only when the module has a real signal) + chevron */}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {health?.headline != null && (
+            <span
+              style={{
+                fontFamily: MONO_FONT,
+                fontSize: 11,
+                color: statsInk(health.headlineHealth),
+              }}
+            >
+              {health.headline}
+            </span>
+          )}
+          <ChevronRight
+            size={14}
+            strokeWidth={1.75}
+            color="var(--theme-text-muted)"
+            aria-hidden="true"
+          />
+        </span>
+      </button>
+
+      {/* Per-module health sub-row — only when the module has segments. */}
+      {segments.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            marginTop: 4,
+            paddingLeft: 38,
+            fontFamily: MONO_FONT,
+            fontSize: 10.5,
+          }}
+        >
+          {segments.map((seg, i) => (
+            <span key={`${seg.text}-${i}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {i > 0 && (
+                <span style={{ color: 'var(--theme-text-muted)', marginRight: 6 }}>·</span>
+              )}
+              <span style={{ display: 'inline-flex', alignItems: 'center', color: healthInk(seg.health) }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: 999,
+                    background: 'currentColor',
+                    marginRight: 4,
+                    display: 'inline-block',
+                  }}
+                />
+                {seg.text}
+              </span>
+            </span>
+          ))}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--theme-text-muted)', lineHeight: 1.4 }}>
-          {description}
-        </div>
-      </div>
-    </button>
+      )}
+    </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Column — one vertical category column
+// Column — one vertical V-model category column.
 // ---------------------------------------------------------------------------
 
 interface ColumnProps {
-  categoryId: string
   label: string
   modules: typeof MODULES
   projectId: string
-  accent: string
+  tone: CategoryTone
+  /** moduleId -> ModuleHealthRow lookup. */
+  healthByModule: Map<string, ModuleHealthRow>
 }
 
-function Column({ categoryId, label, modules, projectId, accent }: ColumnProps) {
+function Column({ label, modules, projectId, tone, healthByModule }: ColumnProps) {
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 0,
-      minWidth: 0,
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
       {/* Column header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '10px 12px',
-        borderRadius: '8px 8px 0 0',
-        backgroundColor: 'var(--theme-surface)',
-        border: '1px solid var(--theme-border)',
-        borderBottom: `2px solid ${accent}`,
-        marginBottom: 8,
-      }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: accent, flexShrink: 0 }} />
-        <span style={{
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: 'var(--theme-text)',
-        }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 14px',
+          borderRadius: 6,
+          background: 'var(--theme-bg)',
+          border: '1px solid var(--theme-border)',
+          borderTop: `2px solid ${tone.accent}`,
+          marginBottom: 4,
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{ width: 10, height: 10, borderRadius: 2, background: tone.accent }}
+        />
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'var(--theme-text)',
+          }}
+        >
           {label}
         </span>
-        <span style={{
-          marginLeft: 'auto',
-          fontSize: 10,
-          color: 'var(--theme-text-muted)',
-          backgroundColor: 'var(--theme-sidebar-item-active)',
-          borderRadius: 10,
-          padding: '1px 7px',
-        }}>
+        <span
+          style={{
+            marginLeft: 'auto',
+            fontFamily: MONO_FONT,
+            fontSize: 11,
+            color: 'var(--theme-text-muted)',
+            background: 'var(--theme-neutral-tint)',
+            padding: '1px 7px',
+            borderRadius: 999,
+          }}
+        >
           {modules.length}
         </span>
       </div>
 
-      {/* Module cards stacked vertically */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {modules.map(m => (
-          <ModuleCard
-            key={m.id}
-            icon={m.icon}
-            label={m.label}
-            description={MODULE_DESCRIPTIONS[m.id] ?? ''}
-            to={`/projects/${projectId}/${m.route}`}
-            active={location.pathname.includes(`/${m.route}`)}
-            accent={accent}
-          />
-        ))}
+      {/* Module cards */}
+      {modules.map((m) => (
+        <ModuleCard
+          key={m.id}
+          icon={m.icon}
+          label={m.label}
+          description={MODULE_DESCRIPTIONS[m.id] ?? ''}
+          to={`/projects/${projectId}/${m.route}`}
+          accent={tone.accent}
+          accentTint={tone.accentTint}
+          health={healthByModule.get(m.id)}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Hero — project identity + metadata grid + 5 discipline progress bars.
+// ---------------------------------------------------------------------------
+
+function HeroCard({ summary }: { summary: ProjectLandingSummary }) {
+  return (
+    <Card>
+      <div
+        style={{
+          padding: '18px 20px',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          gap: 24,
+        }}
+      >
+        {/* LEFT — identity + metadata */}
+        <div>
+          <h2
+            style={{
+              margin: '0 0 4px',
+              fontSize: 22,
+              fontWeight: 600,
+              letterSpacing: '-0.012em',
+              color: 'var(--theme-text)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+            title={`Status: ${summary.status}`}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 999,
+                flexShrink: 0,
+                background: statusDotColor(summary.status),
+              }}
+            />
+            {summary.name}
+          </h2>
+
+          {/* Mono sub-line: domain · DAL · phase */}
+          <div
+            style={{
+              fontFamily: MONO_FONT,
+              fontSize: 12,
+              color: 'var(--theme-text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>{summary.domain}</span>
+            <span style={{ color: 'var(--theme-text-muted)' }}>·</span>
+            {summary.dal ? (
+              <DalChip dal={summary.dal as Dal} />
+            ) : (
+              <span style={{ color: 'var(--theme-text-muted)' }}>DAL —</span>
+            )}
+          </div>
+
+          {/* Metadata grid */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 24,
+              marginTop: 14,
+              paddingTop: 14,
+              borderTop: '1px solid var(--theme-border)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <MetaCell label="Owner">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {summary.owner ? (
+                  <>
+                    <Avatar name={summary.owner.name} size={18} />
+                    {summary.owner.name}
+                  </>
+                ) : (
+                  '—'
+                )}
+              </span>
+            </MetaCell>
+            <MetaCell label="Phase">{summary.phase ?? '—'}</MetaCell>
+            <MetaCell label="Next gate">
+              <MonoChip tint={gateChipTint(summary.gate.state)}>{summary.gate.code}</MonoChip>
+            </MetaCell>
+            <MetaCell label="Last sync">{relativeTime(summary.updatedAt)}</MetaCell>
+            <MetaCell label="Team">
+              {summary.teamMembers.length} member{summary.teamMembers.length === 1 ? '' : 's'}
+            </MetaCell>
+          </div>
+        </div>
+
+        {/* RIGHT — 5 discipline progress bars */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 6,
+            minWidth: 220,
+          }}
+        >
+          {summary.disciplines.map((d: DisciplineProgress) => (
+            <div
+              key={d.key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                fontFamily: MONO_FONT,
+                fontSize: 11,
+              }}
+            >
+              <span style={{ width: 88, color: 'var(--theme-text-muted)' }}>{d.label}</span>
+              <ProgressBar pct={d.pct} health={d.health} label={d.label} />
+              <span
+                style={{
+                  minWidth: 38,
+                  textAlign: 'right',
+                  fontWeight: 500,
+                  color: 'var(--theme-text)',
+                }}
+              >
+                {d.pct === null ? '—' : `${d.pct}%`}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
+    </Card>
+  )
+}
+
+/** A single label/value cell in the hero metadata grid. */
+function MetaCell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span
+        style={{
+          fontSize: 11,
+          color: 'var(--theme-text-muted)',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ fontSize: 13, color: 'var(--theme-text)', fontFamily: MONO_FONT }}>
+        {children}
+      </span>
     </div>
   )
 }
@@ -185,97 +591,115 @@ function Column({ categoryId, label, modules, projectId, accent }: ColumnProps) 
 
 export default function ProjectLandingPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { projects } = useProjectStore()
+  const navigate = useNavigate()
   const { isEnabled } = useFeaturePackage()
-  const project = projects.find(p => p.id === projectId)
 
-  const devModules       = MODULES.filter(m => m.category === 'development' && isEnabled(m.id))
-  const systemModules    = MODULES.filter(m => m.category === 'system' && isEnabled(m.id))
-  const assuranceModules = MODULES.filter(m => m.category === 'assurance' && isEnabled(m.id))
+  const {
+    data: summary,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['project-landing-summary', projectId],
+    queryFn: async () => {
+      const response = await projectService.getProjectLandingSummary(projectId!)
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load project')
+      }
+      return response.data ?? null
+    },
+    enabled: Boolean(projectId),
+    retry: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  })
 
-  const statusColors: Record<string, string> = {
-    active:    '#22c55e',
-    completed: 'var(--theme-accent)',
-    archived:  'var(--theme-text-muted)',
-    planning:  '#f59e0b',
+  // moduleId -> ModuleHealthRow lookup for the per-module sub-rows.
+  const healthByModule = new Map<string, ModuleHealthRow>(
+    (summary?.moduleHealth ?? []).map((row) => [row.moduleId, row]),
+  )
+
+  // --- States — gate the whole body on the summary query ---
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <LoadingSpinner label="Loading project…" />
+      </div>
+    )
   }
-  const statusDot = statusColors[project?.status ?? ''] ?? 'var(--theme-text-muted)'
+
+  if (error) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Card>
+          <div style={{ padding: 16 }}>
+            <ErrorMessage
+              message={error instanceof Error ? error.message : 'Error loading project.'}
+              inline
+            />
+            <p style={{ color: 'var(--theme-text-muted)', fontSize: 12, marginBottom: 12 }}>
+              Check that the backend is running, the database is connected, and you are logged
+              in.
+            </p>
+            <Button variant="primary" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!summary) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Card>
+          <div style={{ padding: 24 }}>
+            <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, marginBottom: 12 }}>
+              Project not found. It may have been deleted, or the link is wrong.
+            </p>
+            <Button variant="primary" onClick={() => navigate('/')}>
+              Back to portfolio
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // --- Body — hero + 3-column V-model navigator ---
+
+  const devModules = MODULES.filter((m) => m.category === 'development' && isEnabled(m.id))
+  const systemModules = MODULES.filter((m) => m.category === 'system' && isEnabled(m.id))
+  const assuranceModules = MODULES.filter((m) => m.category === 'assurance' && isEnabled(m.id))
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <HeroCard summary={summary} />
 
-      {/* Project header */}
-      {project && (
-        <div style={{
-          padding: '14px 18px',
-          borderRadius: 8,
-          border: '1px solid var(--theme-border)',
-          backgroundColor: 'var(--theme-surface)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: statusDot, flexShrink: 0 }} />
-          <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--theme-text)', margin: 0 }}>
-            {project.name}
-          </h1>
-          {project.domain && (
-            <span style={{
-              fontSize: 10,
-              fontWeight: 500,
-              padding: '2px 8px',
-              borderRadius: 10,
-              backgroundColor: 'var(--theme-sidebar-item-active)',
-              color: 'var(--theme-text-muted)',
-            }}>
-              {project.domain}
-            </span>
-          )}
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-            <div style={{ width: 120, height: 4, backgroundColor: 'var(--theme-border)', borderRadius: 2 }}>
-              <div style={{ height: 4, width: `${project.progress}%`, backgroundColor: 'var(--theme-accent)', borderRadius: 2 }} />
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
-              {project.progress}% complete
-            </span>
-            <span style={{
-              fontSize: 10,
-              padding: '2px 8px',
-              borderRadius: 10,
-              textTransform: 'capitalize',
-              backgroundColor: project.status === 'active' ? 'rgba(34,197,94,0.12)' : 'var(--theme-sidebar-item-active)',
-              color: project.status === 'active' ? '#22c55e' : 'var(--theme-text-muted)',
-            }}>
-              {project.status}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Three-column V-model style layout */}
       {projectId && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-[14px]">
           <Column
-            categoryId="development"
-            label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development & Control'}
+            label={CATEGORIES.find((c) => c.id === 'development')?.label ?? 'Development & Control'}
             modules={devModules}
             projectId={projectId}
-            accent={CATEGORY_ACCENT.development}
+            tone={CATEGORY_TONE.development}
+            healthByModule={healthByModule}
           />
           <Column
-            categoryId="system"
-            label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
+            label={CATEGORIES.find((c) => c.id === 'system')?.label ?? 'System Definition'}
             modules={systemModules}
             projectId={projectId}
-            accent={CATEGORY_ACCENT.system}
+            tone={CATEGORY_TONE.system}
+            healthByModule={healthByModule}
           />
           <Column
-            categoryId="assurance"
-            label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
+            label={CATEGORIES.find((c) => c.id === 'assurance')?.label ?? 'Assurance'}
             modules={assuranceModules}
             projectId={projectId}
-            accent={CATEGORY_ACCENT.assurance}
+            tone={CATEGORY_TONE.assurance}
+            healthByModule={healthByModule}
           />
         </div>
       )}

@@ -29,6 +29,7 @@ import {
   unassignProjectEngineeringRole,
 } from '../controllers/projectStakeholderRoles.controller'
 import { getDashboardSummary } from '../controllers/dashboardSummary.controller'
+import { getProjectLandingSummary } from '../controllers/projectLandingSummary.controller'
 
 const router = Router()
 
@@ -105,5 +106,17 @@ router.post('/:id/invitations/decline', authenticateToken, resolveProjectParam, 
 // Audit logs and analytics — project-scoped reads, members only (#153).
 router.get('/:id/audit-logs', authenticateToken, resolveProjectParam, requireProjectMember, getProjectAuditLogs)
 router.get('/:id/analytics', authenticateToken, resolveProjectParam, requireProjectMember, getProjectAnalytics)
+
+// Project-landing aggregate (RF-3, #487). Single-project sibling of the
+// portfolio `dashboard-summary` — a project-scoped read, members only. The
+// `/:id/landing-summary` sub-path never collides with the literal
+// `dashboard-summary` route registered above.
+router.get(
+  '/:id/landing-summary',
+  authenticateToken,
+  resolveProjectParam,
+  requireProjectMember,
+  getProjectLandingSummary
+)
 
 export default router
