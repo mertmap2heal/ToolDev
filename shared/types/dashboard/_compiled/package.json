@@ -1,0 +1,4 @@
+{
+  "//": "RF-2 (#484): marks the compiled dashboard-summary shared types as ESM. shared/package.json has no `type`, so without this the .js here would be interpreted as CommonJS. The .js is type-only (export {}) but keeping the module kind correct matches shared/incoseEars/_compiled. Do not delete.",
+  "type": "module"
+}

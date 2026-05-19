@@ -28,6 +28,7 @@ import {
   assignProjectEngineeringRole,
   unassignProjectEngineeringRole,
 } from '../controllers/projectStakeholderRoles.controller'
+import { getDashboardSummary } from '../controllers/dashboardSummary.controller'
 
 const router = Router()
 
@@ -36,6 +37,12 @@ const router = Router()
 router.post('/bulk-update', authenticateToken, requireAdmin, bulkUpdateProjects)
 router.post('/import', authenticateToken, importProjects)
 router.get('/export', authenticateToken, requireAdmin, exportProjects)
+
+// Portfolio dashboard aggregate (RF-2, #484). MUST register before the
+// `/:id` routes or Express captures it as `:id="dashboard-summary"`. A
+// per-user view — `authenticateToken` only; the service scopes to the
+// caller's visible projects (no requireAdmin, no tenant leak).
+router.get('/dashboard-summary', authenticateToken, getDashboardSummary)
 
 // Project CRUD
 router.post('/', authenticateToken, createProject)

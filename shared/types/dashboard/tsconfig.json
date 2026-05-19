@@ -1,0 +1,18 @@
+{
+  "// Build config for the RF-2 dashboard-summary shared types.": "Emits `_compiled/index.js` + `_compiled/index.d.ts`, which the backend imports (the backend tsconfig has rootDir=./src and cannot compile a .ts outside src/). The frontend imports the .ts source directly via the Vite `shared` alias. Regenerate after editing index.ts: `cd shared/types/dashboard && npx tsc`.",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    "declaration": true,
+    "outDir": "./_compiled",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["index.ts"],
+  "exclude": ["node_modules", "_compiled"]
+}

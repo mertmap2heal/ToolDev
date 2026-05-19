@@ -1,180 +1,227 @@
-import { useState } from 'react'
+/**
+ * Dashboard — portfolio overview (RF-2, #484).
+ *
+ * Restyled to `improvements/verum-design-system/project/refresh/01-dashboard-B.html`:
+ * a "Today" info-banner, a 6-cell KPI grid, a dense project table, and a
+ * 320px right rail (My queue + Activity). Built on the RF-1 `@/components/ui`
+ * primitives + `--theme-*` tokens — no inline-styled `StatCard` /
+ * `DashboardProjectCard` (both deleted), no `blue-*`/`indigo-*`/`purple-*`.
+ *
+ * Two data sources: `['projects']` (the project list — drives filters,
+ * bulk-select, the delete/team flows) and `['dashboard-summary']` (the RF-2
+ * aggregate — KPIs, per-project roll-ups with module health + gate state, the
+ * caller's queue, the activity feed). Every pre-existing behaviour — search,
+ * status / date-range / active filters, row bulk-select + select-all, the
+ * bulk delete/export menu, per-row Team/Analytics/Audit, the team modal, the
+ * single + bulk delete-confirmation modals, the #263 delete-error banner, and
+ * the loading/error/empty states — is preserved.
+ */
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Filter, Trash2, Users, BarChart3, LogOut, FileDown, ListChecks } from 'lucide-react'
+import { Trash2, Users, BarChart3, LogOut, FileDown, ListChecks, Filter } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import CreateProjectButton from '../../components/projects/CreateProjectButton'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import ProjectTeamModal from '../../components/projects/ProjectTeamModal'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ErrorMessage from '../../components/common/ErrorMessage'
+import {
+  StatTile,
+  Card,
+  CardHead,
+  Banner,
+  Button,
+  Checkbox,
+  Avatar,
+  DalChip,
+  MonoChip,
+  Table,
+  TableHead,
+  TableBody,
+  TableHeaderCell,
+  TableRow,
+  TableCell,
+} from '../../components/ui'
+import type { Dal } from '../../components/ui'
 import { projectService } from '../../services/project.service'
 import { useProjectStore } from '../../store/projectStore'
 import type { Project } from 'shared/types/project.types'
+import type {
+  ProjectRollup,
+  ModuleHealthMetric,
+  QueueItem,
+  ActivityItem,
+} from 'shared/types/dashboard/index'
 import { errorMessage } from '../../utils/errorMessage'
 
-function StatCard({ label, value, subtitle }: { label: string; value: string | number; subtitle: string }) {
+// ---------------------------------------------------------------------------
+// Page-local presentational helpers (NOT promoted to `components/ui/` —
+// the Design comment flags both as dashboard-local).
+// ---------------------------------------------------------------------------
+
+/** A thin progress bar — the `01-dashboard-B.html` `.pbar` row. */
+function ProgressBar({ value, atRisk }: { value: number; atRisk?: boolean }) {
+  const pct = Math.max(0, Math.min(100, value))
+  const fill = atRisk ? 'var(--status-danger)' : 'var(--theme-accent)'
   return (
-    <div
-      style={{
-        padding: '16px 20px',
-        borderRadius: 8,
-        border: '1px solid var(--theme-border)',
-        backgroundColor: 'var(--theme-surface)',
-      }}
-    >
-      <div style={{ fontSize: 11, color: 'var(--theme-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 600, color: 'var(--theme-text)', lineHeight: 1 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--theme-text-muted)', marginTop: 4 }}>
-        {subtitle}
-      </div>
-    </div>
-  )
-}
-
-interface DashboardProjectCardProps {
-  project: Project
-  selected: boolean
-  isDeleting: boolean
-  onSelect: (id: string, checked: boolean) => void
-  onDelete: (e: React.MouseEvent, id: string, name: string) => void
-  onTeam: (project: Project) => void
-  onAnalytics: (project: Project) => void
-  onAudit: (project: Project) => void
-}
-
-function DashboardProjectCard({
-  project,
-  selected,
-  isDeleting,
-  onSelect,
-  onDelete,
-  onTeam,
-  onAnalytics,
-  onAudit,
-}: DashboardProjectCardProps) {
-  const navigate = useNavigate()
-
-  const statusColors: Record<string, string> = {
-    active: '#22c55e',
-    completed: '#3b82f6',
-    archived: '#9ca3af',
-    planning: '#f59e0b',
-  }
-  const statusDot = statusColors[project.status] ?? '#9ca3af'
-
-  return (
-    <div
-      onClick={() => navigate(`/projects/${project.slug ?? project.id}`)}
-      style={{
-        borderRadius: 8,
-        border: `1px solid ${selected ? 'var(--theme-accent)' : 'var(--theme-border)'}`,
-        backgroundColor: 'var(--theme-surface)',
-        padding: '14px 16px',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        transition: 'border-color 0.12s, box-shadow 0.12s',
-        position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = 'none'
-      }}
-    >
-      {/* Card header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={(e) => onSelect(project.id, e.target.checked)}
-          onClick={(e) => e.stopPropagation()}
-          style={{ marginTop: 2, flexShrink: 0 }}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: statusDot, flexShrink: 0 }} />
-            <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--theme-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {project.name}
-            </span>
-          </div>
-          {project.domain && (
-            <span style={{ fontSize: 11, color: 'var(--theme-text-muted)' }}>{project.domain}</span>
-          )}
-        </div>
-        <span style={{
-          fontSize: 10,
-          fontWeight: 500,
-          padding: '2px 7px',
-          borderRadius: 10,
-          backgroundColor: project.status === 'active' ? 'rgba(34,197,94,0.12)' : 'var(--theme-sidebar-item-active)',
-          color: project.status === 'active' ? '#22c55e' : 'var(--theme-text-muted)',
-          textTransform: 'capitalize',
-          flexShrink: 0,
-        }}>
-          {project.status}
-        </span>
-      </div>
-
-      {/* Progress bar */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>Progress</span>
-          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>{project.progress}%</span>
-        </div>
-        <div style={{ height: 3, backgroundColor: 'var(--theme-border)', borderRadius: 2 }}>
-          <div style={{ height: 3, width: `${project.progress}%`, backgroundColor: 'var(--theme-accent)', borderRadius: 2 }} />
-        </div>
-      </div>
-
-      {/* Footer: date + actions */}
-      <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-        onClick={(e) => e.stopPropagation()}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          flex: 1,
+          height: 4,
+          background: 'var(--theme-surface)',
+          borderRadius: 2,
+          overflow: 'hidden',
+          position: 'relative',
+        }}
       >
-        <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
-          {new Date(project.updatedAt).toLocaleDateString()}
-        </span>
-        <div style={{ display: 'flex', gap: 2 }}>
-          {[
-            { icon: Users, title: 'Team', action: () => onTeam(project) },
-            { icon: BarChart3, title: 'Analytics', action: () => onAnalytics(project) },
-            { icon: LogOut, title: 'Audit', action: () => onAudit(project) },
-            { icon: Trash2, title: 'Delete', action: (e: React.MouseEvent) => onDelete(e, project.id, project.name), danger: true, disabled: isDeleting },
-          ].map(({ icon: Icon, title, action, danger, disabled }) => (
-            <button
-              key={title}
-              onClick={(e) => { e.stopPropagation(); action(e as React.MouseEvent) }}
-              disabled={disabled}
-              title={title}
-              style={{
-                padding: '3px 5px',
-                borderRadius: 4,
-                border: 'none',
-                background: 'none',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                color: danger ? '#ef4444' : 'var(--theme-text-muted)',
-                opacity: disabled ? 0.4 : 1,
-              }}
-            >
-              <Icon size={13} />
-            </button>
-          ))}
-        </div>
-      </div>
+        <span
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct}%`,
+            background: fill,
+            borderRadius: 2,
+          }}
+        />
+      </span>
+      <span
+        style={{
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontSize: 11,
+          color: 'var(--theme-text-muted)',
+        }}
+      >
+        {pct}%
+      </span>
     </div>
   )
 }
+
+/**
+ * A page-local ~64x16 sparkline glyph — an inline `<svg polyline>`. Used in
+ * the activity card head to show the portfolio's recent-activity volume
+ * trend. Deliberately dashboard-local, NOT a `@/components/ui` primitive (the
+ * Design comment flags it page-local).
+ */
+function Sparkline({ points }: { points: number[] }) {
+  if (points.length < 2) return null
+  const w = 64
+  const h = 16
+  const max = Math.max(...points, 1)
+  const min = Math.min(...points, 0)
+  const span = max - min || 1
+  const coords = points
+    .map((p, i) => {
+      const x = (i / (points.length - 1)) * w
+      const y = h - ((p - min) / span) * h
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  return (
+    <svg width={w} height={h} aria-hidden="true" style={{ display: 'block' }}>
+      <polyline
+        points={coords}
+        fill="none"
+        stroke="var(--theme-accent)"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+/**
+ * Bucket activity timestamps into a small per-day volume series for the
+ * activity-card sparkline. Real data — the count of feed rows per day over the
+ * last 7 days — not a fabricated trend.
+ */
+function activityVolumeSeries(feed: ActivityItem[]): number[] {
+  const days = 7
+  const buckets = new Array(days).fill(0)
+  const now = Date.now()
+  const dayMs = 24 * 60 * 60 * 1000
+  for (const a of feed) {
+    const ageDays = Math.floor((now - new Date(a.timestamp).getTime()) / dayMs)
+    if (ageDays >= 0 && ageDays < days) {
+      buckets[days - 1 - ageDays] += 1
+    }
+  }
+  return buckets
+}
+
+/** Map a module-health verdict to a `MonoChip` tint. */
+function chipTint(health: ModuleHealthMetric['health']): 'default' | 'green' | 'amber' | 'red' {
+  if (health === 'ok') return 'default'
+  if (health === 'warn') return 'amber'
+  return 'red'
+}
+
+/** Status-dot colour for a project status. */
+function statusDotColor(status: string): string {
+  if (status === 'active') return 'var(--theme-teal)'
+  if (status === 'planning') return 'var(--theme-warning-ink)'
+  return 'var(--theme-text-muted)'
+}
+
+/** A compact relative-time string for the `Updated` / queue / activity cells. */
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const min = Math.floor(diff / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} h ago`
+  const d = Math.floor(hr / 24)
+  if (d < 7) return `${d} d ago`
+  return new Date(iso).toLocaleDateString()
+}
+
+/** A compact relative age from a millisecond duration (queue rows). */
+function relativeAge(ms: number): string {
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return 'now'
+  if (min < 60) return `${min} m`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} h`
+  return `${Math.floor(hr / 24)} d`
+}
+
+/** Queue-priority dot colour. */
+function queueDotColor(priority: QueueItem['priority']): string {
+  if (priority === 'critical') return 'var(--status-danger)'
+  if (priority === 'high') return 'var(--theme-warning-ink)'
+  return 'var(--theme-accent)'
+}
+
+/** Activity-tone -> the tinted square-icon background + ink. */
+function activityToneStyle(tone: ActivityItem['tone']): { bg: string; ink: string } {
+  switch (tone) {
+    case 'success':
+      return { bg: 'var(--theme-success-tint)', ink: 'var(--theme-teal)' }
+    case 'warn':
+      return { bg: 'var(--theme-warning-tint)', ink: 'var(--theme-warning-ink)' }
+    case 'danger':
+      return { bg: 'var(--theme-danger-tint)', ink: 'var(--status-danger)' }
+    case 'info':
+      return { bg: 'var(--theme-info-tint)', ink: 'var(--theme-info-ink)' }
+    default:
+      return { bg: 'var(--theme-surface)', ink: 'var(--theme-text-muted)' }
+  }
+}
+
+const MONO =
+  'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [filterValue, setFilterValue] = useState('all')
   const [showRunningOnly, setShowRunningOnly] = useState(false)
@@ -214,10 +261,26 @@ export default function DashboardPage() {
     refetchOnWindowFocus: true,
   })
 
+  // RF-2 aggregate — KPIs, per-project roll-ups, my-queue, activity feed.
+  const { data: summary } = useQuery({
+    queryKey: ['dashboard-summary'],
+    queryFn: async () => {
+      const response = await projectService.getDashboardSummary()
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load dashboard summary')
+      }
+      return response.data ?? null
+    },
+    retry: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  })
+
   const deleteProjectMutation = useMutation({
     mutationFn: (projectId: string) => projectService.deleteProject(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       setProjectToDelete(null)
       setDeleteConfirmation(null)
     },
@@ -253,7 +316,7 @@ export default function DashboardPage() {
     setSelectedProjectIds((prev) => checked ? [...prev, id] : prev.filter(pid => pid !== id))
   }
   const handleSelectAll = (checked: boolean) => {
-    setSelectedProjectIds(checked ? displayedProjects.map(p => p.id) : [])
+    setSelectedProjectIds(checked ? displayedRollups.map(r => r.projectId) : [])
   }
   // #260: open the confirmation modal instead of deleting immediately.
   const handleBulkDelete = () => {
@@ -278,6 +341,7 @@ export default function DashboardPage() {
       bulkDeleteConfirm.map((p) => projectService.deleteProject(p.id)),
     )
     queryClient.invalidateQueries({ queryKey: ['projects'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
     setSelectedProjectIds([])
     setBulkDeleteConfirm(null)
     setBulkDeleteInFlight(false)
@@ -304,270 +368,896 @@ export default function DashboardPage() {
     }
   }
 
-  const displayedProjects = (projectsData || projects || [])
-    .filter(p => filterValue === 'all' || p.status === filterValue)
-    .filter(p => !dateRange || (() => {
-      const u = new Date(p.updatedAt)
-      return u >= new Date(dateRange.from) && u <= new Date(dateRange.to)
-    })())
-    .filter(p => !showRunningOnly || p.status === 'active')
-    .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const projectList = useMemo(
+    () => projectsData || projects || [],
+    [projectsData, projects],
+  )
 
-  const runningProjects = (projectsData || projects || []).filter(p => p.status === 'active')
-  const totalProjects = (projectsData || projects || []).length
-  const allProgress = (projectsData || projects || [])
-  const totalProgress = allProgress.length > 0
-    ? Math.round(allProgress.reduce((sum, p) => sum + p.progress, 0) / allProgress.length)
-    : 0
+  // Roll-ups are the table rows. When the aggregate has not loaded yet, fall
+  // back to a roll-up shape derived from the project list so the table (and
+  // filters / bulk-select) still work — the module-health cells just show as
+  // neutral until the aggregate arrives.
+  const rollups: ProjectRollup[] = useMemo(() => {
+    if (summary?.projectRollups && summary.projectRollups.length > 0) {
+      return summary.projectRollups
+    }
+    return projectList.map((p): ProjectRollup => ({
+      projectId: p.id,
+      slug: p.slug ?? p.id,
+      name: p.name,
+      domain: p.domain ?? '',
+      status: p.status,
+      dal: null,
+      progress: p.progress,
+      owner: null,
+      teamMembers: [],
+      updatedAt: p.updatedAt,
+      reqCount: { count: null, health: 'ok' },
+      verCoverage: { count: null, health: 'ok' },
+      suspectCount: { count: null, health: 'ok' },
+      issueCount: { count: null, health: 'ok' },
+      hazardCount: { count: null, health: 'ok' },
+      gate: { code: 'pre-SRR', state: 'none' },
+    }))
+  }, [summary, projectList])
 
-  const inputStyle: React.CSSProperties = {
-    padding: '5px 10px',
-    borderRadius: 6,
-    border: '1px solid var(--theme-border)',
-    backgroundColor: 'var(--theme-bg)',
-    color: 'var(--theme-text)',
-    fontSize: 12,
-    outline: 'none',
-  }
+  // The same `displayedProjects` filter chain as before — now applied to the
+  // roll-up rows (status / date-range / active / search).
+  const displayedRollups = useMemo(
+    () =>
+      rollups
+        .filter((r) => filterValue === 'all' || r.status === filterValue)
+        .filter((r) => !dateRange || (() => {
+          const u = new Date(r.updatedAt)
+          return u >= new Date(dateRange.from) && u <= new Date(dateRange.to)
+        })())
+        .filter((r) => !showRunningOnly || r.status === 'active')
+        .filter((r) => !searchQuery || r.name.toLowerCase().includes(searchQuery.toLowerCase())),
+    [rollups, filterValue, dateRange, showRunningOnly, searchQuery],
+  )
+
+  // The Project entity behind a roll-up row — used by the per-row actions
+  // (Team / Analytics / Audit / Delete) which operate on `Project`.
+  const projectById = useMemo(
+    () => new Map(projectList.map((p) => [p.id, p])),
+    [projectList],
+  )
+
+  const allSelected =
+    displayedRollups.length > 0 && selectedProjectIds.length === displayedRollups.length
+
+  // KPIs — from the aggregate, with a zeroed fallback before it loads.
+  const kpis = summary?.kpis
+  const myQueue = summary?.myQueue ?? []
+  const activityFeed = summary?.activityFeed ?? []
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1280 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', margin: 0 }}>Projects</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: 'var(--theme-text)', margin: 0 }}>
+          Portfolio
+        </h1>
         <CreateProjectButton />
       </div>
 
-      {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        <StatCard label="Total Projects" value={totalProjects} subtitle="across all domains" />
-        <StatCard label="Active" value={runningProjects.length} subtitle="currently running" />
-        <StatCard label="Avg Progress" value={`${totalProgress}%`} subtitle="mean completion" />
-      </div>
-
-      {/* Search + filter bar */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
-          <Search size={13} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--theme-text-muted)', pointerEvents: 'none' }} />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ ...inputStyle, paddingLeft: 28, width: '100%', boxSizing: 'border-box' }}
-          />
-        </div>
-        <select
-          value={filterValue}
-          onChange={e => setFilterValue(e.target.value)}
-          style={inputStyle}
-        >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="archived">Archived</option>
-        </select>
-
-        <input
-          type="date"
-          value={dateRange?.from || ''}
-          onChange={e => setDateRange(r => ({ from: e.target.value, to: r?.to ?? '' }))}
-          style={inputStyle}
-        />
-        <input
-          type="date"
-          value={dateRange?.to || ''}
-          onChange={e => setDateRange(r => ({ from: r?.from ?? '', to: e.target.value }))}
-          style={inputStyle}
-        />
-        <button
-          onClick={() => setShowRunningOnly(v => !v)}
-          title="Active only"
-          style={{
-            ...inputStyle,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            cursor: 'pointer',
-            color: showRunningOnly ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
-            borderColor: showRunningOnly ? 'var(--theme-accent)' : 'var(--theme-border)',
-          }}
-        >
-          <Filter size={13} />
-        </button>
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowBulkMenu(v => !v)}
-            style={{
-              ...inputStyle,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              cursor: 'pointer',
-              color: showBulkMenu ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
-              borderColor: showBulkMenu ? 'var(--theme-accent)' : 'var(--theme-border)',
-            }}
-          >
-            <ListChecks size={13} />
-          </button>
-          {showBulkMenu && selectedProjectIds.length > 0 && (
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              top: '100%',
-              marginTop: 4,
-              backgroundColor: 'var(--theme-surface)',
-              border: '1px solid var(--theme-border)',
-              borderRadius: 6,
-              padding: 8,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-              zIndex: 20,
-              minWidth: 160,
-            }}>
-              <button onClick={handleBulkDelete} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
-                <Trash2 size={13} /> Delete selected ({selectedProjectIds.length})
+      {/* "Today" info-banner — the caller's pending sign-offs at a glance. */}
+      {kpis && (kpis.signOffsPending.mine > 0 || kpis.openHazards.open > 0) && (
+        <Banner
+          variant="info"
+          actions={
+            myQueue.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  document
+                    .getElementById('dashboard-my-queue')
+                    ?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                style={{
+                  border: 0,
+                  background: 'transparent',
+                  color: 'inherit',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  padding: 0,
+                }}
+              >
+                Open my queue
               </button>
-              <button onClick={handleBulkExport} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--theme-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
-                <FileDown size={13} /> Export selected
-              </button>
+            ) : undefined
+          }
+        >
+          {kpis.signOffsPending.mine > 0
+            ? `${kpis.signOffsPending.mine} sign-off${kpis.signOffsPending.mine === 1 ? ' is' : 's are'} waiting on you`
+            : 'No sign-offs are waiting on you'}
+          {kpis.signOffsPending.overdue > 0 && ` · ${kpis.signOffsPending.overdue} overdue`}
+          {kpis.openHazards.catastrophic > 0 &&
+            `. ${kpis.openHazards.catastrophic} Catastrophic hazard${kpis.openHazards.catastrophic === 1 ? '' : 's'} open.`}
+        </Banner>
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 320px',
+          gap: 16,
+          alignItems: 'start',
+        }}
+      >
+        {/* ---- LEFT COLUMN ---- */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          {/* 6-cell KPI grid (3x2) inside a bordered card. */}
+          <Card>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              {[
+                {
+                  key: 'active',
+                  label: 'Active projects',
+                  value: kpis?.activeProjects.count ?? 0,
+                  sub:
+                    kpis && kpis.activeProjects.deltaThisQuarter !== 0
+                      ? `+${kpis.activeProjects.deltaThisQuarter} this quarter`
+                      : 'this quarter',
+                },
+                {
+                  key: 'signoffs',
+                  label: 'Sign-offs pending',
+                  value: kpis?.signOffsPending.total ?? 0,
+                  sub: `${kpis?.signOffsPending.overdue ?? 0} overdue · ${kpis?.signOffsPending.mine ?? 0} mine`,
+                },
+                {
+                  key: 'coverage',
+                  label: 'Verification coverage',
+                  value: `${kpis?.verificationCoverage.pct ?? 0}%`,
+                  sub: 'portfolio-wide',
+                },
+                {
+                  key: 'requirements',
+                  label: 'Open requirements',
+                  value: kpis?.openRequirements.open ?? 0,
+                  sub: `${kpis?.openRequirements.releasedPct ?? 0}% released · ${kpis?.openRequirements.inReview ?? 0} in review`,
+                },
+                {
+                  key: 'hazards',
+                  label: 'Open hazards',
+                  value: kpis?.openHazards.open ?? 0,
+                  sub: `${kpis?.openHazards.catastrophic ?? 0} Catastrophic · ${kpis?.openHazards.hazardous ?? 0} Hazardous`,
+                },
+                {
+                  key: 'issues',
+                  label: 'Open issues',
+                  value: kpis?.openIssues.open ?? 0,
+                  sub: `${kpis?.openIssues.critical ?? 0} critical`,
+                },
+              ].map((cell, idx) => (
+                <StatTile
+                  key={cell.key}
+                  label={cell.label}
+                  value={cell.value}
+                  sub={cell.sub}
+                  style={{
+                    borderRight: idx % 3 === 2 ? undefined : '1px solid var(--theme-border)',
+                    borderBottom: idx < 3 ? '1px solid var(--theme-border)' : undefined,
+                  }}
+                />
+              ))}
             </div>
+          </Card>
+
+          {/* Filter sub-bar — search + status / DAL / owner-ish + active + bulk. */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+              <input
+                type="text"
+                aria-label="Filter projects"
+                placeholder="Filter projects…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  height: 30,
+                  padding: '0 10px',
+                  borderRadius: 6,
+                  border: '1px solid var(--theme-border)',
+                  background: 'var(--theme-bg)',
+                  color: 'var(--theme-text)',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+            </div>
+            <select
+              aria-label="Filter by status"
+              value={filterValue}
+              onChange={(e) => setFilterValue(e.target.value)}
+              style={{
+                height: 30,
+                padding: '0 8px',
+                borderRadius: 6,
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-bg)',
+                color: 'var(--theme-text)',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
+            <input
+              type="date"
+              aria-label="Updated from"
+              value={dateRange?.from || ''}
+              onChange={(e) => setDateRange((r) => ({ from: e.target.value, to: r?.to ?? '' }))}
+              style={{
+                height: 30,
+                padding: '0 8px',
+                borderRadius: 6,
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-bg)',
+                color: 'var(--theme-text)',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+            <input
+              type="date"
+              aria-label="Updated to"
+              value={dateRange?.to || ''}
+              onChange={(e) => setDateRange((r) => ({ from: r?.from ?? '', to: e.target.value }))}
+              style={{
+                height: 30,
+                padding: '0 8px',
+                borderRadius: 6,
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-bg)',
+                color: 'var(--theme-text)',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+            <Button
+              variant={showRunningOnly ? 'primary' : 'default'}
+              onClick={() => setShowRunningOnly((v) => !v)}
+              title="Active only"
+            >
+              <Filter size={14} aria-hidden="true" />
+              Active only
+            </Button>
+            <div style={{ position: 'relative' }}>
+              <Button
+                variant={showBulkMenu ? 'primary' : 'default'}
+                onClick={() => setShowBulkMenu((v) => !v)}
+                title="Bulk actions"
+              >
+                <ListChecks size={14} aria-hidden="true" />
+                Bulk
+              </Button>
+              {showBulkMenu && selectedProjectIds.length > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '100%',
+                    marginTop: 4,
+                    background: 'var(--theme-surface)',
+                    border: '1px solid var(--theme-border)',
+                    borderRadius: 6,
+                    padding: 8,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    zIndex: 20,
+                    minWidth: 180,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  <button
+                    onClick={handleBulkDelete}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      color: 'var(--status-danger)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                    }}
+                  >
+                    <Trash2 size={14} aria-hidden="true" /> Delete selected ({selectedProjectIds.length})
+                  </button>
+                  <button
+                    onClick={handleBulkExport}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      color: 'var(--theme-accent)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                    }}
+                  >
+                    <FileDown size={14} aria-hidden="true" /> Export selected
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* #263: inline banner for delete failures (previously window.alert). */}
+          {deleteErrorBanner && (
+            <Banner
+              variant="danger"
+              actions={
+                <button
+                  type="button"
+                  onClick={() => setDeleteErrorBanner(null)}
+                  aria-label="Dismiss"
+                  style={{
+                    border: 0,
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    padding: 0,
+                  }}
+                >
+                  ×
+                </button>
+              }
+            >
+              {deleteErrorBanner}
+            </Banner>
+          )}
+
+          {/* Project table */}
+          {isLoading ? (
+            <LoadingSpinner label="Loading portfolio…" />
+          ) : error ? (
+            <Card>
+              <div style={{ padding: 16 }}>
+                <ErrorMessage
+                  message={error instanceof Error ? error.message : 'Error loading projects.'}
+                  inline
+                />
+                <p style={{ color: 'var(--theme-text-muted)', fontSize: 12, marginBottom: 12 }}>
+                  Check that the backend is running, the database is connected, and you are
+                  logged in.
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="primary" onClick={() => refetch()}>
+                    Retry
+                  </Button>
+                  <Button as="a" href="/api/health" target="_blank" rel="noopener noreferrer">
+                    Check backend health
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : displayedRollups.length === 0 ? (
+            <Card>
+              <div style={{ padding: 24 }}>
+                <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, marginBottom: 12 }}>
+                  No projects match. Clear the filters, or create a project.
+                </p>
+                <CreateProjectButton />
+              </div>
+            </Card>
+          ) : (
+            <Card style={{ overflow: 'visible' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeaderCell style={{ width: 36, paddingLeft: 16 }}>
+                      <Checkbox
+                        aria-label="Select all projects"
+                        checked={allSelected}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                      />
+                    </TableHeaderCell>
+                    <TableHeaderCell style={{ width: 280 }}>Project</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 56 }}>DAL</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 140 }}>Progress</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 210 }}>Module health</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 120 }}>Owner</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 100 }}>Updated</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 84 }}>Gate</TableHeaderCell>
+                    <TableHeaderCell style={{ width: 92 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {displayedRollups.map((r) => {
+                    const selected = selectedProjectIds.includes(r.projectId)
+                    const project = projectById.get(r.projectId)
+                    const navigateToProject = () => navigate(`/projects/${r.slug}`)
+                    return (
+                      <TableRow
+                        key={r.projectId}
+                        selected={selected}
+                        role="link"
+                        tabIndex={0}
+                        onClick={navigateToProject}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigateToProject()
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {/* Checkbox */}
+                        <TableCell
+                          selected={selected}
+                          style={{ paddingLeft: 16 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            aria-label={`Select ${r.name}`}
+                            checked={selected}
+                            onChange={(e) => handleSelectProject(r.projectId, e.target.checked)}
+                          />
+                        </TableCell>
+                        {/* Project name + status dot + sub */}
+                        <TableCell selected={selected}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <span
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 999,
+                                flexShrink: 0,
+                                background: statusDotColor(r.status),
+                              }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  color: 'var(--theme-text)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {r.name}
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: MONO,
+                                  fontSize: 10.5,
+                                  color: 'var(--theme-text-muted)',
+                                  marginTop: 1,
+                                }}
+                              >
+                                {[r.domain, r.dal ? `DAL ${r.dal}` : null, r.status]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        {/* DAL chip */}
+                        <TableCell selected={selected}>
+                          {r.dal ? (
+                            <DalChip dal={r.dal as Dal} />
+                          ) : (
+                            <span style={{ color: 'var(--theme-text-muted)', fontSize: 12 }}>—</span>
+                          )}
+                        </TableCell>
+                        {/* Progress bar */}
+                        <TableCell selected={selected}>
+                          <ProgressBar
+                            value={r.progress}
+                            atRisk={r.verCoverage.health === 'danger'}
+                          />
+                        </TableCell>
+                        {/* Module health chips */}
+                        <TableCell selected={selected}>
+                          <div style={{ display: 'inline-flex', gap: 3, flexWrap: 'wrap' }}>
+                            <MonoChip tint={chipTint(r.reqCount.health)}>
+                              REQ {r.reqCount.count ?? '—'}
+                            </MonoChip>
+                            <MonoChip tint={chipTint(r.verCoverage.health)}>
+                              VER {r.verCoverage.count === null ? '—' : `${r.verCoverage.count}%`}
+                            </MonoChip>
+                            <MonoChip tint={chipTint(r.suspectCount.health)}>
+                              SUS {r.suspectCount.count ?? '—'}
+                            </MonoChip>
+                            <MonoChip tint={chipTint(r.hazardCount.health)}>
+                              HAZ {r.hazardCount.count ?? '—'}
+                            </MonoChip>
+                            <MonoChip tint={chipTint(r.issueCount.health)}>
+                              ISS {r.issueCount.count ?? '—'}
+                            </MonoChip>
+                          </div>
+                        </TableCell>
+                        {/* Owner + team Avatar stack */}
+                        <TableCell selected={selected}>
+                          <OwnerStack rollup={r} />
+                        </TableCell>
+                        {/* Updated */}
+                        <TableCell selected={selected}>
+                          <span
+                            style={{ fontFamily: MONO, fontSize: 11, color: 'var(--theme-text-muted)' }}
+                          >
+                            {relativeTime(r.updatedAt)}
+                          </span>
+                        </TableCell>
+                        {/* Gate chip */}
+                        <TableCell selected={selected}>
+                          <MonoChip
+                            tint={
+                              r.gate.state === 'at-risk'
+                                ? 'red'
+                                : r.gate.state === 'cleared' || r.gate.state === 'released'
+                                  ? 'green'
+                                  : 'default'
+                            }
+                          >
+                            {r.gate.code}
+                          </MonoChip>
+                        </TableCell>
+                        {/* Row actions */}
+                        <TableCell
+                          selected={selected}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            {[
+                              {
+                                icon: Users,
+                                title: 'Team',
+                                action: () => project && setTeamModalProject(project),
+                              },
+                              {
+                                icon: BarChart3,
+                                title: 'Analytics',
+                                action: () => project && setAnalyticsModalProject(project),
+                              },
+                              {
+                                icon: LogOut,
+                                title: 'Audit',
+                                action: () => project && setAuditLogModalProject(project),
+                              },
+                              {
+                                icon: Trash2,
+                                title: 'Delete',
+                                action: (e: React.MouseEvent) =>
+                                  handleDeleteClick(e, r.projectId, r.name),
+                                danger: true,
+                                disabled:
+                                  deleteProjectMutation.isPending &&
+                                  projectToDelete === r.projectId,
+                              },
+                            ].map(({ icon: Icon, title, action, danger, disabled }) => (
+                              <button
+                                key={title}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  action(e as React.MouseEvent)
+                                }}
+                                disabled={disabled}
+                                title={title}
+                                aria-label={`${title} ${r.name}`}
+                                style={{
+                                  padding: '3px 5px',
+                                  borderRadius: 4,
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: disabled ? 'not-allowed' : 'pointer',
+                                  color: danger ? 'var(--status-danger)' : 'var(--theme-text-muted)',
+                                  opacity: disabled ? 0.4 : 1,
+                                }}
+                              >
+                                <Icon size={14} aria-hidden="true" />
+                              </button>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
           )}
         </div>
-        {displayedProjects.length > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--theme-text-muted)', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={selectedProjectIds.length === displayedProjects.length}
-              onChange={(e) => handleSelectAll(e.target.checked)}
-            />
-            Select all
-          </label>
-        )}
+
+        {/* ---- RIGHT RAIL ---- */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          {/* My queue */}
+          <Card>
+            <CardHead title="My queue" meta={`${myQueue.length} items`} />
+            <div id="dashboard-my-queue">
+              {myQueue.length === 0 ? (
+                <div style={{ padding: '14px', fontSize: 12.5, color: 'var(--theme-text-muted)' }}>
+                  Nothing awaiting your sign-off. Review windows open here as they assign to you.
+                </div>
+              ) : (
+                myQueue.map((q, i) => (
+                  <button
+                    key={`${q.entityType}-${q.entityRef}-${i}`}
+                    type="button"
+                    onClick={() => navigate(`/projects/${q.projectId}`)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 14px',
+                      borderBottom:
+                        i < myQueue.length - 1 ? '1px solid var(--theme-border)' : undefined,
+                      background: 'transparent',
+                      borderLeft: 0,
+                      borderRight: 0,
+                      borderTop: 0,
+                      cursor: 'pointer',
+                      fontSize: 12.5,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        flexShrink: 0,
+                        background: queueDotColor(q.priority),
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        color: 'var(--theme-text-muted)',
+                        minWidth: 64,
+                      }}
+                    >
+                      {q.entityRef}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        color: 'var(--theme-text)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {q.label}
+                    </span>
+                    <span
+                      style={{ fontFamily: MONO, fontSize: 11, color: 'var(--theme-text-muted)' }}
+                    >
+                      {relativeAge(q.ageMs)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </Card>
+
+          {/* Activity feed */}
+          <Card>
+            <CardHead>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--theme-text)',
+                }}
+              >
+                Activity
+              </h3>
+              {activityFeed.length >= 2 && (
+                <span style={{ marginLeft: 8 }}>
+                  <Sparkline points={activityVolumeSeries(activityFeed)} />
+                </span>
+              )}
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 11.5,
+                  color: 'var(--theme-text-muted)',
+                }}
+              >
+                all projects
+              </span>
+            </CardHead>
+            <div style={{ maxHeight: 480, overflow: 'auto' }}>
+              {activityFeed.length === 0 ? (
+                <div style={{ padding: '14px', fontSize: 12.5, color: 'var(--theme-text-muted)' }}>
+                  No activity yet across your projects.
+                </div>
+              ) : (
+                activityFeed.map((a, i) => {
+                  const tone = activityToneStyle(a.tone)
+                  return (
+                    <button
+                      key={`${a.action}-${a.timestamp}-${i}`}
+                      type="button"
+                      onClick={() => navigate(`/projects/${a.projectId}`)}
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 14px',
+                        borderBottom:
+                          i < activityFeed.length - 1
+                            ? '1px solid var(--theme-border)'
+                            : undefined,
+                        background: 'transparent',
+                        borderLeft: 0,
+                        borderRight: 0,
+                        borderTop: 0,
+                        cursor: 'pointer',
+                        fontSize: 12.5,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          flexShrink: 0,
+                          background: tone.bg,
+                          color: tone.ink,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontFamily: MONO,
+                          fontSize: 10,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {a.tone === 'success'
+                          ? '✓'
+                          : a.tone === 'danger'
+                            ? '✕'
+                            : a.tone === 'warn'
+                              ? '!'
+                              : '•'}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span
+                          style={{
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: 6,
+                          }}
+                        >
+                          <span style={{ fontWeight: 500, color: 'var(--theme-text)' }}>
+                            {a.actor}
+                          </span>
+                          <span
+                            style={{
+                              marginLeft: 'auto',
+                              fontFamily: MONO,
+                              fontSize: 11,
+                              color: 'var(--theme-text-muted)',
+                            }}
+                          >
+                            {relativeTime(a.timestamp)}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            display: 'block',
+                            color: 'var(--theme-text-muted)',
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {a.summary} in <b style={{ color: 'var(--theme-text)' }}>{a.projectName}</b>
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
 
-      {/* #263: inline banner for delete failures (previously window.alert). */}
-      {deleteErrorBanner && (
+      {/* #262: Analytics / Audit modals render an explicit empty-state body so
+          the features do not look broken. */}
+      {analyticsModalProject && (
         <div
-          role="alert"
           style={{
-            padding: '10px 14px',
-            borderRadius: 6,
-            border: '1px solid #fca5a5',
-            backgroundColor: '#fef2f2',
-            color: '#b91c1c',
-            fontSize: 12,
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
+            justifyContent: 'center',
+            zIndex: 50,
           }}
+          onClick={() => setAnalyticsModalProject(null)}
         >
-          <span>{deleteErrorBanner}</span>
-          <button
-            type="button"
-            onClick={() => setDeleteErrorBanner(null)}
-            style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: 14 }}
-            aria-label="Dismiss"
+          <Card
+            surface
+            style={{ width: '100%', maxWidth: 600 }}
           >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* Content */}
-      {isLoading ? (
-        <div style={{ color: 'var(--theme-text-muted)', fontSize: 13, padding: '32px 0' }}>Loading projects...</div>
-      ) : error ? (
-        <div style={{ padding: '24px', borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)' }}>
-          <p style={{ color: '#ef4444', fontSize: 13, marginBottom: 8, fontWeight: 500 }}>
-            {error instanceof Error ? error.message : 'Error loading projects.'}
-          </p>
-          <p style={{ color: 'var(--theme-text-muted)', fontSize: 12, marginBottom: 12 }}>
-            Check that the backend is running, the database is connected, and you are logged in.
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => refetch()}
-              style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
-            >
-              Retry
-            </button>
-            <a
-              href="/api/health"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ padding: '6px 14px', backgroundColor: 'var(--theme-sidebar-item-active)', color: 'var(--theme-text)', borderRadius: 6, fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-            >
-              Check backend health
-            </a>
-          </div>
-        </div>
-      ) : displayedProjects.length === 0 ? (
-        <div style={{ color: 'var(--theme-text-muted)', fontSize: 13, padding: '32px 0' }}>
-          <p style={{ marginBottom: 12 }}>No projects found.</p>
-          <CreateProjectButton />
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-          {displayedProjects.map((project) => (
-            <DashboardProjectCard
-              key={project.id}
-              project={project}
-              selected={selectedProjectIds.includes(project.id)}
-              isDeleting={deleteProjectMutation.isPending && projectToDelete === project.id}
-              onSelect={handleSelectProject}
-              onDelete={handleDeleteClick}
-              onTeam={setTeamModalProject}
-              onAnalytics={setAnalyticsModalProject}
-              onAudit={setAuditLogModalProject}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* #262: Analytics / Audit modals used to render just a title + Close
-          button with no actual content, making the features look broken.
-          Render an explicit empty-state body so the user knows the feature
-          is not built on this page rather than failing. */}
-      {analyticsModalProject && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
-             onClick={() => setAnalyticsModalProject(null)}>
-          <div
-            style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 8 }}>
-              Project Analytics: {analyticsModalProject.name}
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
-              Per-project analytics are not built on this page yet. Track requirement coverage, verification status, and traceability from the project's own dashboard once you open the project.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setAnalyticsModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+            <div style={{ padding: 24 }} onClick={(e) => e.stopPropagation()}>
+              <h2
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: 'var(--theme-text)',
+                  marginBottom: 8,
+                  marginTop: 0,
+                }}
+              >
+                Project Analytics: {analyticsModalProject.name}
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
+                Per-project analytics are not built on this page yet. Track requirement
+                coverage, verification status, and traceability from the project's own
+                dashboard once you open the project.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button variant="primary" onClick={() => setAnalyticsModalProject(null)}>
+                  Close
+                </Button>
+              </div>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {auditLogModalProject && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
-             onClick={() => setAuditLogModalProject(null)}>
-          <div
-            style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 8 }}>
-              Audit Log: {auditLogModalProject.name}
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
-              A per-project audit-log view is not built on this page yet. Platform admins can read the tenant-wide audit log from Platform Admin.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setAuditLogModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+          onClick={() => setAuditLogModalProject(null)}
+        >
+          <Card surface style={{ width: '100%', maxWidth: 600 }}>
+            <div style={{ padding: 24 }} onClick={(e) => e.stopPropagation()}>
+              <h2
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: 'var(--theme-text)',
+                  marginBottom: 8,
+                  marginTop: 0,
+                }}
+              >
+                Audit Log: {auditLogModalProject.name}
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
+                A per-project audit-log view is not built on this page yet. Platform admins can
+                read the tenant-wide audit log from Platform Admin.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button variant="primary" onClick={() => setAuditLogModalProject(null)}>
+                  Close
+                </Button>
+              </div>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -629,8 +1319,71 @@ export default function DashboardPage() {
       <ProjectTeamModal
         project={teamModalProject}
         onClose={() => setTeamModalProject(null)}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['projects'] })}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['projects'] })
+          queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+        }}
       />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// OwnerStack — an overlapping Avatar stack (owner + team) with a +n overflow.
+// ---------------------------------------------------------------------------
+
+function OwnerStack({ rollup }: { rollup: ProjectRollup }) {
+  // Owner first, then up-to-2 other team members, then a +n overflow chip.
+  const seen = new Set<string>()
+  const ordered: { userId: string; name: string }[] = []
+  if (rollup.owner) {
+    ordered.push({ userId: rollup.owner.userId, name: rollup.owner.name })
+    seen.add(rollup.owner.userId)
+  }
+  for (const m of rollup.teamMembers) {
+    if (seen.has(m.userId)) continue
+    seen.add(m.userId)
+    ordered.push({ userId: m.userId, name: m.name })
+  }
+  if (ordered.length === 0) {
+    return <span style={{ color: 'var(--theme-text-muted)', fontSize: 12 }}>—</span>
+  }
+  const shown = ordered.slice(0, 3)
+  const overflow = ordered.length - shown.length
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {shown.map((m, i) => (
+        <Avatar
+          key={m.userId}
+          name={m.name}
+          size={22}
+          style={{
+            marginLeft: i === 0 ? 0 : -5,
+            border: '1.5px solid var(--theme-bg)',
+          }}
+        />
+      ))}
+      {overflow > 0 && (
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 999,
+            marginLeft: -5,
+            border: '1.5px solid var(--theme-bg)',
+            background: 'var(--theme-surface)',
+            color: 'var(--theme-text-muted)',
+            fontFamily: MONO,
+            fontSize: 9,
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          +{overflow}
+        </span>
+      )}
     </div>
   )
 }
