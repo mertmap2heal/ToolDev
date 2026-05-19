@@ -6,10 +6,20 @@ import type {
   UpdateProjectDto,
 } from 'shared/types/project.types'
 import type { ApiResponse } from 'shared/types/api.types'
+import type { DashboardSummary } from 'shared/types/dashboard/index'
 
 export const projectService = {
   async getProjects(): Promise<ApiResponse<Project[]>> {
     return apiClient.get<Project[]>('/projects')
+  },
+
+  /**
+   * RF-2 (#484) — the portfolio dashboard aggregate: KPIs, per-project
+   * roll-ups, the caller's pending-action queue, and the activity feed.
+   * Visibility-scoped server-side to the caller's accessible projects.
+   */
+  async getDashboardSummary(): Promise<ApiResponse<DashboardSummary>> {
+    return apiClient.get<DashboardSummary>('/projects/dashboard-summary')
   },
 
   async getProject(id: string): Promise<ApiResponse<Project>> {
