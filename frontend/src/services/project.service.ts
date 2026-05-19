@@ -6,7 +6,7 @@ import type {
   UpdateProjectDto,
 } from 'shared/types/project.types'
 import type { ApiResponse } from 'shared/types/api.types'
-import type { DashboardSummary } from 'shared/types/dashboard/index'
+import type { DashboardSummary, ProjectLandingSummary } from 'shared/types/dashboard/index'
 
 export const projectService = {
   async getProjects(): Promise<ApiResponse<Project[]>> {
@@ -24,6 +24,17 @@ export const projectService = {
 
   async getProject(id: string): Promise<ApiResponse<Project>> {
     return apiClient.get<Project>(`/projects/${id}`)
+  },
+
+  /**
+   * RF-3 (#487) — the project-landing aggregate: identity, the five discipline
+   * progress bars, the lifecycle gate, owner / team, and per-module health
+   * rows. Membership-scoped server-side (`requireProjectMember`).
+   */
+  async getProjectLandingSummary(
+    projectId: string,
+  ): Promise<ApiResponse<ProjectLandingSummary>> {
+    return apiClient.get<ProjectLandingSummary>(`/projects/${projectId}/landing-summary`)
   },
 
   async createProject(data: CreateProjectDto): Promise<ApiResponse<Project>> {
