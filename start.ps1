@@ -209,6 +209,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
+# --- 3e2. Seed standard lifecycle catalogue (idempotent - safe to run every start) ---
+Write-Host "  Seeding lifecycle phases..."
+Push-Location (Join-Path $ROOT "backend")
+npm run seed:lifecycle-phases
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  WARNING: seed:lifecycle-phases failed - run manually: cd backend && npm run seed:lifecycle-phases"
+} else {
+    Write-Host "  Lifecycle catalogue up to date."
+}
+Pop-Location
+
 # --- 3f. Seed dedicated e2e test user (idempotent - safe to run every start) ---
 # Guarantees the Playwright auth flow has the account it logs in with, so the
 # e2e suite is self-contained. Fixed non-secret test password - no env var.

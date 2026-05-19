@@ -56,6 +56,8 @@ model User {
   baselineRootsCreated                BaselineRoot[]                    @relation("BaselineRootCreatedBy")
   committeeMemberships                CommitteeMember[]
   raciAssignments                     RaciAssignment[]
+  lifecyclePhasesCreated              LifecyclePhase[]                  @relation("LifecyclePhaseCreatedBy")
+  lifecycleTransitionsCreated         LifecycleTransition[]             @relation("LifecycleTransitionCreatedBy")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -176,6 +178,15 @@ model Project {
   // behaviour. Distinct from strictLifecycleGates, which gates only
   // lifecycle-status transitions. Toggled solely via PATCH /:id/strict-mode.
   strictMode           Boolean           @default(false)
+
+  // Lifecycle persistence (ROADMAP NX-11; issue #474). The project's current
+  // lifecycle phase, plus the timestamp it was entered. Both nullable and
+  // additive per the R-6 `strictMode` precedent — a project has no current
+  // phase until one is set. `currentPhaseId` is a nullable FK to
+  // LifecyclePhase (onDelete: SetNull); `phaseEnteredAt` is consumed later by
+  // LF-4 checklist-gated transitions and the Control Tower SLA math.
+  currentPhaseId       String?
+  phaseEnteredAt       DateTime?
 
   // Safety-classification domain (ROADMAP NX-9; kb/safety-standards.md).
   // Distinct from `domain` above — `domain` is a required free-text
@@ -306,6 +317,9 @@ model Project {
   fmeas                       Fmea[]
   fmeaRows                    FmeaRow[]
   fmeaHazardLinks             FmeaHazardLink[]
+  lifecyclePhases             LifecyclePhase[]
+  lifecycleTransitions        LifecycleTransition[]
+  currentPhase                LifecyclePhase?              @relation("ProjectCurrentPhase", fields: [currentPhaseId], references: [id], onDelete: SetNull)
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -4937,4 +4951,85 @@ model FmeaHazardLink {
   @@unique([fmeaId, hazardId])
   @@index([projectId])
   @@index([hazardId])
+}
+
+// ============================================================================
+// LIFECYCLE DEFINITION (ROADMAP NX-11; issue #474)
+// ============================================================================
+// LifecyclePhase + LifecycleTransition are the relational home of the lifecycle
+// definition that previously lived only in the frontend `lifecycleStore`
+// localStorage. The graph shape mirrors the store's `steps[]` /
+// `transitionRules[]`.
+//
+// Scoping: `lifecycleScope` discriminates standard | organization | project.
+// `standard`/`organization` rows are a shared catalog (`projectId = null`);
+// `project`-scoped rows carry a real `projectId`. The endpoints filter to
+// `projectId IS NULL OR projectId = :projectId` so a caller never reads
+// another project's custom lifecycle (N-3 tenant rule).
+//
+// Provenance: a lifecycle definition is project *configuration*, not a
+// cert-relevant artefact — it carries a light `createdByUserId` human marker
+// (the BaselineRoot / SignatureEvent pattern), NOT the R-1 8-field lattice.
+
+model LifecyclePhase {
+  id                  String   @id @default(uuid())
+  // standard | organization | project — mirrors the store `Lifecycle.type`.
+  lifecycleScope      String   @default("project")
+  // Set when lifecycleScope='project'; null for standard/organization catalog
+  // rows. The catalog row's stable seed key lives in `seedKey` instead.
+  projectId           String?
+  // Stable identity for an idempotent catalog seed (e.g. "std-do178c::Planning").
+  // Null for project-custom phases. Unique so the seed upserts cleanly.
+  seedKey             String?  @unique
+  // Logical lifecycle this phase belongs to — the store's `Lifecycle.id`.
+  // Phases sharing a lifecycleKey form one ordered lifecycle.
+  lifecycleKey        String
+  lifecycleName       String
+  lifecycleVersion    String   @default("1.0")
+  lifecycleDescription String?
+  name                String
+  description         String?
+  // FK-by-string into the status-definition catalog — kept loose (the store
+  // does the same; tightening this join is deferred LF-4 work).
+  statusId            String
+  orderIndex          Int
+  isInitial           Boolean  @default(false)
+  // Item types this lifecycle applies to — mirrors the store
+  // `Lifecycle.applicableItemTypes`.
+  applicableItemTypes String[]
+  createdByUserId     String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project         Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy       User?                 @relation("LifecyclePhaseCreatedBy", fields: [createdByUserId], references: [id])
+  currentForProjects Project[]          @relation("ProjectCurrentPhase")
+  transitionsFrom LifecycleTransition[] @relation("fromPhase")
+  transitionsTo   LifecycleTransition[] @relation("toPhase")
+
+  @@index([projectId])
+  @@index([lifecycleScope])
+  @@index([lifecycleKey, orderIndex])
+}
+
+model LifecycleTransition {
+  id                        String   @id @default(uuid())
+  projectId                 String?
+  lifecycleKey              String
+  fromPhaseId               String
+  toPhaseId                 String
+  // Discipline / engineering-role ids gating this transition — mirrors the
+  // store `TransitionRule.allowedEngineeringRoleIds`.
+  allowedEngineeringRoleIds String[]
+  createdByUserId           String?
+  createdAt                 DateTime @default(now())
+
+  fromPhase LifecyclePhase @relation("fromPhase", fields: [fromPhaseId], references: [id], onDelete: Cascade)
+  toPhase   LifecyclePhase @relation("toPhase", fields: [toPhaseId], references: [id], onDelete: Cascade)
+  project   Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?          @relation("LifecycleTransitionCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@unique([fromPhaseId, toPhaseId])
+  @@index([projectId])
+  @@index([lifecycleKey])
 }
