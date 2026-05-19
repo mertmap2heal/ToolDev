@@ -13,10 +13,9 @@
  *
  * Every pre-existing behaviour is preserved: `useFeaturePackage().isEnabled()`
  * per-module filtering, module navigation/routing, the `MODULES` / `CATEGORIES`
- * config, and deep links. The legacy bare `location.pathname` reference is
- * fixed to `useLocation()`.
+ * config, and deep links.
  */
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronRight, type LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { MODULES, CATEGORIES, type ModuleCategory } from '../../config/ModuleConfiguration'
@@ -593,9 +592,6 @@ function MetaCell({ label, children }: { label: string; children: React.ReactNod
 export default function ProjectLandingPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  // Fixes the legacy bare `location.pathname` reference — `useLocation` is the
-  // React-Router hook; a free `location` was the global `window.location`.
-  useLocation()
   const { isEnabled } = useFeaturePackage()
 
   const {

@@ -26,6 +26,7 @@ import {
   DAL_ORDER,
   VER_PASS_STATUSES,
   VER_RUN_STATUSES,
+  verCoverageHealth,
   deriveGate,
 } from './projectHealth.shared'
 
@@ -89,10 +90,18 @@ export async function composeProjectLandingSummary(
       : Promise.resolve(null),
   ])
 
-  // --- Step 3: requirements (status groups) + DAL hazards (1 batch) ---
-  const [reqGroups, dalRows] = await Promise.all([
+  // --- Step 3: requirements (review-status + status groups) + DAL hazards
+  //             (1 batch — the three queries are independent) ---
+  const [reqGroups, reqStatusGroups, dalRows] = await Promise.all([
     prisma.requirement.groupBy({
       by: ['reviewStatus'],
+      where: { projectId, deletedAt: null },
+      _count: { _all: true },
+    }),
+    // "Released" requirements for the module sub-row — by `Requirement.status`,
+    // a separate group (the dashboard `verified|released|approved|done` rule).
+    prisma.requirement.groupBy({
+      by: ['status'],
       where: { projectId, deletedAt: null },
       _count: { _all: true },
     }),
@@ -109,13 +118,6 @@ export async function composeProjectLandingSummary(
     reqTotal += n
     if (g.reviewStatus === 'approved') reqApproved += n
   }
-  // "Released" requirements for the module sub-row — by `Requirement.status`,
-  // a separate group (the dashboard `verified|released|approved|done` rule).
-  const reqStatusGroups = await prisma.requirement.groupBy({
-    by: ['status'],
-    where: { projectId, deletedAt: null },
-    _count: { _all: true },
-  })
   for (const g of reqStatusGroups) {
     if (g.status && /released|verified|approved|done/i.test(g.status)) {
       reqReleased += g._count._all
@@ -145,13 +147,15 @@ export async function composeProjectLandingSummary(
     if (g.resultStatus === 'FAIL') verFail += n
   }
 
-  // --- Step 5: suspect links, open issues, open hazards, cert objectives,
-  //             open/overdue tasks, open change requests, validation items ---
+  // --- Step 5: suspect links, open issues, open hazards (by severity),
+  //             all hazards (by status), cert objectives, open/overdue tasks,
+  //             open change requests, validation items ---
   const now = new Date()
   const [
     suspectGroups,
     issueGroups,
     hazardGroups,
+    hazardClosedRows,
     certGroups,
     taskOpenCount,
     taskOverdueCount,
@@ -171,6 +175,12 @@ export async function composeProjectLandingSummary(
     prisma.hazard.groupBy({
       by: ['severity'],
       where: { projectId, deletedAt: null, status: { not: 'Closed' } },
+      _count: { _all: true },
+    }),
+    // Safety discipline % = hazard-closure rate over ALL non-deleted hazards.
+    prisma.hazard.groupBy({
+      by: ['status'],
+      where: { projectId, deletedAt: null },
       _count: { _all: true },
     }),
     prisma.certObjective.groupBy({
@@ -217,12 +227,8 @@ export async function composeProjectLandingSummary(
     if (g.severity === HAZARD_SEVERITY_CATASTROPHIC) hazardCatastrophic += g._count._all
     if (g.severity === HAZARD_SEVERITY_HAZARDOUS) hazardHazardous += g._count._all
   }
-  // Safety discipline % = hazard-closure rate over ALL non-deleted hazards.
-  const hazardClosedRows = await prisma.hazard.groupBy({
-    by: ['status'],
-    where: { projectId, deletedAt: null },
-    _count: { _all: true },
-  })
+  // Safety discipline % = hazard-closure rate over ALL non-deleted hazards
+  // (`hazardClosedRows` — fetched in the Step 5 batch above).
   let hazardAll = 0
   let hazardClosed = 0
   for (const g of hazardClosedRows) {
@@ -323,7 +329,10 @@ export async function composeProjectLandingSummary(
     moduleHealth.push({
       moduleId: 'verification',
       headline: `${verPct}%`,
-      headlineHealth: disciplineHealth(verPct),
+      // Verification-coverage health — the same `verCoverageHealth` (>=85 ok)
+      // band the dashboard's verification cell uses, so a project at 82-84%
+      // coverage does not read `ok` here and `warn` on the dashboard.
+      headlineHealth: verCoverageHealth(verPct),
       segments,
     })
   }

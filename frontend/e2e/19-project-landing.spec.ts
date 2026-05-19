@@ -57,17 +57,37 @@ test.describe('Project Landing', () => {
   })
 
   test('a feature-disabled module is not rendered as a card', async ({ page, projectId }) => {
+    // Drive the dev feature-package switch down to `core`. The provider reads
+    // the `devPackage` localStorage key once, at mount (FeaturePackageContext
+    // `getInitialPackage`), so the key must be set BEFORE a reload. `core`
+    // includes `requirements` + `verification` but excludes `certification`
+    // (minPackage `complete`) — see frontend/src/config/packages/core.json.
     await page.goto(`/projects/${projectId}`)
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByRole('button', { name: 'Open Requirements' })).toBeVisible({
-      timeout: 10_000,
-    })
-    // Every visible module card has an "Open <label>" accessible name; a
-    // module hidden by the active feature package renders no such card. The
-    // count of rendered cards never exceeds the 21-module catalogue.
-    const cardCount = await page.getByRole('button', { name: /^Open / }).count()
-    expect(cardCount).toBeGreaterThan(0)
-    expect(cardCount).toBeLessThanOrEqual(21)
+    try {
+      await page.evaluate(() => localStorage.setItem('devPackage', 'core'))
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+
+      // A core module still renders its card.
+      await expect(page.getByRole('button', { name: 'Open Requirements' })).toBeVisible({
+        timeout: 10_000,
+      })
+      // A non-core module (Certification — `complete` tier) renders NO card
+      // once the package is `core`. This is the real assertion the unstrict
+      // `0 < n <= 21` count check could never make: it proves `isEnabled`
+      // filtering actually removes a hidden module.
+      await expect(page.getByRole('button', { name: 'Open Certification' })).toHaveCount(0)
+
+      // Every visible card carries an "Open <label>" accessible name; the
+      // rendered set is a strict subset of the 21-module catalogue.
+      const cardCount = await page.getByRole('button', { name: /^Open / }).count()
+      expect(cardCount).toBeGreaterThan(0)
+      expect(cardCount).toBeLessThan(21)
+    } finally {
+      // Restore the dev-default `complete` package for any later test.
+      await page.evaluate(() => localStorage.removeItem('devPackage'))
+    }
   })
 
   test('loading and error copy is engineer-voice (no emoji)', async ({ page, projectId }) => {
