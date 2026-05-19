@@ -1017,7 +1017,16 @@ test.describe('Requirements', () => {
 
     // Switch to Compare mode and pick the two snapshots.
     await page.getByRole('button', { name: /^Compare$/ }).click()
-    const versionTiles = page.getByRole('button').filter({ hasText: /^[0-9]/ })
+    // Scope the tile locator to the Version History modal. A page-wide
+    // getByRole('button') can match digit-prefixed buttons rendered behind
+    // the modal, and clicking one is then intercepted by the modal's
+    // fixed-inset-0 backdrop -- an order-dependent flake (OE-8, #496).
+    const versionModal = page
+      .locator('.fixed.inset-0')
+      .filter({ has: page.getByRole('heading', { name: /Version History/i }) })
+    const versionTiles = versionModal.getByRole('button').filter({ hasText: /^[0-9]/ })
+    // Wait for Compare mode to render its snapshot tiles before counting.
+    await expect(versionTiles.first()).toBeVisible({ timeout: 10_000 })
     // Pick the two highest-numbered snapshot tiles.
     const tileCount = await versionTiles.count()
     if (tileCount < 2) {
