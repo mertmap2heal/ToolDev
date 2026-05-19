@@ -60,16 +60,37 @@ html {
   -moz-osx-font-smoothing: grayscale;
 
   /* Default: Light theme (GitHub Light-inspired) */
-  --theme-bg:                  #ffffff;
-  --theme-surface:             #f6f8fa;
-  --theme-sidebar:             #f6f8fa;
+  --theme-bg:                  #FBFBFA;
+  --theme-surface:             #F4F5F2;
+  --theme-sidebar:             #F4F5F2;
   --theme-text:                #1f2328;
   --theme-text-muted:          #656d76;
   --theme-border:              #d0d7de;
+  /* D8 (improvements/ROADMAP-refresh.md): the App surface deliberately keeps
+     the BLUE action accent. design-system.md section 3.1's deep-forest accent
+     (#1B4332) is scoped to the Verum marketing surface (preview/landing)
+     ONLY. The R-9 :root and .dark ink, surface and accent token block above
+     stays intact, scoped to that marketing surface. */
   --theme-accent:              #0969da;
   --theme-accent-subtle:       #ddf4ff;
   --theme-sidebar-item-hover:  rgba(175, 184, 193, 0.20);
   --theme-sidebar-item-active: rgba(175, 184, 193, 0.30);
+  /* Refresh palette C reconciliation (RF-0): accent-hover, the two new hues
+     (purple, teal) with tint companions, the status tint/ink companions, and
+     the neutral tint. Declared in both :root and html[data-theme="midnight"];
+     consumed by RF-1+, not RF-0. */
+  --theme-accent-hover:        #0860C7;
+  --theme-purple:              #6F42C1;
+  --theme-purple-tint:         #F1E8FF;
+  --theme-teal:                #117165;
+  --theme-teal-tint:           #E1F0EE;
+  --theme-success-tint:        #E5EFE9;
+  --theme-warning-tint:        #FBF0D8;
+  --theme-warning-ink:         #5C4400;
+  --theme-danger-tint:         #FBE9E7;
+  --theme-info-tint:           #DDF1FF;
+  --theme-info-ink:            #054EA3;
+  --theme-neutral-tint:        #ECEEF0;
   color-scheme: light;
   color: var(--theme-text);
   background-color: var(--theme-bg);
@@ -87,6 +108,21 @@ html[data-theme="midnight"] {
   --theme-accent-subtle:       #1f3a5f;
   --theme-sidebar-item-hover:  rgba(177, 186, 196, 0.08);
   --theme-sidebar-item-active: rgba(177, 186, 196, 0.14);
+  /* RF-0: authored midnight equivalents of the new palette-C tokens (D5).
+     New hues brightened for dark legibility; each -tint a low-luminance
+     translucent wash; each -ink a bright on-dark hue. */
+  --theme-accent-hover:        #388bfd;
+  --theme-purple:              #bc8cff;
+  --theme-purple-tint:         rgba(188, 140, 255, 0.15);
+  --theme-teal:                #3bb3a3;
+  --theme-teal-tint:           rgba(59, 179, 163, 0.15);
+  --theme-success-tint:        rgba(63, 185, 80, 0.15);
+  --theme-warning-tint:        rgba(210, 153, 34, 0.15);
+  --theme-warning-ink:         #e3b341;
+  --theme-danger-tint:         rgba(248, 81, 73, 0.15);
+  --theme-info-tint:           rgba(47, 129, 247, 0.15);
+  --theme-info-ink:            #79c0ff;
+  --theme-neutral-tint:        rgba(177, 186, 196, 0.12);
   color-scheme: dark;
   color: var(--theme-text);
   background-color: var(--theme-bg);
