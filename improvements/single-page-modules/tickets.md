@@ -149,12 +149,12 @@ Per `frontend.md` §7 and the inline comment at line 42 of `LifecycleStatusPage.
 **Acceptance:** Three tabs become two (Control Tower + Lifecycle Settings). URL `?tab=status` redirects to Control Tower.
 
 ### LF-2 (L) — Promote lifecycle phases from Zustand to Prisma
-**Status: Shipped — 6c27e93 (Issue #474, NX-11).** Bundled with LF-3 as ROADMAP NX-11 "Lifecycle persistence".
+**Status: Shipped — Issue #474 / PR #475 / merge commit 2fbacc8 on `dev` (code commit 6c27e93), NX-11.** Bundled with LF-3 as ROADMAP NX-11 "Lifecycle persistence".
 Per `backend.md` §7. Lifecycle definitions previously lived only in `frontend/src/store/lifecycleStore.ts` (localStorage-persisted). Shipped: `LifecyclePhase` + `LifecycleTransition` Prisma models, `Project.currentPhaseId` + `Project.phaseEnteredAt` columns, an idempotent standard-catalogue seed (`seed-lifecycle-phases.ts`, wired into `start.ps1`), the store re-pointed off `persist` to a DB-hydrated in-memory cache (`useLifecycleSync`) with a one-time silent localStorage->DB migration of any browser-local custom lifecycles.
 **Acceptance met:** Lifecycle definitions persist server-side; the Zustand store is a DB-hydrated cache, no localStorage source of truth.
 
 ### LF-3 (Q) — Replace stub endpoints `/library`, `/applicable`, `/transitions`
-**Status: Shipped — 6c27e93 (Issue #474, NX-11).** Bundled with LF-2 as ROADMAP NX-11 "Lifecycle persistence".
+**Status: Shipped — Issue #474 / PR #475 / merge commit 2fbacc8 on `dev` (code commit 6c27e93), NX-11.** Bundled with LF-2 as ROADMAP NX-11 "Lifecycle persistence".
 Per `backend.md` §7. The three placeholder stubs at `lifecycle.routes.ts:11-35` returned empty data. Shipped: replaced with real model-backed, project-scoped endpoints (`projectIdParam` + `requireProjectMember`) — `GET /:projectId/library|applicable|transitions` — plus the lifecycle write endpoints (`POST/PUT/DELETE /:projectId/definitions`) the editor now needs for server-side persistence. Catalogue (standard/organization) lifecycles are read-only (403 on write).
 **Acceptance met:** Stubs replaced with real endpoints returning DB data; the frontend adapter is backend-only.
 
