@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Safety · Overview — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .s-body { padding: 16px 20px 24px; display: grid; grid-template-columns: 1fr 320px; gap: 16px; overflow: auto; }
+  .s-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .s-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  /* Top KPIs */
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); overflow: hidden;
+  }
+  .kpis .stat { padding: 14px 16px; border-right: 1px solid var(--line); }
+  .kpis .stat:last-child { border-right: 0; }
+  .kpis .stat .num { font-size: 22px; }
+  .kpis .stat .num.red { color: var(--red); }
+  .kpis .stat .num.amber { color: var(--amber); }
+  .kpis .stat .num.green { color: var(--green); }
+
+  /* Risk matrix 5x5 */
+  .rm {
+    display: grid;
+    grid-template-columns: 90px repeat(5, 1fr);
+    grid-auto-rows: 56px;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .rm .h {
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--fg-3);
+    font-family: var(--app-font-mono);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    text-align: center; padding: 4px;
+  }
+  .rm .yh { writing-mode: vertical-rl; transform: rotate(180deg); }
+  .rm .cell {
+    background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px;
+    cursor: pointer; position: relative;
+  }
+  .rm .cell .ct {
+    font-family: var(--app-font-mono); font-size: 18px; font-weight: 600;
+    color: var(--fg); line-height: 1;
+  }
+  .rm .cell .sub { font-size: 10px; color: var(--fg-3); font-family: var(--app-font-mono); }
+  .rm .cell.zero .ct { color: var(--fg-4); }
+  .rm .cell.zero { background: var(--surface-soft); }
+  .rm .cell.cat { background: rgba(180,35,24,0.18); }
+  .rm .cell.cat .ct { color: var(--red); }
+  .rm .cell.hi { background: rgba(180,35,24,0.10); }
+  .rm .cell.hi .ct { color: var(--red); }
+  .rm .cell.mh { background: rgba(184,134,11,0.12); }
+  .rm .cell.mh .ct { color: var(--amber-ink); }
+  .rm .cell.med { background: var(--amber-tint); }
+  .rm .cell.med .ct { color: var(--amber-ink); }
+  .rm .cell.low { background: var(--green-tint); }
+  .rm .cell.low .ct { color: var(--green); }
+  .rm .cell:hover { outline: 2px solid var(--blue); outline-offset: -2px; z-index: 2; }
+
+  /* method coverage */
+  .meth-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 0;
+  }
+  .meth-row {
+    display: grid;
+    grid-template-columns: 50px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12.5px;
+  }
+  .meth-row:last-child { border-bottom: 0; }
+  .meth-row .id {
+    font-family: var(--app-font-mono); font-size: 11px;
+    font-weight: 600; color: var(--fg);
+    padding: 2px 6px; border-radius: 3px;
+    background: var(--surface-2); text-align: center;
+  }
+  .meth-row .body { min-width: 0; }
+  .meth-row .nm { font-size: 13px; font-weight: 500; color: var(--fg); }
+  .meth-row .sub { font-size: 11px; color: var(--fg-3); }
+  .meth-row .bars {
+    display: flex; gap: 2px; align-items: flex-end;
+    height: 18px;
+  }
+  .meth-row .b {
+    width: 14px; border-radius: 1px;
+    background: var(--surface-2);
+    position: relative;
+  }
+  .meth-row .b.draft { background: var(--fg-4); }
+  .meth-row .b.review { background: var(--amber); }
+  .meth-row .b.approved { background: var(--green); }
+  .meth-row .b > span {
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    font-family: var(--app-font-mono); font-size: 9px;
+    color: var(--fg-3); margin-bottom: 2px;
+  }
+  .meth-row .ct {
+    font-family: var(--app-font-mono); font-size: 12px;
+    color: var(--fg-2); min-width: 32px; text-align: right;
+  }
+
+  /* blockers */
+  .blk-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12.5px;
+  }
+  .blk-row:last-child { border-bottom: 0; }
+  .blk-row .t { flex: 1; min-width: 0; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
+  .blk-row .ct {
+    font-family: var(--app-font-mono); font-size: 12px; font-weight: 600;
+    color: var(--amber-ink); min-width: 28px; text-align: right;
+  }
+
+  /* quick actions */
+  .qa-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 14px; }
+  .qa-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); cursor: pointer;
+    text-decoration: none; color: var(--fg);
+    font-size: 13px;
+    transition: border-color 120ms ease, background 120ms ease;
+  }
+  .qa-btn:hover { background: var(--surface); border-color: var(--line-strong); }
+  .qa-btn .ico {
+    width: 28px; height: 28px; border-radius: 5px;
+    background: var(--surface);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .qa-btn .body { display: flex; flex-direction: column; min-width: 0; }
+  .qa-btn .nm { font-weight: 500; font-size: 12.5px; }
+  .qa-btn .sub { font-size: 11px; color: var(--fg-3); }
+
+  /* baseline trend */
+  .trend-chart { height: 140px; padding: 14px; position: relative; }
+  .trend-chart svg { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="04 Safety (B · overview)">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item is-active" href="04-safety-B.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><a>Falcon-9R Avionics</a><span class="sep">/</span><a>Safety analysis</a><span class="sep">/</span><b>Overview</b></div>
+      <div class="title-row">
+        <h1>Safety analysis</h1>
+        <span class="meta">System <b>Avionics suite</b> &middot; baseline <b>B-2026-04-12</b> &middot; <b>80</b> hazards · <b>22</b> analyses</span>
+        <div class="right">
+          <button class="btn"><i data-lucide="file-down" style="width:14px;height:14px;"></i>Safety case</button>
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import FMEA</button>
+          <div class="btn-split">
+            <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New hazard</button>
+            <button class="btn primary"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></button>
+          </div>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab is-active" href="#">Overview</a>
+        <a class="tab" href="04-safety-A.html">Hazards<span class="tab-count">80</span></a>
+        <a class="tab" href="#">Analyses<span class="tab-count">22</span></a>
+        <a class="tab" href="#">FTA</a>
+        <a class="tab" href="#">Markov</a>
+        <a class="tab" href="#">Risk matrix</a>
+        <a class="tab" href="#">Traceability</a>
+        <a class="tab" href="#">Reviews</a>
+        <span style="flex:1;"></span>
+        <a class="tab" href="04-safety-A.html" style="color:var(--fg-3);">Switch to hazard list ↗</a>
+      </div>
+    </div>
+
+    <div class="s-body">
+
+      <div class="s-main">
+
+        <!-- KPIs -->
+        <div class="kpis">
+          <div class="stat">
+            <span class="lbl">Total hazards</span>
+            <span class="num">80</span>
+            <span class="sub"><span class="delta up">+3</span> this baseline · 22 analyses</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Open · unmitigated</span>
+            <span class="num red">31</span>
+            <span class="sub">4 Catastrophic · 9 Hazardous</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Missing links</span>
+            <span class="num amber">11</span>
+            <span class="sub">REQ · VER · IFC</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Verified</span>
+            <span class="num green">26</span>
+            <span class="sub">33% of all · <span class="delta up">+5</span></span>
+          </div>
+        </div>
+
+        <!-- Risk matrix -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Risk matrix · 5×5</h3>
+            <span class="meta">Severity × Likelihood &middot; 80 hazards plotted</span>
+          </div>
+          <div style="padding: 14px;">
+            <div class="rm">
+              <div class="h"></div>
+              <div class="h">Improbable<br/><span style="color:var(--fg-4); text-transform:none; font-family:inherit; letter-spacing:0;">1</span></div>
+              <div class="h">Remote<br/><span style="color:var(--fg-4); text-transform:none; font-family:inherit; letter-spacing:0;">2</span></div>
+              <div class="h">Occasional<br/><span style="color:var(--fg-4); text-transform:none; font-family:inherit; letter-spacing:0;">3</span></div>
+              <div class="h">Probable<br/><span style="color:var(--fg-4); text-transform:none; font-family:inherit; letter-spacing:0;">4</span></div>
+              <div class="h">Frequent<br/><span style="color:var(--fg-4); text-transform:none; font-family:inherit; letter-spacing:0;">5</span></div>
+
+              <div class="h yh">Catastrophic</div>
+              <div class="cell mh"><span class="ct">1</span><span class="sub">HAZ-022</span></div>
+              <div class="cell hi"><span class="ct">2</span></div>
+              <div class="cell cat"><span class="ct">1</span><span class="sub">HAZ-018</span></div>
+              <div class="cell cat zero"><span class="ct">0</span></div>
+              <div class="cell cat zero"><span class="ct">0</span></div>
+
+              <div class="h yh">Hazardous</div>
+              <div class="cell med"><span class="ct">3</span></div>
+              <div class="cell mh"><span class="ct">6</span></div>
+              <div class="cell hi"><span class="ct">5</span></div>
+              <div class="cell hi"><span class="ct">3</span></div>
+              <div class="cell cat zero"><span class="ct">1</span><span class="sub">HAZ-061</span></div>
+
+              <div class="h yh">Major</div>
+              <div class="cell low"><span class="ct">4</span></div>
+              <div class="cell med"><span class="ct">7</span></div>
+              <div class="cell med"><span class="ct">9</span></div>
+              <div class="cell mh"><span class="ct">5</span></div>
+              <div class="cell hi"><span class="ct">2</span></div>
+
+              <div class="h yh">Minor</div>
+              <div class="cell low"><span class="ct">5</span></div>
+              <div class="cell low"><span class="ct">8</span></div>
+              <div class="cell med"><span class="ct">6</span></div>
+              <div class="cell med"><span class="ct">3</span></div>
+              <div class="cell mh"><span class="ct">1</span></div>
+
+              <div class="h yh">No effect</div>
+              <div class="cell low"><span class="ct">2</span></div>
+              <div class="cell low"><span class="ct">3</span></div>
+              <div class="cell low"><span class="ct">2</span></div>
+              <div class="cell low zero"><span class="ct">1</span></div>
+              <div class="cell low zero"><span class="ct">0</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Methods + Trend -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="card">
+            <div class="card-head">
+              <h3>Analysis methods</h3>
+              <span class="meta">draft · review · approved</span>
+            </div>
+            <div>
+              <div class="meth-row">
+                <span class="id">FHA</span>
+                <div class="body">
+                  <div class="nm">Functional Hazard Analysis</div>
+                  <div class="sub">9 analyses · ARP4761</div>
+                </div>
+                <span class="bars">
+                  <span class="b draft" style="height: 8px;"></span>
+                  <span class="b review" style="height: 14px;"></span>
+                  <span class="b approved" style="height: 18px;"></span>
+                </span>
+                <span class="ct">2 / 3 / 4</span>
+              </div>
+              <div class="meth-row">
+                <span class="id">FTA</span>
+                <div class="body">
+                  <div class="nm">Fault Tree Analysis</div>
+                  <div class="sub">7 trees · top events</div>
+                </div>
+                <span class="bars">
+                  <span class="b draft" style="height: 10px;"></span>
+                  <span class="b review" style="height: 8px;"></span>
+                  <span class="b approved" style="height: 16px;"></span>
+                </span>
+                <span class="ct">3 / 1 / 3</span>
+              </div>
+              <div class="meth-row">
+                <span class="id">FMEA</span>
+                <div class="body">
+                  <div class="nm">Failure Mode &amp; Effects</div>
+                  <div class="sub">4 analyses · 218 modes</div>
+                </div>
+                <span class="bars">
+                  <span class="b draft" style="height: 4px;"></span>
+                  <span class="b review" style="height: 10px;"></span>
+                  <span class="b approved" style="height: 16px;"></span>
+                </span>
+                <span class="ct">1 / 1 / 2</span>
+              </div>
+              <div class="meth-row">
+                <span class="id">Mkv</span>
+                <div class="body">
+                  <div class="nm">Markov reliability</div>
+                  <div class="sub">2 models · MTTF</div>
+                </div>
+                <span class="bars">
+                  <span class="b draft" style="height: 6px;"></span>
+                  <span class="b review" style="height: 4px;"></span>
+                  <span class="b approved" style="height: 12px;"></span>
+                </span>
+                <span class="ct">1 / 0 / 1</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Hazard count by baseline</h3>
+              <span class="meta">last 6 baselines</span>
+            </div>
+            <div class="trend-chart">
+              <svg viewBox="0 0 280 110" preserveAspectRatio="none">
+                <!-- gridlines -->
+                <line x1="0" y1="25" x2="280" y2="25" stroke="#E8EAEC" stroke-dasharray="2 2"/>
+                <line x1="0" y1="55" x2="280" y2="55" stroke="#E8EAEC" stroke-dasharray="2 2"/>
+                <line x1="0" y1="85" x2="280" y2="85" stroke="#E8EAEC" stroke-dasharray="2 2"/>
+                <!-- area for catastrophic -->
+                <polyline fill="rgba(180,35,24,0.10)" stroke="#B42318" stroke-width="1.5"
+                  points="0,82 56,80 112,78 168,82 224,80 280,78" />
+                <!-- hazardous -->
+                <polyline fill="none" stroke="#B45309" stroke-width="1.5"
+                  points="0,72 56,68 112,64 168,60 224,58 280,55" />
+                <!-- major -->
+                <polyline fill="none" stroke="#B8860B" stroke-width="1.5"
+                  points="0,55 56,52 112,50 168,46 224,42 280,38" />
+                <!-- minor -->
+                <polyline fill="none" stroke="#1B4332" stroke-width="1.5"
+                  points="0,38 56,36 112,34 168,30 224,28 280,25" />
+                <!-- markers -->
+                <g fill="#fff" stroke="#B42318" stroke-width="1.5">
+                  <circle cx="0" cy="82" r="2"/><circle cx="56" cy="80" r="2"/><circle cx="112" cy="78" r="2"/>
+                  <circle cx="168" cy="82" r="2"/><circle cx="224" cy="80" r="2"/><circle cx="280" cy="78" r="2"/>
+                </g>
+                <!-- baseline labels -->
+                <text x="0" y="105" font-family="JetBrains Mono" font-size="8" fill="#9DA4AB">B-…-01</text>
+                <text x="56" y="105" font-family="JetBrains Mono" font-size="8" fill="#9DA4AB">02</text>
+                <text x="112" y="105" font-family="JetBrains Mono" font-size="8" fill="#9DA4AB">03</text>
+                <text x="168" y="105" font-family="JetBrains Mono" font-size="8" fill="#9DA4AB">04</text>
+                <text x="224" y="105" font-family="JetBrains Mono" font-size="8" fill="#9DA4AB">05</text>
+                <text x="248" y="105" font-family="JetBrains Mono" font-size="8" fill="#9DA4AB">06</text>
+              </svg>
+            </div>
+            <div style="padding: 0 14px 14px; display: flex; gap: 16px; font-size: 11px; color: var(--fg-3); font-family: var(--app-font-mono);">
+              <span><span style="display:inline-block; width:10px; height:2px; background:#B42318; vertical-align:middle; margin-right:4px;"></span>Cat</span>
+              <span><span style="display:inline-block; width:10px; height:2px; background:#B45309; vertical-align:middle; margin-right:4px;"></span>Haz</span>
+              <span><span style="display:inline-block; width:10px; height:2px; background:#B8860B; vertical-align:middle; margin-right:4px;"></span>Maj</span>
+              <span><span style="display:inline-block; width:10px; height:2px; background:#1B4332; vertical-align:middle; margin-right:4px;"></span>Min</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT RAIL -->
+      <div class="s-side">
+
+        <!-- Quick actions -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Quick actions</h3>
+          </div>
+          <div class="qa-grid">
+            <a class="qa-btn" href="#">
+              <span class="ico"><i data-lucide="plus" style="width:14px;height:14px;"></i></span>
+              <div class="body"><span class="nm">New hazard</span><span class="sub">define + source</span></div>
+            </a>
+            <a class="qa-btn" href="#">
+              <span class="ico"><i data-lucide="file-plus" style="width:14px;height:14px;"></i></span>
+              <div class="body"><span class="nm">New analysis</span><span class="sub">FHA · FMEA</span></div>
+            </a>
+            <a class="qa-btn" href="#">
+              <span class="ico"><i data-lucide="git-branch" style="width:14px;height:14px;"></i></span>
+              <div class="body"><span class="nm">Fault tree</span><span class="sub">FTA · cut sets</span></div>
+            </a>
+            <a class="qa-btn" href="#">
+              <span class="ico"><i data-lucide="bar-chart-3" style="width:14px;height:14px;"></i></span>
+              <div class="body"><span class="nm">Markov model</span><span class="sub">MTTF · MTBF</span></div>
+            </a>
+          </div>
+        </div>
+
+        <!-- Top blockers -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Top blockers</h3>
+            <span class="meta">cannot ship audit pack</span>
+          </div>
+          <div>
+            <div class="blk-row"><i data-lucide="link-2" style="width:14px;height:14px;color:var(--fg-3);"></i><span class="t">Hazards missing verification links</span><span class="ct">11</span></div>
+            <div class="blk-row"><i data-lucide="git-pull-request" style="width:14px;height:14px;color:var(--fg-3);"></i><span class="t">FHA in review beyond 7 d</span><span class="ct">3</span></div>
+            <div class="blk-row"><i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--fg-3);"></i><span class="t">FTA top events without rate evidence</span><span class="ct">4</span></div>
+            <div class="blk-row"><i data-lucide="circle-x" style="width:14px;height:14px;color:var(--fg-3);"></i><span class="t">Markov state coverage &lt; 95%</span><span class="ct">2</span></div>
+            <div class="blk-row"><i data-lucide="clock" style="width:14px;height:14px;color:var(--fg-3);"></i><span class="t">Reviews overdue</span><span class="ct">6</span></div>
+          </div>
+        </div>
+
+        <!-- Recent hazards -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Recently changed</h3>
+            <a href="04-safety-A.html" class="meta" style="color: var(--blue-ink); text-decoration: none;">all 80 ↗</a>
+          </div>
+          <div>
+            <div class="blk-row">
+              <span class="sev catastrophic">Cat</span>
+              <span class="t" style="font-family: var(--app-font-mono); font-size: 11.5px;">HAZ-018</span>
+              <span class="t" style="color: var(--fg);">GPS lock loss · banking</span>
+              <span class="ct" style="font-weight: 400; color: var(--fg-3);">2 d</span>
+            </div>
+            <div class="blk-row">
+              <span class="sev hazardous">Haz</span>
+              <span class="t" style="font-family: var(--app-font-mono); font-size: 11.5px;">HAZ-061</span>
+              <span class="t" style="color: var(--fg);">CAN bus saturation</span>
+              <span class="ct" style="font-weight: 400; color: var(--fg-3);">11 d</span>
+            </div>
+            <div class="blk-row">
+              <span class="sev hazardous">Haz</span>
+              <span class="t" style="font-family: var(--app-font-mono); font-size: 11.5px;">HAZ-044</span>
+              <span class="t" style="color: var(--fg);">Autopilot disengage</span>
+              <span class="ct" style="font-weight: 400; color: var(--fg-3);">6 d</span>
+            </div>
+            <div class="blk-row">
+              <span class="sev major">Maj</span>
+              <span class="t" style="font-family: var(--app-font-mono); font-size: 11.5px;">HAZ-080</span>
+              <span class="t" style="color: var(--fg);">Display freeze · landing</span>
+              <span class="ct" style="font-weight: 400; color: var(--fg-3);">3 w</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Project <b>Falcon-9R Avionics</b></span>
+    <span>80 hazards · 22 analyses</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

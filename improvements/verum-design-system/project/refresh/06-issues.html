@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Issues — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .i-body { display: grid; grid-template-columns: 1fr 460px; overflow: hidden; }
+  .ilist { display: flex; flex-direction: column; overflow: hidden; min-width: 0; border-right: 1px solid var(--line); }
+  .ipanel { display: flex; flex-direction: column; overflow: auto; background: var(--bg); }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); }
+  .kpis .stat { padding: 12px 16px; border-right: 1px solid var(--line); }
+  .kpis .stat:last-child { border-right: 0; }
+  .kpis .stat .num { font-size: 20px; }
+  .kpis .stat .num.red { color: var(--red); }
+  .kpis .stat .num.amber { color: var(--amber); }
+
+  /* table */
+  .scroll { flex: 1; overflow: auto; }
+  table.it { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
+  table.it thead th {
+    text-align: left; background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3); font-size: 12px; font-weight: 500;
+    padding: 7px 12px; white-space: nowrap;
+    position: sticky; top: 0; z-index: 2;
+  }
+  table.it td {
+    padding: 0 12px; height: 48px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--bg); vertical-align: top;
+    padding-top: 9px;
+  }
+  table.it tr:hover td { background: var(--surface-soft); cursor: pointer; }
+  table.it tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue); }
+
+  .id { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-2); }
+  .titcell { display: flex; flex-direction: column; gap: 3px; }
+  .titcell .t { color: var(--fg); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .titcell .meta { font-family: var(--app-font-mono); font-size: 10.5px; color: var(--fg-3); display: flex; gap: 5px; }
+  .titcell .meta .sep { color: var(--fg-4); }
+  .titcell .meta .ref { color: var(--blue-ink); }
+
+  .ow { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-2); }
+  .ow .av { width: 20px; height: 20px; font-size: 9px; }
+  .when { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .age {
+    font-family: var(--app-font-mono); font-size: 11px;
+    color: var(--fg-3);
+  }
+  .age.urgent { color: var(--red); font-weight: 500; }
+  .age.warn { color: var(--amber-ink); }
+
+  /* Detail panel */
+  .ip-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .ip-head .id { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .ip-head h2 {
+    margin: 4px 0 8px;
+    font-size: 17px; font-weight: 600; line-height: 1.35; letter-spacing: -0.005em;
+    color: var(--fg);
+  }
+  .ip-head .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ip-head .actions .btn { font-size: 12px; height: 26px; padding: 0 10px; }
+
+  .ip-meta {
+    display: grid; grid-template-columns: 100px 1fr;
+    border-bottom: 1px solid var(--line);
+  }
+  .ip-meta .row {
+    display: contents;
+  }
+  .ip-meta .k {
+    padding: 8px 18px;
+    font-size: 11px;
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--surface-soft);
+    border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: center;
+  }
+  .ip-meta .v {
+    padding: 8px 18px;
+    font-size: 12.5px;
+    color: var(--fg);
+    border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ip-meta .row:last-child .k,
+  .ip-meta .row:last-child .v { border-bottom: 0; }
+
+  .ip-section {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .ip-section h3 {
+    margin: 0 0 8px;
+    font-size: 11px; color: var(--fg-3); font-weight: 500;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .ip-section p { margin: 0 0 8px; font-size: 13px; color: var(--fg); line-height: 1.55; }
+
+  .links-list { display: flex; flex-direction: column; gap: 4px; }
+  .link-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--bg);
+    font-size: 12.5px;
+  }
+  .link-row .id { width: 80px; }
+  .link-row .t { flex: 1; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Activity */
+  .act {
+    display: flex; gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12.5px;
+  }
+  .act:last-child { border-bottom: 0; }
+  .act .av { width: 22px; height: 22px; font-size: 10px; }
+  .act .body { flex: 1; min-width: 0; }
+  .act .head { display: flex; align-items: baseline; gap: 6px; }
+  .act .head .who { font-weight: 500; color: var(--fg); }
+  .act .head .what { color: var(--fg-3); font-size: 12px; }
+  .act .head .when { margin-left: auto; font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-4); }
+  .act .quote {
+    margin-top: 4px;
+    padding: 8px 10px;
+    border-left: 2px solid var(--blue);
+    background: var(--blue-tint);
+    border-radius: 0 4px 4px 0;
+    font-size: 12.5px; color: var(--fg);
+  }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="06 Issues">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item is-active" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><a>Falcon-9R Avionics</a><span class="sep">/</span><b>Issues</b></div>
+
+      <div class="title-row">
+        <h1>Issues</h1>
+        <span class="meta"><b>23</b> open · <b>1</b> critical · <b>2</b> high · avg age <b>4.2 d</b></span>
+        <div class="right">
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import</button>
+          <button class="btn"><i data-lucide="download" style="width:14px;height:14px;"></i>Export</button>
+          <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New issue</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <a class="tab is-active" href="#">Open<span class="tab-count">23</span></a>
+        <a class="tab" href="#">Mine<span class="tab-count">4</span></a>
+        <a class="tab" href="#">Watching<span class="tab-count">7</span></a>
+        <a class="tab" href="#">Blocked<span class="tab-count">3</span></a>
+        <a class="tab" href="#">Resolved<span class="tab-count">128</span></a>
+        <a class="tab" href="#">All</a>
+      </div>
+    </div>
+
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Filter by ID, title, linked item, owner, label…" />
+        <span class="kbd">⌘F</span>
+      </div>
+      <span class="filter-pill compact active"><span class="key">Severity</span><span class="val">Critical, High</span><span class="x">×</span></span>
+      <span class="filter-pill compact"><span class="key">Status</span><span class="val">Open</span></span>
+      <span class="filter-pill compact"><span class="key">Component</span><span class="val">Any</span></span>
+      <button class="filter-pill ghost"><i data-lucide="plus" style="width:13px;height:13px;"></i>Add filter</button>
+      <button class="filter-pill clear-all">Clear all</button>
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>Sort: Severity, then age</button>
+        <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Group: None</button>
+      </div>
+    </div>
+
+    <div class="i-body">
+
+      <!-- LIST -->
+      <div class="ilist">
+
+        <div class="kpis">
+          <div class="stat"><span class="lbl">Open</span><span class="num">23</span><span class="sub"><span class="delta down" style="color:var(--red);">+7</span> last 7 d</span></div>
+          <div class="stat"><span class="lbl">Critical</span><span class="num red">1</span><span class="sub">avg age <b>2 d 4 h</b></span></div>
+          <div class="stat"><span class="lbl">High</span><span class="num amber">2</span><span class="sub">SLA breach 0</span></div>
+          <div class="stat"><span class="lbl">Blocked</span><span class="num">3</span><span class="sub">2 on rig 02</span></div>
+          <div class="stat"><span class="lbl">Resolved · 30 d</span><span class="num">128</span><span class="sub">MTTR <b>3.4 d</b></span></div>
+        </div>
+
+        <div class="scroll">
+          <table class="it">
+            <colgroup>
+              <col style="width: 36px;"/>
+              <col style="width: 78px;"/>
+              <col style="width: 78px;"/>
+              <col/>
+              <col style="width: 110px;"/>
+              <col style="width: 78px;"/>
+              <col style="width: 60px;"/>
+            </colgroup>
+            <thead>
+              <tr>
+                <th style="padding-left:16px;"><input type="checkbox" class="check"/></th>
+                <th>ID</th>
+                <th>Severity</th>
+                <th>Issue</th>
+                <th>Linked to</th>
+                <th>Owner</th>
+                <th style="text-align: right;">Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="is-active">
+                <td style="padding-left:16px;"><input type="checkbox" class="check" checked/></td>
+                <td><span class="id">ISS-0119</span></td>
+                <td><span class="sev catastrophic">Critical</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">GPS lock loss during high-G banking exceeds 1.2 s ceiling</div>
+                    <div class="meta"><span>Open</span><span class="sep">·</span><span>navigation</span><span class="sep">·</span><span class="ref">↑ REQ-1024</span></div>
+                  </div>
+                </td>
+                <td><a href="03-verification-A.html" class="id" style="color:var(--blue-ink);">↑ VER-0301</a></td>
+                <td><div class="ow"><span class="av a-l">LR</span>Rivera</div></td>
+                <td class="age urgent" style="text-align: right;">2 d 4 h</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0117</span></td>
+                <td><span class="sev hazardous">High</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">IMU drift compounds after 6 min un-cal flight — re-cal needed</div>
+                    <div class="meta"><span>In progress</span><span class="sep">·</span><span>nav-sensors</span><span class="sep">·</span><span class="ref">↑ REQ-1018</span></div>
+                  </div>
+                </td>
+                <td><a href="04-safety-A.html" class="id" style="color:var(--blue-ink);">↑ HAZ-052</a></td>
+                <td><div class="ow"><span class="av a-m">MT</span>Tan</div></td>
+                <td class="age warn" style="text-align: right;">3 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0114</span></td>
+                <td><span class="sev hazardous">High</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">Test rig 02 cannot reach −40°C in environmental chamber</div>
+                    <div class="meta"><span>Blocked</span><span class="sep">·</span><span>test-infra</span><span class="sep">·</span><span class="ref">↑ TSK-0515</span></div>
+                  </div>
+                </td>
+                <td><a href="05-tasks.html" class="id" style="color:var(--blue-ink);">↑ TSK-0515</a></td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="age" style="text-align: right;">5 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0112</span></td>
+                <td><span class="sev major">Med</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">Coverage gap on REQ-1024 → ATP-301 link after baseline shift</div>
+                    <div class="meta"><span>Open</span><span class="sep">·</span><span>traceability</span><span class="sep">·</span><span class="ref">↑ REQ-1024</span></div>
+                  </div>
+                </td>
+                <td><a href="../requirements-page-v3.html" class="id" style="color:var(--blue-ink);">↑ REQ-1024</a></td>
+                <td><div class="ow"><span class="av a-r">RS</span>Solano</div></td>
+                <td class="age" style="text-align: right;">7 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0108</span></td>
+                <td><span class="sev minor">Low</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">Parameter wing.area_ref formula references deprecated CAD link</div>
+                    <div class="meta"><span>In review</span><span class="sep">·</span><span>parameters</span><span class="sep">·</span><span class="ref">↑ PRM-0142</span></div>
+                  </div>
+                </td>
+                <td><a href="../parameters-page-v2.html" class="id" style="color:var(--blue-ink);">↑ PRM-0142</a></td>
+                <td><div class="ow"><span class="av a-m">MT</span>Tan</div></td>
+                <td class="age" style="text-align: right;">11 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0104</span></td>
+                <td><span class="sev major">Med</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">SDP §5.2 references retired tooling AbsInt 23.6</div>
+                    <div class="meta"><span>Open</span><span class="sep">·</span><span>documentation</span><span class="sep">·</span><span class="ref">↑ DOC-002</span></div>
+                  </div>
+                </td>
+                <td><a href="07-documentation.html" class="id" style="color:var(--blue-ink);">↑ DOC-002</a></td>
+                <td><div class="ow"><span class="av a-n">NV</span>Voss</div></td>
+                <td class="age" style="text-align: right;">14 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0101</span></td>
+                <td><span class="sev major">Med</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">FTA top-event rate evidence missing for HAZ-061 (CAN saturation)</div>
+                    <div class="meta"><span>Open</span><span class="sep">·</span><span>safety</span><span class="sep">·</span><span class="ref">↑ HAZ-061</span></div>
+                  </div>
+                </td>
+                <td><a href="04-safety-A.html" class="id" style="color:var(--blue-ink);">↑ HAZ-061</a></td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="age" style="text-align: right;">14 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0096</span></td>
+                <td><span class="sev minor">Low</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">Tooltip on coverage cell shows raw enum instead of label</div>
+                    <div class="meta"><span>To do</span><span class="sep">·</span><span>ui-polish</span></div>
+                  </div>
+                </td>
+                <td><span class="id" style="color: var(--fg-4);">—</span></td>
+                <td><div class="ow"><span class="av a-c">CN</span>Nguyen</div></td>
+                <td class="age" style="text-align: right;">21 d</td>
+              </tr>
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="id">ISS-0091</span></td>
+                <td><span class="sev minor">Low</span></td>
+                <td>
+                  <div class="titcell">
+                    <div class="t">Bulk-delete confirmation list truncates long project names</div>
+                    <div class="meta"><span>Open</span><span class="sep">·</span><span>ui</span></div>
+                  </div>
+                </td>
+                <td><span class="id" style="color: var(--fg-4);">—</span></td>
+                <td><div class="ow"><span class="av a-s">SF</span>Fuentes</div></td>
+                <td class="age" style="text-align: right;">28 d</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DETAIL PANEL -->
+      <aside class="ipanel">
+
+        <div class="ip-head">
+          <div class="id">ISS-0119 · created 12 May 2026 09:14 by L. Rivera</div>
+          <h2>GPS lock loss during high-G banking exceeds 1.2 s ceiling</h2>
+          <div class="actions">
+            <button class="btn primary"><i data-lucide="user-plus" style="width:13px;height:13px;"></i>Assign me</button>
+            <button class="btn"><i data-lucide="git-pull-request" style="width:13px;height:13px;"></i>Open CR</button>
+            <button class="btn"><i data-lucide="link" style="width:13px;height:13px;"></i>Link</button>
+            <button class="btn"><i data-lucide="more-horizontal" style="width:13px;height:13px;"></i></button>
+          </div>
+        </div>
+
+        <div class="ip-meta">
+          <div class="row"><div class="k">Severity</div><div class="v"><span class="sev catastrophic">Critical</span><span style="color: var(--fg-3); font-size: 11.5px;">DAL-B impact</span></div></div>
+          <div class="row"><div class="k">Status</div><div class="v"><span class="status review">Open · in triage</span></div></div>
+          <div class="row"><div class="k">Component</div><div class="v"><span class="mc blue">navigation</span><span class="mc">flight-control</span></div></div>
+          <div class="row"><div class="k">Owner</div><div class="v"><span class="av a-l">LR</span> L. Rivera <span style="color: var(--fg-3); font-size: 11.5px;">· V&amp;V lead</span></div></div>
+          <div class="row"><div class="k">Reporter</div><div class="v"><span class="av a-l">LR</span> L. Rivera</div></div>
+          <div class="row"><div class="k">Watchers</div><div class="v"><span class="av a-m">MT</span><span class="av a-k">KP</span><span class="av a-r">RS</span><span style="color: var(--fg-3); font-size: 11px;">3</span></div></div>
+          <div class="row"><div class="k">SLA</div><div class="v" style="color: var(--red);">4 h 18 m left · breached: 0</div></div>
+          <div class="row"><div class="k">Found in</div><div class="v"><span class="mono" style="font-size: 11.5px;">B-2026-04-12</span> · run <span class="mono" style="font-size: 11.5px; color: var(--blue-ink);">VER-0301-R7</span></div></div>
+        </div>
+
+        <div class="ip-section">
+          <h3>Description</h3>
+          <p>During HIL run <span class="mono" style="font-size: 11.5px; color: var(--blue-ink);">VER-0301-R7</span> on rig <span class="mono" style="font-size: 11.5px;">RIG-02</span>, GPS reacquisition after a sustained 6&nbsp;g banking manoeuvre took <b>1.84&nbsp;s</b>, exceeding the <b>1.20&nbsp;s</b> ceiling defined in <span class="mono" style="font-size: 11.5px; color: var(--blue-ink);">REQ-1024</span>.</p>
+          <p>Cause is suspected to be a stale almanac in the receiver state cache; on cold-start path the unit takes 1.6–2.1&nbsp;s. Banking flushes the cache when bank angle &gt; 45° for &gt; 250&nbsp;ms.</p>
+        </div>
+
+        <div class="ip-section">
+          <h3>Links · 7</h3>
+          <div class="links-list">
+            <div class="link-row">
+              <span class="status released" style="font-size: 10px; line-height: 14px; padding: 0 6px;">REQ</span>
+              <span class="id">REQ-1024</span>
+              <span class="t">GPS reacquisition &lt; 1.2 s after 6g maneuver</span>
+            </div>
+            <div class="link-row">
+              <span class="status failed" style="font-size: 10px; line-height: 14px; padding: 0 6px;">VER</span>
+              <span class="id">VER-0301</span>
+              <span class="t">HIL run, failed at R-7 (1.84 s)</span>
+            </div>
+            <div class="link-row">
+              <span class="status review" style="font-size: 10px; line-height: 14px; padding: 0 6px;">HAZ</span>
+              <span class="id">HAZ-018</span>
+              <span class="t">Loss of GPS lock during banking · Catastrophic</span>
+            </div>
+            <div class="link-row">
+              <span class="status review" style="font-size: 10px; line-height: 14px; padding: 0 6px;">CR</span>
+              <span class="id">CR-0142</span>
+              <span class="t">Proposed firmware bump (almanac retention)</span>
+            </div>
+            <div class="link-row">
+              <span class="status in-progress" style="font-size: 10px; line-height: 14px; padding: 0 6px;">TSK</span>
+              <span class="id">TSK-0488</span>
+              <span class="t">Investigate root cause of VER-0301 re-acquisition failure</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ip-section" style="border-bottom: 0;">
+          <h3>Activity · 4</h3>
+          <div class="act">
+            <span class="av a-l">LR</span>
+            <div class="body">
+              <div class="head"><span class="who">L. Rivera</span><span class="what">opened the issue</span><span class="when">2 d 4 h</span></div>
+            </div>
+          </div>
+          <div class="act">
+            <span class="av a-k">KP</span>
+            <div class="body">
+              <div class="head"><span class="who">K. Park</span><span class="what">linked HAZ-018</span><span class="when">2 d 3 h</span></div>
+            </div>
+          </div>
+          <div class="act">
+            <span class="av a-m">MT</span>
+            <div class="body">
+              <div class="head"><span class="who">M. Tan</span><span class="what">commented</span><span class="when">1 d 6 h</span></div>
+              <div class="quote">Suspect this is the same stale-almanac path we saw on Hyperion-X. Worth checking if the cache-flush rule on bank&gt;45° was lifted from there.</div>
+            </div>
+          </div>
+          <div class="act">
+            <span class="av a-l">LR</span>
+            <div class="body">
+              <div class="head"><span class="who">L. Rivera</span><span class="what">opened CR-0142</span><span class="when">38 m</span></div>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Project <b>Falcon-9R Avionics</b></span>
+    <span>23 open · 1 critical · SLA breached <b style="color: var(--green);">0</b></span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

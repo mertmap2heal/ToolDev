@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dashboard — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  /* --- Dashboard A: portfolio of projects, card grid --- */
+  .dash-body { padding: 16px 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow: auto; }
+
+  /* KPI strip — uses .stat from chrome, 5 cells, dividers */
+  .kpis {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+    overflow: hidden;
+  }
+  .kpis .stat { border-right: 1px solid var(--line); padding: 14px 16px; }
+  .kpis .stat:last-child { border-right: 0; }
+  .kpis .stat .num { font-size: 22px; }
+
+  /* Project grid */
+  .grid-projects {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .proj {
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg);
+    padding: 14px 14px 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    cursor: pointer;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .proj:hover { border-color: var(--line-strong); box-shadow: 0 1px 0 var(--line), 0 4px 12px rgba(15,20,25,0.04); }
+  .proj.is-attention { border-left: 3px solid var(--amber); }
+  .proj.is-blocked { border-left: 3px solid var(--red); }
+
+  .proj-head { display: flex; align-items: flex-start; gap: 10px; }
+  .proj-head .meta-col { flex: 1; min-width: 0; }
+  .proj-head .proj-name {
+    font-size: 14px; font-weight: 600; color: var(--fg);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .proj-head .proj-name .dot { width: 7px; height: 7px; border-radius: 999px; }
+  .proj-head .proj-name .dot.active { background: var(--green); }
+  .proj-head .proj-name .dot.planning { background: var(--amber); }
+  .proj-head .proj-name .dot.archived { background: var(--fg-4); }
+  .proj-head .proj-domain {
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+    margin-top: 3px;
+  }
+  .proj-head .proj-star { color: var(--fg-4); cursor: pointer; }
+  .proj-head .proj-star.is-on { color: var(--amber); }
+
+  .proj-progress {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+  }
+  .proj-progress .bar {
+    flex: 1; height: 4px; background: var(--surface-2); border-radius: 2px;
+    overflow: hidden; position: relative;
+  }
+  .proj-progress .bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--blue); border-radius: 2px;
+  }
+  .proj-progress .pct { color: var(--fg); font-weight: 500; min-width: 32px; text-align: right; }
+
+  /* Module dot row — quick health glance per module */
+  .proj-modules {
+    display: flex; gap: 4px;
+  }
+  .mod-pill {
+    flex: 1;
+    height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px;
+    border-radius: 3px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-family: var(--app-font-mono);
+    font-size: 10px;
+    color: var(--fg-2);
+    cursor: pointer;
+  }
+  .mod-pill:hover { background: var(--surface-2); }
+  .mod-pill .lt { color: var(--fg-3); letter-spacing: 0.04em; }
+  .mod-pill .v { color: var(--fg); font-weight: 600; }
+  .mod-pill.warn { background: var(--amber-tint); border-color: #EBD58A; }
+  .mod-pill.warn .v { color: var(--amber-ink); }
+  .mod-pill.warn .lt { color: var(--amber-ink); opacity: 0.7; }
+  .mod-pill.blocked { background: var(--red-tint); border-color: #F2C2B9; }
+  .mod-pill.blocked .v { color: var(--red); }
+  .mod-pill.blocked .lt { color: var(--red); opacity: 0.7; }
+
+  /* sparkline */
+  .spark { height: 22px; width: 100%; display: block; color: var(--blue); }
+
+  .proj-foot {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11.5px; color: var(--fg-3);
+    border-top: 1px solid var(--line-soft);
+    padding-top: 10px;
+    margin-top: 2px;
+  }
+  .proj-foot .team { display: flex; align-items: center; }
+  .proj-foot .team .av { width: 18px; height: 18px; font-size: 9px; margin-left: -4px; border: 1.5px solid var(--bg); }
+  .proj-foot .team .av:first-child { margin-left: 0; }
+  .proj-foot .more {
+    margin-left: -4px;
+    width: 18px; height: 18px; border-radius: 999px;
+    background: var(--surface-2); color: var(--fg-3);
+    font-size: 9px; font-weight: 600; font-family: var(--app-font-mono);
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1.5px solid var(--bg);
+  }
+  .proj-foot .when { margin-left: auto; font-family: var(--app-font-mono); }
+  .proj-foot .gate {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    padding: 1px 6px; border-radius: 3px;
+    color: var(--blue-ink); background: var(--blue-tint);
+    border: 1px solid #B6DCFE;
+  }
+  .proj-foot .gate.warn { color: var(--amber-ink); background: var(--amber-tint); border-color: #EBD58A; }
+  .proj-foot .gate.blocked { color: var(--red); background: var(--red-tint); border-color: #F2C2B9; }
+
+  /* section heading */
+  .section-h {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 500;
+    color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 4px 0 -4px;
+  }
+  .section-h .ct {
+    font-family: var(--app-font-mono); font-size: 11px;
+    color: var(--fg-3); text-transform: none; letter-spacing: 0;
+    background: var(--surface-2); padding: 1px 7px; border-radius: 999px;
+  }
+  .section-h .hairline { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="01 Dashboard (A)">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn" title="Notifications"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn" title="Help"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn" title="Theme"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item is-active" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html" title="Settings"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><b>Dashboard</b></div>
+
+      <div class="banner info">
+        <span class="badge"><i data-lucide="inbox" style="width:12px;height:12px;"></i>Today</span>
+        <span><b>8 sign-offs</b> awaiting your approval &middot; <b>3 projects</b> have audit-package gaps &middot; review window closes <b>Fri 17:00 UTC</b></span>
+        <div class="actions">
+          <span class="link">Open review queue</span>
+          <button class="btn sm primary"><i data-lucide="arrow-right" style="width:12px;height:12px;"></i>Go</button>
+        </div>
+      </div>
+
+      <div class="title-row">
+        <h1>Projects</h1>
+        <span class="meta"><b>6</b> projects &middot; <b>4</b> active &middot; <b>2</b> at-risk &middot; updated <b>13:42 UTC</b></span>
+        <div class="right">
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import project</button>
+          <button class="btn"><i data-lucide="layout-grid" style="width:14px;height:14px;"></i>View<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span></button>
+          <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New project</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <a class="tab is-active" href="#">All<span class="tab-count">6</span></a>
+        <a class="tab" href="#">Active<span class="tab-count">4</span></a>
+        <a class="tab" href="#">At-risk<span class="tab-count" style="background:var(--amber-tint);color:var(--amber-ink);">2</span></a>
+        <a class="tab" href="#">Mine<span class="tab-count">3</span></a>
+        <a class="tab" href="#">Starred<span class="tab-count">2</span></a>
+        <a class="tab" href="#">Archived<span class="tab-count">1</span></a>
+        <span style="flex:1;"></span>
+        <a class="tab" href="01-dashboard-B.html" style="color:var(--fg-3);">Switch to table view ↗</a>
+      </div>
+    </div>
+
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Filter projects by name, domain, owner, DAL…" />
+        <span class="kbd">⌘F</span>
+      </div>
+      <span class="filter-pill compact active"><span class="key">Status</span><span class="val">Active</span><span class="x">×</span></span>
+      <span class="filter-pill compact"><span class="key">Owner</span><span class="val">Anyone</span></span>
+      <span class="filter-pill compact"><span class="key">Domain</span><span class="val">All</span></span>
+      <button class="filter-pill ghost"><i data-lucide="plus" style="width:13px;height:13px;"></i>Add filter</button>
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>Sort: Updated</button>
+        <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Group: None</button>
+      </div>
+    </div>
+
+    <div class="dash-body">
+
+      <!-- KPI strip -->
+      <div class="kpis">
+        <div class="stat">
+          <span class="lbl">Active projects</span>
+          <span class="num">4</span>
+          <span class="sub"><span class="delta up">+1</span> this quarter</span>
+        </div>
+        <div class="stat">
+          <span class="lbl">Open requirements</span>
+          <span class="num">3,128</span>
+          <span class="sub"><b>87%</b> released &middot; 41 in review</span>
+        </div>
+        <div class="stat">
+          <span class="lbl">Verification coverage</span>
+          <span class="num">72%</span>
+          <span class="sub"><span class="delta up">+4 pp</span> vs last week</span>
+        </div>
+        <div class="stat">
+          <span class="lbl">Open issues</span>
+          <span class="num">38</span>
+          <span class="sub"><span class="delta down" style="color:var(--red);">+7</span> &middot; 6 critical</span>
+        </div>
+        <div class="stat">
+          <span class="lbl">Sign-offs pending</span>
+          <span class="num">12</span>
+          <span class="sub"><b>3</b> overdue</span>
+        </div>
+      </div>
+
+      <!-- AT RISK -->
+      <div class="section-h">
+        <span>At risk</span><span class="ct">2</span><hr class="hairline" />
+      </div>
+      <div class="grid-projects">
+        <!-- Project 1: Falcon-9R (current) -->
+        <div class="proj is-attention">
+          <div class="proj-head">
+            <div class="meta-col">
+              <div class="proj-name">
+                <span class="dot active"></span>
+                Falcon-9R Avionics
+              </div>
+              <div class="proj-domain">aerospace · DAL B · DO-178C</div>
+            </div>
+            <span class="dal dal-B">B</span>
+            <i data-lucide="star" class="proj-star is-on" style="width:14px;height:14px;"></i>
+          </div>
+          <svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none">
+            <polyline fill="none" stroke="currentColor" stroke-width="1.5"
+              points="0,18 10,16 20,15 30,12 40,11 50,9 60,10 70,7 80,8 90,5 100,6 110,4 120,3" />
+            <polyline fill="currentColor" fill-opacity="0.08" stroke="none"
+              points="0,18 10,16 20,15 30,12 40,11 50,9 60,10 70,7 80,8 90,5 100,6 110,4 120,3 120,22 0,22" />
+          </svg>
+          <div class="proj-progress">
+            <span>Progress</span>
+            <span class="bar"><i style="width: 68%;"></i></span>
+            <span class="pct">68%</span>
+          </div>
+          <div class="proj-modules">
+            <span class="mod-pill"><span class="lt">REQ</span><span class="v">1,247</span></span>
+            <span class="mod-pill"><span class="lt">VER</span><span class="v">72%</span></span>
+            <span class="mod-pill warn"><span class="lt">SUS</span><span class="v">12</span></span>
+            <span class="mod-pill blocked"><span class="lt">ISS</span><span class="v">6</span></span>
+          </div>
+          <div class="proj-foot">
+            <div class="team">
+              <span class="av a-m">MT</span>
+              <span class="av a-k">KP</span>
+              <span class="av a-r">RS</span>
+              <span class="more">+4</span>
+            </div>
+            <span class="gate warn"><i data-lucide="alert-triangle" style="width:11px;height:11px;"></i>SRR overdue</span>
+            <span class="when">2 m ago</span>
+          </div>
+        </div>
+
+        <!-- Project 2: Hyperion -->
+        <div class="proj is-blocked">
+          <div class="proj-head">
+            <div class="meta-col">
+              <div class="proj-name">
+                <span class="dot active"></span>
+                Hyperion-X Flight Computer
+              </div>
+              <div class="proj-domain">aerospace · DAL A · DO-178C + DO-254</div>
+            </div>
+            <span class="dal dal-A">A</span>
+            <i data-lucide="star" class="proj-star" style="width:14px;height:14px;"></i>
+          </div>
+          <svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none" style="color: var(--red);">
+            <polyline fill="none" stroke="currentColor" stroke-width="1.5"
+              points="0,8 10,9 20,10 30,8 40,10 50,9 60,11 70,10 80,12 90,13 100,15 110,14 120,16" />
+            <polyline fill="currentColor" fill-opacity="0.08" stroke="none"
+              points="0,8 10,9 20,10 30,8 40,10 50,9 60,11 70,10 80,12 90,13 100,15 110,14 120,16 120,22 0,22" />
+          </svg>
+          <div class="proj-progress">
+            <span>Progress</span>
+            <span class="bar"><i style="width: 41%; background: var(--red);"></i></span>
+            <span class="pct">41%</span>
+          </div>
+          <div class="proj-modules">
+            <span class="mod-pill"><span class="lt">REQ</span><span class="v">2,816</span></span>
+            <span class="mod-pill blocked"><span class="lt">VER</span><span class="v">38%</span></span>
+            <span class="mod-pill warn"><span class="lt">HAZ</span><span class="v">42</span></span>
+            <span class="mod-pill blocked"><span class="lt">ISS</span><span class="v">14</span></span>
+          </div>
+          <div class="proj-foot">
+            <div class="team">
+              <span class="av a-l">LR</span>
+              <span class="av a-s">SF</span>
+              <span class="more">+9</span>
+            </div>
+            <span class="gate blocked"><i data-lucide="x-circle" style="width:11px;height:11px;"></i>PDR blocked</span>
+            <span class="when">14 m ago</span>
+          </div>
+        </div>
+
+        <!-- spacer empty card slot -->
+        <div></div>
+      </div>
+
+      <!-- ACTIVE -->
+      <div class="section-h">
+        <span>On track</span><span class="ct">2</span><hr class="hairline" />
+      </div>
+      <div class="grid-projects">
+        <!-- Aurora -->
+        <div class="proj">
+          <div class="proj-head">
+            <div class="meta-col">
+              <div class="proj-name">
+                <span class="dot active"></span>
+                Aurora-2 Lunar Lander
+              </div>
+              <div class="proj-domain">space · DAL B · ARP4754A</div>
+            </div>
+            <span class="dal dal-B">B</span>
+            <i data-lucide="star" class="proj-star is-on" style="width:14px;height:14px;"></i>
+          </div>
+          <svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none">
+            <polyline fill="none" stroke="currentColor" stroke-width="1.5"
+              points="0,17 10,15 20,14 30,13 40,11 50,12 60,10 70,9 80,8 90,9 100,7 110,6 120,5" />
+            <polyline fill="currentColor" fill-opacity="0.08" stroke="none"
+              points="0,17 10,15 20,14 30,13 40,11 50,12 60,10 70,9 80,8 90,9 100,7 110,6 120,5 120,22 0,22" />
+          </svg>
+          <div class="proj-progress">
+            <span>Progress</span>
+            <span class="bar"><i style="width: 82%;"></i></span>
+            <span class="pct">82%</span>
+          </div>
+          <div class="proj-modules">
+            <span class="mod-pill"><span class="lt">REQ</span><span class="v">964</span></span>
+            <span class="mod-pill"><span class="lt">VER</span><span class="v">91%</span></span>
+            <span class="mod-pill"><span class="lt">HAZ</span><span class="v">23</span></span>
+            <span class="mod-pill"><span class="lt">ISS</span><span class="v">2</span></span>
+          </div>
+          <div class="proj-foot">
+            <div class="team">
+              <span class="av a-c">CN</span>
+              <span class="av a-r">RS</span>
+              <span class="more">+5</span>
+            </div>
+            <span class="gate"><i data-lucide="check-circle-2" style="width:11px;height:11px;"></i>CDR cleared</span>
+            <span class="when">1 h ago</span>
+          </div>
+        </div>
+
+        <!-- Helios Drone -->
+        <div class="proj">
+          <div class="proj-head">
+            <div class="meta-col">
+              <div class="proj-name">
+                <span class="dot active"></span>
+                Helios-T Tactical UAV
+              </div>
+              <div class="proj-domain">unmanned · DAL C · MIL-STD-882E</div>
+            </div>
+            <span class="dal dal-C">C</span>
+            <i data-lucide="star" class="proj-star" style="width:14px;height:14px;"></i>
+          </div>
+          <svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none">
+            <polyline fill="none" stroke="currentColor" stroke-width="1.5"
+              points="0,16 10,14 20,13 30,12 40,12 50,10 60,11 70,9 80,8 90,7 100,8 110,6 120,5" />
+            <polyline fill="currentColor" fill-opacity="0.08" stroke="none"
+              points="0,16 10,14 20,13 30,12 40,12 50,10 60,11 70,9 80,8 90,7 100,8 110,6 120,5 120,22 0,22" />
+          </svg>
+          <div class="proj-progress">
+            <span>Progress</span>
+            <span class="bar"><i style="width: 56%;"></i></span>
+            <span class="pct">56%</span>
+          </div>
+          <div class="proj-modules">
+            <span class="mod-pill"><span class="lt">REQ</span><span class="v">512</span></span>
+            <span class="mod-pill"><span class="lt">VER</span><span class="v">64%</span></span>
+            <span class="mod-pill"><span class="lt">HAZ</span><span class="v">11</span></span>
+            <span class="mod-pill"><span class="lt">ISS</span><span class="v">1</span></span>
+          </div>
+          <div class="proj-foot">
+            <div class="team">
+              <span class="av a-n">NV</span>
+              <span class="av a-m">MT</span>
+              <span class="av a-k">KP</span>
+              <span class="more">+2</span>
+            </div>
+            <span class="gate"><i data-lucide="check-circle-2" style="width:11px;height:11px;"></i>SRR cleared</span>
+            <span class="when">3 h ago</span>
+          </div>
+        </div>
+
+        <div></div>
+      </div>
+
+      <!-- DRAFT -->
+      <div class="section-h">
+        <span>Planning</span><span class="ct">1</span><hr class="hairline" />
+      </div>
+      <div class="grid-projects">
+        <div class="proj">
+          <div class="proj-head">
+            <div class="meta-col">
+              <div class="proj-name">
+                <span class="dot planning"></span>
+                Triton-R Underwater Vehicle
+              </div>
+              <div class="proj-domain">marine · DAL C · ISO 26262-style</div>
+            </div>
+            <span class="dal dal-C">C</span>
+            <i data-lucide="star" class="proj-star" style="width:14px;height:14px;"></i>
+          </div>
+          <svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none">
+            <polyline fill="none" stroke="currentColor" stroke-width="1.5"
+              points="0,20 30,19 60,18 90,17 120,16" />
+          </svg>
+          <div class="proj-progress">
+            <span>Progress</span>
+            <span class="bar"><i style="width: 12%;"></i></span>
+            <span class="pct">12%</span>
+          </div>
+          <div class="proj-modules">
+            <span class="mod-pill"><span class="lt">REQ</span><span class="v">88</span></span>
+            <span class="mod-pill"><span class="lt">VER</span><span class="v">—</span></span>
+            <span class="mod-pill"><span class="lt">HAZ</span><span class="v">4</span></span>
+            <span class="mod-pill"><span class="lt">ISS</span><span class="v">0</span></span>
+          </div>
+          <div class="proj-foot">
+            <div class="team">
+              <span class="av a-r">RS</span>
+              <span class="av a-l">LR</span>
+            </div>
+            <span class="gate"><i data-lucide="circle-dashed" style="width:11px;height:11px;"></i>Pre-SRR</span>
+            <span class="when">yesterday</span>
+          </div>
+        </div>
+        <div></div><div></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Tenant <b>Aerodyne Systems</b></span>
+    <span>6 projects · 4 active</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

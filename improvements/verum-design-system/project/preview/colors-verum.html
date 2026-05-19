@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Colors — Verum brand</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="_card.css" />
+  <style>
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border-default);
+      border: 1px solid var(--border-default);
+    }
+    .swatch {
+      background: var(--surface-base);
+      padding: 24px 22px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 220px;
+    }
+    .swatch__chip {
+      width: 100%;
+      height: 96px;
+      border: 1px solid var(--border-default);
+      border-radius: 2px;
+    }
+    .swatch__role {
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      color: var(--ink-primary);
+    }
+    .swatch__hex {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .swatch__token {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      color: var(--ink-faint);
+    }
+
+    .group-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--ink-muted);
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    .demo {
+      background: var(--accent-primary);
+      color: var(--accent-primary-text);
+      padding: 32px 36px;
+      border-radius: 2px;
+    }
+    .demo__eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(250,248,243,0.65);
+    }
+    .demo__title {
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: 32px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin: 8px 0 12px;
+    }
+    .demo__body {
+      font-size: 14px;
+      line-height: 1.55;
+      color: rgba(250,248,243,0.85);
+      max-width: 50ch;
+    }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .pill {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 4px 10px;
+      border-radius: 2px;
+      border: 1px solid;
+    }
+    .pill--ok { background: rgba(27,67,50,0.10); color: var(--accent-primary); border-color: rgba(27,67,50,0.25); }
+    .pill--warn { background: rgba(184,134,11,0.10); color: var(--status-warning); border-color: rgba(184,134,11,0.30); }
+    .pill--danger { background: rgba(139,0,0,0.08); color: var(--status-danger); border-color: rgba(139,0,0,0.30); }
+    .pill--neutral { background: var(--surface-raised); color: var(--ink-muted); border-color: var(--border-strong); }
+  </style>
+</head>
+<body class="verum">
+  <article class="card">
+    <header class="card__head">
+      <div>
+        <div class="card__eyebrow">03 · Color · Verum brand</div>
+        <h1 class="card__title">Cream and ink. Forest is the only saturation.</h1>
+        <p class="card__sub" style="margin-top:14px;">Warm paper neutrals carry every surface. Forest green (<span class="mono">#1B4332</span>) is reserved for primary action, eyebrows, and accent pills. Warning gold and oxblood appear only as status pigment — never decoration.</p>
+      </div>
+    </header>
+
+    <section class="card__main" style="gap: 28px;">
+      <div>
+        <div class="group-title">Ink &nbsp;·&nbsp; foreground</div>
+        <div class="grid" style="margin-top: 12px;">
+          <div class="swatch"><div class="swatch__chip" style="background:#0F1419"></div><div class="swatch__role">Ink primary</div><div class="swatch__hex">#0F1419</div><div class="swatch__token">--ink-primary</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#6B6660"></div><div class="swatch__role">Ink muted</div><div class="swatch__hex">#6B6660</div><div class="swatch__token">--ink-muted</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#A8A29A"></div><div class="swatch__role">Ink faint</div><div class="swatch__hex">#A8A29A</div><div class="swatch__token">--ink-faint</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#FAF8F3;border-color:#C9C2AF"></div><div class="swatch__role">On-accent</div><div class="swatch__hex">#FAF8F3</div><div class="swatch__token">--accent-primary-text</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="group-title">Surface &nbsp;·&nbsp; background</div>
+        <div class="grid" style="margin-top: 12px;">
+          <div class="swatch"><div class="swatch__chip" style="background:#FAF8F3"></div><div class="swatch__role">Surface base</div><div class="swatch__hex">#FAF8F3</div><div class="swatch__token">--surface-base</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#F2EEE3"></div><div class="swatch__role">Surface raised</div><div class="swatch__hex">#F2EEE3</div><div class="swatch__token">--surface-raised</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#EBE5D5"></div><div class="swatch__role">Surface inset</div><div class="swatch__hex">#EBE5D5</div><div class="swatch__token">--surface-inset</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#E2DCCD"></div><div class="swatch__role">Border default</div><div class="swatch__hex">#E2DCCD</div><div class="swatch__token">--border-default</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="group-title">Accent &nbsp;·&nbsp; status</div>
+        <div class="grid" style="margin-top: 12px;">
+          <div class="swatch"><div class="swatch__chip" style="background:#1B4332"></div><div class="swatch__role">Forest (primary)</div><div class="swatch__hex">#1B4332</div><div class="swatch__token">--accent-primary</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#2D5A3D"></div><div class="swatch__role">Forest hover</div><div class="swatch__hex">#2D5A3D</div><div class="swatch__token">--accent-primary-hover</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#B8860B"></div><div class="swatch__role">Warning gold</div><div class="swatch__hex">#B8860B</div><div class="swatch__token">--status-warning</div></div>
+          <div class="swatch"><div class="swatch__chip" style="background:#8B0000"></div><div class="swatch__role">Danger oxblood</div><div class="swatch__hex">#8B0000</div><div class="swatch__token">--status-danger</div></div>
+        </div>
+      </div>
+
+      <div class="pair">
+        <div class="demo">
+          <div class="demo__eyebrow">In context · primary CTA</div>
+          <div class="demo__title">AI proposes. A human disposes.</div>
+          <div class="demo__body">Every AI suggestion is traceable. Every sign-off is human. Forest fills the moment of decision; cream surrounds it.</div>
+        </div>
+        <div style="background: var(--surface-raised); border: 1px solid var(--border-default); padding: 32px 36px; border-radius: 2px;">
+          <div class="eyebrow" style="color: var(--accent-primary);">In context · status pills</div>
+          <h3 style="margin: 8px 0 8px; font-family: var(--font-display); font-weight: 500; font-size: 28px; letter-spacing: -0.02em;">REQ-1024 · v3.2</h3>
+          <p class="body-sm" style="color: var(--ink-muted); margin: 0;">Authored 4 hours ago · 1 open verification</p>
+          <div class="pills">
+            <span class="pill pill--ok">DAL B</span>
+            <span class="pill pill--ok">Signed off</span>
+            <span class="pill pill--warn">3 open</span>
+            <span class="pill pill--danger">Blocked</span>
+            <span class="pill pill--neutral">Draft</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="card__foot">
+      <span>--accent-primary 1B4332</span>
+      <span>--surface-base FAF8F3</span>
+      <span>--ink-primary 0F1419</span>
+      <span>--border-default E2DCCD</span>
+      <span>1px borders only</span>
+      <span>no gradients</span>
+    </footer>
+  </article>
+</body>
+</html>

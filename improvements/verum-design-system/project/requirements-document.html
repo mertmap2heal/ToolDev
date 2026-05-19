@@ -1,0 +1,1578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FCS Module — Requirements (Document) — Engineering Tool</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  /* ============================================================
+     v2 — GitLab temperament, database-client density.
+     - Calm off-white surface, gray sidebars, real buttons (not links).
+     - Tight 32px rows, frozen Name column, inline-edit affordances.
+     - Inter for UI; JetBrains Mono for IDs / values / formulas / units.
+     - Sentence case throughout. No uppercase chrome labels.
+     - Blue (#0969da) for action; forest green for "released".
+     ============================================================ */
+  html, body { margin: 0; padding: 0; }
+  body { background: #ECEEF0; font-family: var(--app-font); }
+
+  .app {
+    /* Surfaces */
+    --bg:           #FBFBFA;       /* main canvas */
+    --surface:      #F4F5F2;       /* sidebar, toolbar, group rows */
+    --surface-2:    #ECEEEA;       /* hover, group emphasis */
+    --surface-soft: #F8F8F6;       /* table zebra */
+
+    /* Text */
+    --fg:           #1F2328;
+    --fg-2:         #424A53;
+    --fg-3:         #6E7781;
+    --fg-4:         #9DA4AB;
+
+    /* Lines */
+    --line:         #DEE0E2;       /* default */
+    --line-strong:  #C9CDD1;       /* heavier */
+    --line-soft:    #E8EAEC;       /* faintest */
+
+    /* Action */
+    --blue:         #0969DA;
+    --blue-hover:   #0860C7;
+    --blue-tint:    #DDF1FF;
+    --blue-ink:     #054EA3;
+
+    /* Status */
+    --green:        #1B4332;
+    --green-tint:   #E5EFE9;
+    --amber:        #B8860B;
+    --amber-tint:   #FBF0D8;
+    --red:          #B42318;
+    --red-tint:     #FBE9E7;
+    --gray-tint:    #ECEEF0;
+
+    width: 1440px;
+    margin: 0 auto;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-columns: 232px 1fr 0px;
+    border: 1px solid var(--line);
+    transition: grid-template-columns 180ms ease;
+  }
+  .app.has-drawer { grid-template-columns: 232px 1fr 520px; }
+  .app.has-drawer.drawer-expanded { grid-template-columns: 232px 0px 1fr; }
+  .app.is-collapsed { grid-template-columns: 0px 1fr 0px; }
+  .app.is-collapsed.has-drawer { grid-template-columns: 0px 1fr 520px; }
+  .app.is-collapsed.has-drawer.drawer-expanded { grid-template-columns: 0px 0px 1fr; }
+  .app.is-collapsed .sidebar { width: 0; padding: 0; border-right: 0; overflow: hidden; }
+  .app.is-collapsed .sidebar > * { display: none; }
+  .topbar-toggle { display: none !important; }
+  .app.is-collapsed .topbar-toggle { display: inline-flex !important; }
+  .inline-toggle {
+    width: 22px; height: 22px;
+    margin-right: 4px;
+    color: var(--fg-3);
+  }
+  .inline-toggle:hover { background: var(--surface-2); color: var(--fg); }
+
+  /* TOPBAR -------------------------------------------------- */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    height: 44px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark svg { display: block; }
+  .brand .name { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .brand .name .sub { display: block; font-size: 11px; color: var(--fg-3); font-weight: 400; line-height: 1.1; }
+  .topbar .search-global {
+    flex: 1; max-width: 420px;
+    display: flex; align-items: center; gap: 8px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 12px;
+  }
+  .topbar .search-global:hover { background: var(--bg); }
+  .topbar .search-global input { all: unset; flex: 1; color: var(--fg); }
+  .topbar .search-global input::placeholder { color: var(--fg-3); }
+  .topbar .search-global .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+    background: var(--bg);
+  }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); border-radius: 6px; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface); color: var(--fg); }
+  .topbar .avatar {
+    width: 26px; height: 26px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 4px;
+  }
+
+  /* SIDEBAR ------------------------------------------------- */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    padding: 8px 8px 0;
+    display: flex; flex-direction: column; gap: 1px;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .nav-item .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar { position: relative; }
+  .sidebar-toggle {
+    position: absolute;
+    top: 4px; right: 6px;
+    width: 24px; height: 24px;
+    color: var(--fg-3);
+    z-index: 2;
+  }
+  .sidebar-toggle:hover { background: var(--surface-2); color: var(--fg); }
+  .sidebar-foot {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 6px;
+    border-top: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .sidebar-foot:hover { color: var(--fg); }
+  .sidebar-foot .chev { display: inline-flex; transition: transform 180ms ease; }
+  .nav-cap {
+    font-size: 11px;
+    color: var(--fg-3);
+    font-weight: 500;
+    padding: 14px 10px 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 1.3;
+  }
+  .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+  .nav-item.is-active {
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .nav-item i { color: var(--fg-3); flex-shrink: 0; }
+  .nav-item.is-active i { color: var(--blue); }
+  .nav-item .pill-count {
+    margin-left: auto;
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3);
+    background: var(--surface-2);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .nav-item.is-active .pill-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* MAIN ---------------------------------------------------- */
+  .main {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  /* page header */
+  .page-head {
+    position: relative;
+    padding: 14px 20px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .page-head .crumb {
+    font-size: 12px; color: var(--fg-3);
+    margin-bottom: 0;
+    display: flex; align-items: center; gap: 0;
+    min-height: 22px;
+  }
+  .page-head .crumb + .stale { margin-top: 10px; }
+  .page-head .crumb b { color: var(--fg-2); font-weight: 500; }
+  .page-head .crumb a { color: var(--fg-3); text-decoration: none; }
+  .page-head .crumb a:hover { color: var(--blue); }
+
+  .title-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .title-row h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .title-row .meta {
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .title-row .meta b { color: var(--fg-2); font-weight: 500; }
+  .title-row .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface); border-color: var(--line-strong); }
+  .btn.primary {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+  }
+  .btn.primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+  .btn.ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+  .btn.ghost:hover { background: var(--surface); }
+  .btn .caret { color: var(--fg-3); margin-left: 2px; }
+  .btn-split { display: inline-flex; }
+  .btn-split .btn { border-radius: 6px 0 0 6px; }
+  .btn-split .btn + .btn { border-radius: 0 6px 6px 0; border-left: 0; padding: 0 8px; }
+
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    padding: 10px 14px 11px;
+    font-size: 13px;
+    color: var(--fg-3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tab .tab-count {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); background: var(--surface);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.is-active {
+    color: var(--fg);
+    border-bottom-color: var(--blue);
+    font-weight: 500;
+  }
+  .tab.is-active .tab-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* sub-toolbar (filters / search / view toggle) */
+  .subbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .subbar .search {
+    flex: 1; max-width: 360px;
+    display: flex; align-items: center; gap: 8px;
+    height: 30px;
+    padding: 0 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 13px;
+  }
+  .subbar .search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.15); }
+  .subbar .search input { all: unset; flex: 1; color: var(--fg); font-size: 13px; }
+  .subbar .search input::placeholder { color: var(--fg-3); }
+  .subbar .search .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+  }
+
+  .filter-pill {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 13px; color: var(--fg-2);
+    cursor: pointer;
+  }
+  .filter-pill.compact {
+    height: 26px;
+    padding: 0 4px 0 8px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .filter-pill.compact .key {
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  .filter-pill.compact .val {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    padding: 0;
+  }
+  .filter-pill.compact .x {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .filter-pill.compact.active {
+    background: var(--blue-tint);
+    border-color: #B6DCFE;
+    color: var(--blue-ink);
+  }
+  .filter-pill.compact.active .key { color: var(--blue-ink); opacity: 0.75; }
+  .filter-pill.compact .x:hover { background: rgba(9,105,218,0.15); }
+  .filter-pill.clear-all {
+    height: 26px; padding: 0 8px;
+    font-size: 11.5px;
+    color: var(--fg-3);
+    border: none;
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .filter-pill.clear-all:hover { color: var(--fg); background: transparent; }
+  .filter-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px;
+    margin-left: 2px;
+    padding: 0 5px;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: var(--app-font-mono);
+  }
+  .filter-pill:hover { background: var(--surface); }
+  .filter-pill.active {
+    background: var(--blue-tint); color: var(--blue-ink); border-color: #B6DCFE;
+  }
+  .filter-pill .x { color: var(--fg-3); }
+  .filter-pill.active .x { color: var(--blue-ink); }
+  .filter-pill .val { font-family: var(--app-font-mono); font-size: 12px; }
+  .filter-pill .key { color: var(--fg-3); }
+  .filter-pill.active .key { color: var(--blue-ink); }
+
+  .seg {
+    display: inline-flex; height: 30px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  .seg .seg-btn {
+    padding: 0 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--fg-2); cursor: pointer; background: var(--bg);
+  }
+  .seg .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+  .seg .seg-btn.is-active { background: var(--surface-2); color: var(--fg); font-weight: 500; }
+  .seg .seg-btn:hover:not(.is-active) { background: var(--surface); }
+
+  .subbar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* STALE BANNER ------------------------------------------- */
+  .page-head .stale {
+    margin: 8px -20px 12px;
+    border-top: 1px solid #EBD58A;
+  }
+  .stale {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 20px;
+    background: var(--amber-tint);
+    border-bottom: 1px solid #EBD58A;
+    font-size: 12px;
+    color: #5C4400;
+  }
+  .stale .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--amber); color: #fff;
+    padding: 2px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 500;
+  }
+  .stale b { font-weight: 600; }
+  .stale .mono { font-family: var(--app-font-mono); font-size: 11px; }
+  .stale .actions { margin-left: auto; display: flex; gap: 6px; }
+  .stale .link {
+    font-size: 12px; color: #5C4400; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  }
+  .stale .link:hover { color: var(--fg); }
+
+  /* WORKSPACE ---------------------------------------------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    overflow: hidden;
+  }
+
+  /* TREE ---------------------------------------------------- */
+  .tree {
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    font-size: 13px;
+  }
+  .tree-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-head .lbl { font-weight: 600; font-size: 13px; }
+  .tree-head .ct { color: var(--fg-3); font-size: 12px; }
+  .tree-head .new { margin-left: auto; }
+  .tree-head .new .icon-btn { width: 24px; height: 24px; }
+
+  .tree-search {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-search .input {
+    display: flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 8px;
+    border: 1px solid var(--line); border-radius: 5px;
+    color: var(--fg-3); font-size: 12px;
+  }
+  .tree-search .input input { all: unset; flex: 1; color: var(--fg); font-size: 12px; }
+
+  .tree-list { flex: 1; overflow: auto; padding: 4px 4px; }
+
+  .tnode {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 5px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 18px;
+    user-select: none;
+  }
+  .tnode:hover { background: var(--surface); color: var(--fg); }
+  .tnode.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .tnode .chev {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .chev { color: var(--blue-ink); }
+  .tnode .chev.closed i { transform: rotate(-90deg); }
+  .tnode .ico {
+    width: 14px; height: 14px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3);
+  }
+  .tnode.is-selected .ico { color: var(--blue); }
+  .tnode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .tnode .count {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .count { color: var(--blue-ink); }
+
+  .tnode.depth-1 { padding-left: 22px; }
+  .tnode.depth-2 { padding-left: 40px; }
+  .tnode.depth-1 .name { font-weight: 400; color: var(--fg-2); }
+
+  /* TABLE PANE --------------------------------------------- */
+  .table-pane {
+    overflow: hidden;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .scroll-area { flex: 1; overflow: auto; }
+
+  /* table */
+  table.params {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+  table.params thead {
+    position: sticky; top: 0; z-index: 6;
+  }
+  table.params thead th {
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 12px;
+    white-space: nowrap;
+    user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.params thead .sortable { cursor: pointer; }
+  table.params thead .sortable:hover { color: var(--fg); }
+  table.params thead .sortmark {
+    color: var(--blue); margin-left: 4px;
+    display: inline-block;
+  }
+  table.params thead .resize {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 4px; cursor: col-resize;
+  }
+  table.params thead tr.qfilter th {
+    border-bottom: 1px solid var(--line);
+    padding: 4px 12px 6px;
+    background: var(--surface);
+    font-weight: 400;
+  }
+  table.params thead tr.qfilter th.col-check { background: var(--surface); }
+  table.params thead tr.qfilter th.col-name { background: var(--surface); }
+  .qf {
+    height: 22px;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 0 7px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-3);
+    font-size: 11.5px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: var(--app-font);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .qf .val {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+  }
+  .qf:hover { background: var(--bg); border-color: var(--fg-3); border-style: solid; color: var(--fg-2); }
+  .qf.active {
+    background: var(--blue-tint);
+    border: 1px solid #B6DCFE;
+    color: var(--blue-ink);
+    font-weight: 500;
+  }
+  .qf.active:hover { background: #CFE7FE; }
+  .qf .x { color: inherit; opacity: 0.7; }
+  .qf .val { font-family: var(--app-font-mono); font-size: 11px; }
+  .qf-row { font-size: 11px; }
+
+  table.params td {
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line-soft);
+    height: 32px;
+    color: var(--fg);
+    background: var(--bg);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  table.params tbody tr:hover td { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td { background: var(--blue-tint); }
+  table.params tbody tr.is-selected:hover td { background: #C9E4FE; }
+  table.params tbody tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue, #2563EB); }
+  table.params tbody tr.is-active:hover td { background: #DEEBF7; }
+
+  /* group rows */
+  table.params tr.group-row td {
+    background: var(--surface);
+    height: 30px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 0 12px;
+    color: var(--fg-2);
+    font-size: 12px;
+  }
+  table.params tr.group-row .gr-name { font-weight: 600; color: var(--fg); }
+  table.params tr.group-row .gr-meta { color: var(--fg-3); margin-left: 10px; }
+  table.params tr.group-row .gr-meta .dot { display: inline-block; width: 4px; height: 4px; border-radius: 999px; background: var(--fg-4); margin: 0 6px; vertical-align: middle; }
+  table.params tr.group-row .gr-stale { color: var(--amber); font-weight: 500; }
+  table.params tr.group-row .gr-deprecated { color: var(--red); font-weight: 500; }
+
+  /* frozen first columns (checkbox + name) */
+  table.params td.col-check, table.params th.col-check {
+    width: 36px; padding-left: 16px; padding-right: 6px;
+    position: sticky; left: 0; z-index: 4;
+    background: var(--bg);
+  }
+  table.params thead th.col-check { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-check { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-check { background: var(--blue-tint); }
+  table.params tr.group-row td.col-check { background: var(--surface); }
+
+  table.params td.col-name, table.params th.col-name {
+    width: 240px;
+    position: sticky; left: 36px; z-index: 4;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+  table.params thead th.col-name { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-name { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-name { background: var(--blue-tint); }
+  table.params tr.group-row td.col-name { background: var(--surface); }
+
+  /* cell content */
+  .cell-name { display: flex; align-items: center; gap: 8px; }
+  .cell-name .nm {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-name .id {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-4);
+    flex-shrink: 0;
+  }
+  .cell-name .star { color: var(--fg-4); cursor: pointer; }
+  .cell-name .star:hover { color: var(--amber); }
+  .cell-name .star.is-on { color: var(--amber); }
+
+  .cell-type {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+  }
+  .type-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-2);
+    line-height: 16px;
+  }
+  .type-tag.float { color: #185A9D; border-color: #BBDAEF; background: #E8F2FB; }
+  .type-tag.int   { color: #2D5A3D; border-color: #C2DFC9; background: #E8F1EA; }
+  .type-tag.bool  { color: #6B3E14; border-color: #E0CDB1; background: #F8EFD8; }
+  .type-tag.str   { color: #6B2A66; border-color: #DEC1DA; background: #F4E5F2; }
+  .type-tag.array { color: var(--fg-2); border-color: var(--line); background: var(--surface); }
+
+  .cell-value {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    text-align: right;
+    color: var(--fg);
+    white-space: nowrap;
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    overflow: hidden;
+  }
+  .cell-value.computed { color: var(--fg-2); }
+  .cell-value .num { overflow: hidden; text-overflow: ellipsis; }
+  .cell-value .fx {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--blue-tint);
+    color: var(--blue-ink);
+    font-family: var(--app-font-mono);
+    font-style: italic;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: help;
+    letter-spacing: 0.02em;
+  }
+  .cell-value .fx:hover { background: #CFE7FE; }
+
+  .cell-unit {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+
+  .cell-desc {
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12.5px;
+    max-width: 280px;
+    display: block;
+  }
+
+  .cell-source {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-source a { color: var(--blue-ink); text-decoration: none; }
+  .cell-source a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .cell-source .none { color: var(--fg-4); font-style: italic; font-family: var(--app-font); font-size: 12px; }
+
+  /* status */
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .status::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px;
+    background: currentColor;
+  }
+  .status.released   { color: var(--green); background: var(--green-tint); }
+  .status.review     { color: var(--amber); background: var(--amber-tint); }
+  .status.draft      { color: var(--fg-3); background: var(--gray-tint); }
+  .status.deprecated { color: var(--red);   background: var(--red-tint); }
+
+  .cell-used {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .cell-used .num { color: var(--fg); font-weight: 500; }
+  .cell-used .bar {
+    display: inline-block;
+    width: 38px; height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    margin-left: 6px;
+    vertical-align: middle;
+    position: relative; overflow: hidden;
+  }
+  .cell-used .bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--blue);
+    border-radius: 2px;
+  }
+
+  .cell-updated {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-3);
+    white-space: nowrap;
+  }
+
+  .col-actions { width: 36px; text-align: center; }
+  .row-actions {
+    display: inline-flex; gap: 2px; opacity: 0; align-items: center;
+  }
+  tr:hover .row-actions { opacity: 1; }
+  .row-actions .icon-btn { width: 22px; height: 22px; color: var(--fg-3); }
+
+  /* checkbox */
+  .check {
+    appearance: none;
+    width: 14px; height: 14px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+  }
+  .check:hover { border-color: var(--blue); }
+  .check:checked { background: var(--blue); border-color: var(--blue); }
+  .check:checked::after {
+    content: ""; position: absolute; left: 3px; top: 0px;
+    width: 5px; height: 9px;
+    border: solid #fff; border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .check:indeterminate, .check.is-indeterm {
+    background: var(--blue); border-color: var(--blue);
+  }
+  .check.is-indeterm::after {
+    content: ""; position: absolute; left: 2px; right: 2px; top: 5px;
+    height: 2px; background: #fff;
+  }
+
+  /* Bulk action dock */
+  .bulk-dock {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: var(--fg);
+    color: #FBFBFA;
+    border-radius: 8px;
+    padding: 4px 6px 4px 14px;
+    display: flex; align-items: center; gap: 4px;
+    box-shadow: 0 6px 24px rgba(15,20,25,0.18), 0 2px 6px rgba(15,20,25,0.12);
+    font-size: 13px;
+    z-index: 20;
+    min-width: 480px;
+  }
+  .bulk-dock .ct { font-weight: 500; margin-right: 8px; }
+  .bulk-dock .ct .num { font-family: var(--app-font-mono); }
+  .bulk-dock .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.2); margin: 0 4px; }
+  .bulk-dock .b {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 5px; cursor: pointer;
+    color: rgba(255,255,255,0.85); font-size: 12.5px;
+  }
+  .bulk-dock .b:hover { background: rgba(255,255,255,0.10); color: #fff; }
+  .bulk-dock .b.danger { color: #ff8e84; }
+  .bulk-dock .b.danger:hover { background: rgba(255,142,132,0.12); }
+  .bulk-dock .clear {
+    margin-left: auto;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer; padding: 5px 8px;
+  }
+  .bulk-dock .clear:hover { color: #fff; }
+
+  /* STATUS BAR --------------------------------------------- */
+  .statusbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .statusbar .live { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .live::before {
+    content: ""; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--green);
+  }
+  .statusbar b { color: var(--fg-2); font-weight: 500; }
+  .statusbar .right { margin-left: auto; display: flex; gap: 16px; }
+  .statusbar .right span { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .mono { font-family: var(--app-font-mono); font-size: 11.5px; }
+
+
+  /* tab-link-reset */
+  a.tab { text-decoration: none; color: inherit; }
+  a.tab:hover { color: var(--fg); }
+</style>
+
+<style>
+  /* ============================================================
+     DOCUMENT VIEW STYLES
+     ============================================================ */
+  .workspace.doc-workspace {
+    grid-template-columns: 240px minmax(0, 1fr) 320px;
+    background: var(--surface-soft, #F5F5F2);
+  }
+  /* outline column */
+  .doc-outline { background: var(--bg, #FBFBFA); }
+
+  .doc-pane { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .doc-scroll { flex: 1; overflow: auto; padding: 28px 0 80px; }
+  .doc-paper {
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--bg, #FBFBFA);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 44px 56px 60px;
+    box-shadow: 0 1px 0 rgba(15, 23, 28, 0.02), 0 24px 48px rgba(15, 23, 28, 0.04);
+    font-family: var(--app-font);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  /* front matter */
+  .doc-front { margin-bottom: 36px; padding-bottom: 24px; border-bottom: 1px solid var(--line-soft); }
+  .doc-crumb { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); letter-spacing: 0.04em; }
+  .doc-crumb .sep { margin: 0 6px; opacity: 0.5; }
+  .doc-h1 {
+    margin: 6px 0 12px;
+    font-family: var(--app-font);
+    font-size: 28px; font-weight: 600; letter-spacing: -0.015em;
+    line-height: 1.2;
+  }
+  .doc-lede { color: var(--fg-2); font-size: 14.5px; margin: 0 0 16px; max-width: 60ch; text-wrap: pretty; }
+  .doc-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--fg-3); }
+  .doc-meta .dot { width: 3px; height: 3px; border-radius: 999px; background: var(--fg-3); opacity: 0.6; }
+  .doc-meta b { color: var(--fg-2); font-weight: 600; }
+  .doc-meta-right { margin-left: auto; display: inline-flex; gap: 6px; }
+
+  /* Section headings */
+  .doc-h2 {
+    margin: 36px 0 14px;
+    font-size: 18px; font-weight: 600; letter-spacing: -0.005em;
+    color: var(--fg);
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .doc-h2 .num {
+    font-family: var(--app-font-mono); font-size: 11.5px; color: var(--fg-3);
+    font-weight: 500; letter-spacing: 0.04em;
+    border: 1px solid var(--line-soft); padding: 2px 6px; border-radius: 4px;
+    background: var(--surface-soft);
+  }
+  .doc-body { margin: 0 0 18px; color: var(--fg-2); max-width: 62ch; text-wrap: pretty; }
+
+  /* Editable hover affordance — subtle dotted hover, blue caret on focus */
+  [data-editable] {
+    position: relative;
+    transition: background-color 80ms ease, box-shadow 80ms ease;
+    border-radius: 4px;
+    margin: -2px -4px;
+    padding: 2px 4px;
+    cursor: text;
+  }
+  [data-editable]:hover {
+    background: rgba(9, 105, 218, 0.045);
+    box-shadow: inset 0 0 0 1px rgba(9, 105, 218, 0.18);
+  }
+  [data-editable]:hover::after {
+    content: '';
+    position: absolute; right: -2px; top: 50%;
+    width: 1px; height: 1.1em; transform: translateY(-50%);
+    background: var(--blue);
+    animation: doc-caret 1s steps(2) infinite;
+  }
+  @keyframes doc-caret { 50% { opacity: 0; } }
+
+  /* REQ block */
+  .req {
+    position: relative;
+    margin: 22px 0 26px;
+    padding: 16px 18px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  .req:hover { border-color: var(--line-strong); }
+  .req.is-suspect { border-color: #EBD58A; background: linear-gradient(180deg, #FCF7E8 0%, var(--bg) 22%); }
+  .req.is-focused {
+    box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.18);
+    border-color: var(--blue);
+    background: linear-gradient(180deg, #FCF7E8 0%, var(--bg) 22%);
+  }
+  .req-suspect-banner {
+    display: flex; align-items: center; gap: 8px;
+    margin: -6px -10px 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--amber-tint);
+    color: #5C4400; font-size: 12px;
+    border: 1px solid #EBD58A;
+  }
+  .req-suspect-banner b { font-weight: 600; }
+  .req-suspect-banner .link { color: #5C4400; cursor: pointer; }
+  .req-suspect-banner .link:hover { text-decoration: underline; }
+
+  .req-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .req-head .req-id {
+    font-family: var(--app-font-mono); font-size: 11.5px;
+    color: var(--blue-ink, #054EA3);
+    background: rgba(9, 105, 218, 0.07);
+    padding: 2px 6px; border-radius: 4px;
+    letter-spacing: 0.02em;
+  }
+  .req-head .req-title { font-size: 15px; font-weight: 600; color: var(--fg); flex: 1; }
+  .req-head .req-pills { display: inline-flex; gap: 5px; }
+
+  .req-shall {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--blue);
+    background: var(--surface-soft);
+    border-radius: 4px;
+    font-family: var(--app-font);
+    font-size: 13.5px; line-height: 1.55;
+    color: var(--fg);
+    quotes: none;
+  }
+  .req-shall b { font-weight: 700; color: var(--blue-ink, #054EA3); }
+  .req-shall .mono.inset {
+    font-family: var(--app-font-mono); font-size: 12px;
+    background: var(--bg); padding: 1px 5px; border-radius: 3px;
+    border: 1px solid var(--line);
+  }
+  .req-shall.is-edited { border-left-color: #A88200; background: var(--amber-tint); }
+  .req-shall .del { color: #B42318; text-decoration: line-through; opacity: 0.6; margin-right: 4px; }
+  .req-shall .ins { background: rgba(27, 67, 50, 0.10) !important; color: #1B4332 !important; border-color: rgba(27, 67, 50, 0.25) !important; }
+
+  .req-attrs {
+    display: grid; grid-template-columns: 100px 1fr;
+    column-gap: 14px; row-gap: 6px;
+    margin: 0 0 10px;
+    font-size: 12.5px;
+  }
+  .req-attrs dt { color: var(--fg-3); font-weight: 400; }
+  .req-attrs dd { margin: 0; color: var(--fg-2); }
+  .req-attrs .mono { font-family: var(--app-font-mono); font-size: 11.5px; }
+  .req-attrs .author { display: inline-flex; align-items: center; gap: 6px; }
+  .req-attrs .author .avatar {
+    width: 18px; height: 18px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 9px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  .req-foot {
+    display: flex; align-items: center; gap: 10px;
+    padding-top: 10px; border-top: 1px dashed var(--line-soft);
+    font-size: 11.5px; color: var(--fg-3);
+  }
+  .req-foot .dot { width: 3px; height: 3px; border-radius: 999px; background: var(--fg-3); opacity: 0.6; }
+  .req-foot .req-actions { margin-left: auto; display: inline-flex; gap: 2px; }
+  .req-foot .icon-btn {
+    width: 24px; height: 24px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); cursor: pointer;
+  }
+  .req-foot .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+
+  .doc-end {
+    margin-top: 48px; padding-top: 24px;
+    text-align: center; border-top: 1px dashed var(--line-soft);
+  }
+
+  /* ============================================================
+     RIGHT RAIL — MARGIN COMMENTS
+     ============================================================ */
+  .doc-rail {
+    background: var(--bg);
+    border-left: 1px solid var(--line);
+    overflow-y: auto;
+    padding: 0 14px 24px;
+    display: flex; flex-direction: column;
+  }
+  .doc-rail .rail-head {
+    position: sticky; top: 0; z-index: 1;
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 -14px 0;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    font-size: 12px;
+  }
+  .doc-rail .rail-head .lbl {
+    font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .doc-rail .rail-head .ct {
+    background: var(--surface-2); color: var(--fg-2);
+    padding: 1px 6px; border-radius: 999px; font-size: 11px;
+  }
+
+  .thread {
+    margin-top: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+  .thread.is-active {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.10);
+  }
+  .thread-anchor {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; margin-bottom: 8px;
+    background: var(--surface-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    font-size: 11px; color: var(--fg-3);
+  }
+  .thread-anchor .mono { font-family: var(--app-font-mono); color: var(--blue-ink); }
+  .thread-anchor .anchor-dot {
+    width: 6px; height: 6px; border-radius: 999px; background: var(--blue);
+    margin-left: 4px;
+    box-shadow: 0 0 0 3px rgba(9,105,218,0.20);
+  }
+  .thread .dr-comment { padding: 8px 0; border-bottom: 1px dashed var(--line-soft); }
+  .thread .dr-comment:last-child { border-bottom: 0; }
+  .thread .dr-comment .text { font-size: 12.5px; line-height: 1.5; color: var(--fg-2); }
+  .thread-actions {
+    margin-top: 6px; display: flex; gap: 12px;
+    font-size: 11px; color: var(--fg-3);
+  }
+  .thread-actions .link { color: var(--blue); cursor: pointer; }
+  .thread-actions .link:hover { text-decoration: underline; }
+  .thread-reply {
+    margin-top: 8px; padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 6px;
+    color: var(--fg-3); font-size: 12px; cursor: text;
+    background: var(--surface-soft);
+  }
+  .thread-reply:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.12); }
+
+  /* a.seg-btn for cross-page tabs */
+  a.seg-btn { text-decoration: none; }
+</style>
+
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="Requirements — Document View">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 18 18" width="18" height="18">
+          <path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <span class="icon-btn" title="Notifications"><i data-lucide="bell" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Help"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Theme"><i data-lucide="moon" style="width:15px;height:15px;"></i></span>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <span class="icon-btn sidebar-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Hide sidebar">
+      <i data-lucide="panel-left-close" style="width:14px;height:14px;"></i>
+    </span>
+    <div class="nav-cap">Overview</div>
+    <div class="nav-item" title="Dashboard"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></div>
+    <div class="nav-item" title="Projects"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></div>
+    <div class="nav-cap">Development</div>
+    <div class="nav-item" title="System definition"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></div>
+    <div class="nav-item is-active" title="Requirements"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></div>
+    <div class="nav-item" title="Parameters"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></div>
+    <div class="nav-item" title="Verification"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></div>
+    <div class="nav-item" title="Tasks"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></div>
+    <div class="nav-cap">Assurance</div>
+    <div class="nav-item" title="Safety analysis"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></div>
+    <div class="nav-item" title="Risk matrix"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></div>
+    <div class="nav-item" title="Audit package"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE HEAD -->
+    <div class="page-head">
+      <div class="crumb">
+        <span class="icon-btn topbar-toggle inline-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Show sidebar">
+          <i data-lucide="panel-left-open" style="width:14px;height:14px;"></i>
+        </span>
+        <a>Falcon-9R Avionics</a>
+        <span style="margin: 0 6px;">/</span>
+        <b>Requirements</b>
+      </div>
+      <!-- SUSPECT LINKS BANNER -->
+      <div class="stale">
+        <span class="badge"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i>Suspect links</span>
+        <span><b>12 requirements</b> have upstream changes since last review &middot; baseline <span class="mono">B-2026-04-12</span> &middot; oldest <span class="mono">2 d 04 h</span></span>
+        <div class="actions">
+          <span class="link">Open review queue</span>
+          <span class="link">Dismiss</span>
+          <button class="btn primary" style="height:26px; padding: 0 10px; font-size: 12px;">
+            <i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>Re-validate batch
+          </button>
+        </div>
+      </div>
+      <div class="title-row">
+        <h1>Requirements</h1>
+        <span class="meta"><b>1,247</b> records &middot; baseline <b>B-2026-04-12</b> &middot; <b>1,084</b> released &middot; <b>87</b> in review</span>
+        <div class="right">
+          <button class="btn" title="Open traceability matrix">
+            <i data-lucide="network" style="width:14px;height:14px;"></i>Traceability
+          </button>
+          <button class="btn" title="Manage baselines">
+            <i data-lucide="git-commit-vertical" style="width:14px;height:14px;"></i>Baseline
+          </button>
+          <button class="btn">
+            <i data-lucide="file-input" style="width:14px;height:14px;"></i>Import
+          </button>
+          <button class="btn">
+            <i data-lucide="download" style="width:14px;height:14px;"></i>Export<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span>
+          </button>
+          <button class="btn primary">
+            <i data-lucide="plus" style="width:14px;height:14px;"></i>New requirement
+          </button>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab" href="requirements-page-v2.html">Requirements <span style="opacity:.55;font-size:11px;margin-left:4px;">List</span><span class="tab-count">1,247</span></a>
+        <a class="tab is-active" href="requirements-document.html">Document<span class="tab-count">FCS-2.2</span></a>
+        <a class="tab" href="requirements-traceability.html">Traceability<span class="tab-count">3.2k</span></a>
+        <a class="tab" href="requirements-coverage.html">Coverage<span class="tab-count">87%</span></a>
+        <a class="tab" href="#">Baselines<span class="tab-count">14</span></a>
+        <a class="tab" href="#">Settings</a>
+      </div>
+    </div>
+
+    <!-- SUBBAR (Document view) -->
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Find in document — REQ id, title, owner…" />
+        <span class="kbd">⌘F</span>
+      </div>
+
+      <button class="filter-pill">
+        <i data-lucide="filter" style="width:13px;height:13px;"></i>
+        Module: 2.2 FCS Control laws
+      </button>
+      <button class="filter-pill"><i data-lucide="git-commit-vertical" style="width:13px;height:13px;"></i>Baseline B-2026-04-12</button>
+
+      <div class="right">
+        <button class="filter-pill" title="Toggle margin comments">
+          <i data-lucide="message-square-text" style="width:13px;height:13px;"></i>
+          Comments <span class="filter-badge" style="background: var(--blue);">9</span>
+        </button>
+        <button class="filter-pill"><i data-lucide="diff" style="width:13px;height:13px;"></i>Show diff vs baseline</button>
+        <button class="filter-pill"><i data-lucide="printer" style="width:13px;height:13px;"></i>Print</button>
+        <div class="seg" title="View">
+          <a class="seg-btn" href="requirements-page-v2.html"><i data-lucide="list" style="width:13px;height:13px;"></i>List</a>
+          <span class="seg-btn is-active"><i data-lucide="file-text" style="width:13px;height:13px;"></i>Document</span>
+          <a class="seg-btn" href="requirements-traceability.html"><i data-lucide="share-2" style="width:13px;height:13px;"></i>Trace</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKSPACE: Document view = outline | doc | margin comments -->
+    <div class="workspace doc-workspace">
+
+      <!-- LEFT: MODULE OUTLINE -->
+      <aside class="tree doc-outline">
+        <div class="tree-head">
+          <span class="lbl">Module outline</span>
+          <span class="ct">42</span>
+          <span class="new"><span class="icon-btn" title="Expand all"><i data-lucide="chevrons-down-up" style="width:14px;height:14px;"></i></span></span>
+        </div>
+        <div class="tree-search">
+          <div class="input">
+            <i data-lucide="search" style="width:12px;height:12px;color:var(--fg-3);"></i>
+            <input placeholder="Filter sections" />
+          </div>
+        </div>
+        <div class="tree-list">
+          <div class="tnode is-selected"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.2</span><span class="name">Flight control laws</span></div>
+          <div class="tnode depth-1"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.2.1</span><span class="name">Pitch axis</span><span class="count">14</span></div>
+          <div class="tnode depth-1 is-selected"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.2.2</span><span class="name">Roll &amp; yaw</span><span class="count">12</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">REQ-FCS-2214</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">REQ-FCS-2215</span></div>
+          <div class="tnode depth-2 is-selected"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">REQ-FCS-2216</span><span class="count" style="background:var(--amber-tint);color:#5C4400;">!</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">REQ-FCS-2217</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">REQ-FCS-2218</span><span class="count" style="background:var(--amber-tint);color:#5C4400;">!</span></div>
+          <div class="tnode depth-1"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.2.3</span><span class="name">Envelope protection</span><span class="count">11</span></div>
+          <div class="tnode depth-1"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.2.4</span><span class="name">Mode transitions</span><span class="count">5</span></div>
+        </div>
+      </aside>
+
+      <!-- CENTER: SCROLLABLE DOCUMENT -->
+      <div class="doc-pane">
+        <div class="doc-scroll">
+          <div class="doc-paper">
+
+            <!-- Front matter -->
+            <header class="doc-front">
+              <div class="doc-crumb">
+                <span class="mono">2.0</span><span class="sep">›</span>
+                <span class="mono">2.2</span><span class="sep">›</span>
+                <span class="mono">2.2.2</span>
+              </div>
+              <h1 class="doc-h1" contenteditable="false" data-editable>Roll &amp; yaw control laws</h1>
+              <p class="doc-lede" data-editable>This module specifies the closed-loop behavior of the lateral-directional flight control laws under nominal and single-failure conditions. Verification is by analysis at six envelope corners and piloted-simulator demonstration.</p>
+              <div class="doc-meta">
+                <span><span class="mono">12</span> requirements</span>
+                <span class="dot"></span>
+                <span>baseline <b class="mono">B-2026-04-12</b></span>
+                <span class="dot"></span>
+                <span>DAL <b class="mono">A</b></span>
+                <span class="dot"></span>
+                <span>owner <b>K. Sato</b></span>
+                <span class="doc-meta-right">
+                  <span class="dr-pill" style="background: var(--amber-tint); color: #5C4400; border-color: #EBD58A;"><i data-lucide="alert-triangle" style="width:11px;height:11px;"></i>3 suspect</span>
+                  <span class="dr-pill review"><i data-lucide="clock" style="width:11px;height:11px;"></i>2 in review</span>
+                </span>
+              </div>
+            </header>
+
+            <!-- Section heading -->
+            <h2 class="doc-h2" data-editable><span class="mono num">2.2.2.1</span>Stability margins under single failure</h2>
+            <p class="doc-body" data-editable>The yaw damper and roll-augmentation paths shall maintain stable closed-loop behavior under any single-axis hardover or runaway failure of an actuator channel. Margins are evaluated at the corner conditions defined in §2.2.2.4.</p>
+
+            <!-- REQ block -->
+            <section class="req" id="REQ-FCS-2214" data-pin="r2214">
+              <div class="req-head">
+                <span class="req-id mono">REQ-FCS-2214</span>
+                <span class="req-title" data-editable>Roll rate command saturation at high AoA</span>
+                <span class="req-pills">
+                  <span class="dr-pill float">Functional</span>
+                  <span class="dr-pill" style="background:rgba(180,35,24,0.08);color:#B42318;border-color:rgba(180,35,24,0.20);">Critical</span>
+                  <span class="dr-pill released"><i data-lucide="check-circle-2" style="width:11px;height:11px;"></i>Released</span>
+                </span>
+              </div>
+              <blockquote class="req-shall" data-editable>
+                The roll-rate command path <b>shall</b> be saturated to <span class="mono inset">≤ 30 °/s</span> when angle of attack exceeds <span class="mono inset">α_stall − 2°</span> for more than <span class="mono inset">100 ms</span>, to prevent departure into post-stall roll.
+              </blockquote>
+              <dl class="req-attrs">
+                <dt>Rationale</dt><dd data-editable>Prevents excitation of post-stall roll departures observed in wind-tunnel data set WT-22-04. Derived from REQ-FCS-2200 axis-stability targets.</dd>
+                <dt>Acceptance</dt><dd>Sim demonstration <a class="src-link mono">VER-FCS-0418-c</a> · pass margin ≥ 25 % stick travel headroom.</dd>
+                <dt>Verification</dt><dd><span class="mono">A+T</span> · <span style="color:#1B4332;">✓ Verified</span> · 14 evidence links</dd>
+                <dt>Owner</dt><dd><span class="author"><span class="avatar">MA</span>Maya Aldridge</span></dd>
+              </dl>
+              <div class="req-foot">
+                <span><i data-lucide="message-square" style="width:11px;height:11px;"></i>0 comments</span>
+                <span class="dot"></span>
+                <span>updated 17 Apr 14:22</span>
+                <span class="req-actions">
+                  <span class="icon-btn" title="Edit"><i data-lucide="pencil" style="width:13px;height:13px;"></i></span>
+                  <span class="icon-btn" title="Comment"><i data-lucide="message-square-plus" style="width:13px;height:13px;"></i></span>
+                  <span class="icon-btn" title="More"><i data-lucide="more-horizontal" style="width:13px;height:13px;"></i></span>
+                </span>
+              </div>
+            </section>
+
+            <!-- REQ block with comments -->
+            <section class="req" id="REQ-FCS-2215" data-pin="r2215">
+              <div class="req-head">
+                <span class="req-id mono">REQ-FCS-2215</span>
+                <span class="req-title" data-editable>Lateral-directional decoupling on engine-out</span>
+                <span class="req-pills">
+                  <span class="dr-pill float">Functional</span>
+                  <span class="dr-pill" style="background:rgba(180,35,24,0.08);color:#B42318;border-color:rgba(180,35,24,0.20);">Critical</span>
+                  <span class="dr-pill released"><i data-lucide="check-circle-2" style="width:11px;height:11px;"></i>Released</span>
+                </span>
+              </div>
+              <blockquote class="req-shall" data-editable>
+                Following thrust asymmetry exceeding <span class="mono inset">30 %</span> of static rated thrust, the auto-rudder path <b>shall</b> null sideslip to <span class="mono inset">|β| ≤ 1°</span> within <span class="mono inset">800 ms</span> without pilot input.
+              </blockquote>
+              <dl class="req-attrs">
+                <dt>Rationale</dt><dd data-editable>Reduces pilot workload during V₁-cut events; satisfies CS-25.147 lateral-control demonstration.</dd>
+                <dt>Acceptance</dt><dd>Sim cut at V₁ on long runway, all six gross-weight points · <a class="src-link mono">VER-FCS-0419-a</a></dd>
+                <dt>Verification</dt><dd><span class="mono">T</span> · <span style="color:#7A5E00;">⏱ Partial</span> · 4 of 6 GW points complete</dd>
+                <dt>Owner</dt><dd><span class="author"><span class="avatar">MA</span>Maya Aldridge</span></dd>
+              </dl>
+              <div class="req-foot">
+                <span><i data-lucide="message-square" style="width:11px;height:11px;"></i>2 comments</span>
+                <span class="dot"></span>
+                <span>updated 17 Apr 11:08</span>
+                <span class="req-actions">
+                  <span class="icon-btn" title="Edit"><i data-lucide="pencil" style="width:13px;height:13px;"></i></span>
+                  <span class="icon-btn" title="Comment"><i data-lucide="message-square-plus" style="width:13px;height:13px;"></i></span>
+                </span>
+              </div>
+            </section>
+
+            <!-- REQ with SUSPECT marker (focal) -->
+            <section class="req is-suspect is-focused" id="REQ-FCS-2216" data-pin="r2216">
+              <div class="req-suspect-banner">
+                <i data-lucide="alert-triangle" style="width:13px;height:13px;"></i>
+                <span><b>Suspect link</b> — parent <span class="mono">REQ-FCS-2200</span> changed 2 d 04 h ago. Re-verification required before re-release.</span>
+                <span class="link" style="margin-left:auto;">View diff →</span>
+              </div>
+              <div class="req-head">
+                <span class="req-id mono">REQ-FCS-2216</span>
+                <span class="req-title" data-editable>Yaw damper minimum gain margin</span>
+                <span class="req-pills">
+                  <span class="dr-pill float">Performance</span>
+                  <span class="dr-pill" style="background:rgba(180,35,24,0.08);color:#B42318;border-color:rgba(180,35,24,0.20);">Critical</span>
+                  <span class="dr-pill review"><i data-lucide="clock" style="width:11px;height:11px;"></i>In review</span>
+                </span>
+              </div>
+              <blockquote class="req-shall is-edited" data-editable>
+                The yaw damper <b>shall</b> achieve a closed-loop gain margin of <span class="mono inset"><span class="del">≥ 4 dB</span> <span class="ins">≥ 6 dB</span></span> and a phase margin of <span class="mono inset ins">≥ 45°</span> across the cruise (<span class="mono inset">FL280–FL410</span>) and approach (<span class="mono inset">≤ 5,000 ft AGL</span>) flight regimes, with one rudder servo channel held at hardover.
+              </blockquote>
+              <dl class="req-attrs">
+                <dt>Rationale</dt><dd data-editable>Aligns with tightened lateral stability targets in revised REQ-FCS-2200; ensures robustness to single-channel failure of the rudder PCU stack.</dd>
+                <dt>Acceptance</dt><dd>Bode analysis at 6 corner points + sim hardover · <a class="src-link mono">VER-FCS-0418-c</a>, <a class="src-link mono">VER-FCS-0418-d</a></dd>
+                <dt>Verification</dt><dd><span class="mono">A+T</span> · <span style="color:#7A5E00;">⏱ Partial</span> · 2 approach corners open</dd>
+                <dt>Owner</dt><dd><span class="author"><span class="avatar" style="background:linear-gradient(135deg,#e8dcc8,#d4bfa3);">KS</span>Kira Sato</span></dd>
+                <dt>Reviewer</dt><dd><span class="author"><span class="avatar">MA</span>Maya Aldridge<span style="color:var(--fg-3);font-size:11px;margin-left:4px;">· pending</span></span></dd>
+              </dl>
+              <div class="req-foot">
+                <span><i data-lucide="message-square" style="width:11px;height:11px;color:var(--blue);"></i>2 comments</span>
+                <span class="dot"></span>
+                <span>edited 17 Apr · K. Sato</span>
+                <span class="req-actions">
+                  <span class="icon-btn" title="Edit"><i data-lucide="pencil" style="width:13px;height:13px;"></i></span>
+                  <span class="icon-btn" title="Comment"><i data-lucide="message-square-plus" style="width:13px;height:13px;"></i></span>
+                  <span class="icon-btn" title="More"><i data-lucide="more-horizontal" style="width:13px;height:13px;"></i></span>
+                </span>
+              </div>
+            </section>
+
+            <!-- Section heading -->
+            <h2 class="doc-h2" data-editable><span class="mono num">2.2.2.2</span>Trim, override and pilot interaction</h2>
+
+            <section class="req" id="REQ-FCS-2217" data-pin="r2217">
+              <div class="req-head">
+                <span class="req-id mono">REQ-FCS-2217</span>
+                <span class="req-title" data-editable>Roll axis trim-rate limit</span>
+                <span class="req-pills">
+                  <span class="dr-pill int">Performance</span>
+                  <span class="dr-pill" style="background:rgba(168,130,0,0.10);color:#7A5E00;border-color:rgba(168,130,0,0.25);">High</span>
+                  <span class="dr-pill released"><i data-lucide="check-circle-2" style="width:11px;height:11px;"></i>Released</span>
+                </span>
+              </div>
+              <blockquote class="req-shall" data-editable>
+                Below <span class="mono inset">2,000 ft AGL</span>, autopilot roll-trim authority <b>shall</b> be limited to <span class="mono inset">≤ 4 °/s</span> with a hard upper bound of <span class="mono inset">±15°</span> commanded bank angle.
+              </blockquote>
+              <dl class="req-attrs">
+                <dt>Rationale</dt><dd data-editable>Bounds the recoverable disturbance the pilot must counter during approach and go-around. Negotiated with human-factors during ARP4754A allocation review.</dd>
+                <dt>Acceptance</dt><dd>Sim sweep · <a class="src-link mono">VER-FCS-0418-e</a> · pass</dd>
+                <dt>Verification</dt><dd><span class="mono">T</span> · <span style="color:#1B4332;">✓ Verified</span></dd>
+                <dt>Owner</dt><dd><span class="author"><span class="avatar" style="background:linear-gradient(135deg,#e8dcc8,#d4bfa3);">KS</span>Kira Sato</span></dd>
+              </dl>
+              <div class="req-foot">
+                <span><i data-lucide="message-square" style="width:11px;height:11px;"></i>1 comment</span>
+                <span class="dot"></span>
+                <span>updated 15 Apr 17:50</span>
+              </div>
+            </section>
+
+            <!-- REQ with second SUSPECT -->
+            <section class="req is-suspect" id="REQ-FCS-2218" data-pin="r2218">
+              <div class="req-suspect-banner">
+                <i data-lucide="alert-triangle" style="width:13px;height:13px;"></i>
+                <span><b>Suspect link</b> — derived from <span class="mono">REQ-FCS-2200</span> revision 2 d ago.</span>
+                <span class="link" style="margin-left:auto;">View diff →</span>
+              </div>
+              <div class="req-head">
+                <span class="req-id mono">REQ-FCS-2218</span>
+                <span class="req-title" data-editable>Sideslip envelope hard limit</span>
+                <span class="req-pills">
+                  <span class="dr-pill float">Safety</span>
+                  <span class="dr-pill" style="background:rgba(180,35,24,0.08);color:#B42318;border-color:rgba(180,35,24,0.20);">Critical</span>
+                  <span class="dr-pill review"><i data-lucide="clock" style="width:11px;height:11px;"></i>In review</span>
+                </span>
+              </div>
+              <blockquote class="req-shall" data-editable>
+                In normal law, sideslip <b>shall</b> be hard-limited to <span class="mono inset">|β| ≤ 8°</span>. Degraded laws may relax to <span class="mono inset">|β| ≤ 14°</span>; alternate law shall annunciate the relaxation to the crew.
+              </blockquote>
+              <dl class="req-attrs">
+                <dt>Rationale</dt><dd data-editable>Protects the vertical fin from loads in excess of certified limit; aligns with CS-25.147(d).</dd>
+                <dt>Acceptance</dt><dd>FEM load case sweep + sim envelope demo · <a class="src-link mono">VER-FCS-0420-a</a></dd>
+                <dt>Verification</dt><dd><span class="mono">A+T</span> · <span style="color:#7A5E00;">⏱ Partial</span></dd>
+                <dt>Owner</dt><dd><span class="author"><span class="avatar">RO</span>R. Okafor</span></dd>
+              </dl>
+              <div class="req-foot">
+                <span><i data-lucide="message-square" style="width:11px;height:11px;color:var(--blue);"></i>3 comments</span>
+                <span class="dot"></span>
+                <span>updated 14 Apr 16:02</span>
+              </div>
+            </section>
+
+            <!-- end of doc -->
+            <div class="doc-end">
+              <span class="mono" style="color:var(--fg-3);font-size:11px;">— End of §2.2.2 · Roll &amp; yaw control laws —</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: MARGIN COMMENTS RAIL -->
+      <aside class="doc-rail">
+        <div class="rail-head">
+          <span class="lbl">Margin comments</span>
+          <span class="ct">9</span>
+          <span class="seg" style="margin-left:auto;">
+            <span class="seg-btn is-active" style="font-size:11px;padding:0 8px;">Open</span>
+            <span class="seg-btn" style="font-size:11px;padding:0 8px;">All</span>
+          </span>
+        </div>
+
+        <div class="thread" data-pin="r2215">
+          <div class="thread-anchor"><span class="mono">REQ-FCS-2215</span> · acceptance</div>
+          <div class="dr-comment">
+            <span class="avatar">MA</span>
+            <div class="body">
+              <div class="head"><b>Maya Aldridge</b><span class="when">17 Apr</span></div>
+              <div class="text">Two GW points still open — we should hold publication of <span class="mono" style="background:var(--surface-2);padding:1px 4px;border-radius:3px;">VER-FCS-0419-a</span> until both close.</div>
+            </div>
+          </div>
+          <div class="dr-comment">
+            <span class="avatar" style="background:linear-gradient(135deg,#e8dcc8,#d4bfa3);">KS</span>
+            <div class="body">
+              <div class="head"><b>Kira Sato</b><span class="when">17 Apr</span></div>
+              <div class="text">Agreed. Re-running tonight, will request re-validation tomorrow morning.</div>
+            </div>
+          </div>
+          <div class="thread-actions"><span class="link">Reply</span><span class="link">Resolve</span></div>
+        </div>
+
+        <div class="thread is-active" data-pin="r2216">
+          <div class="thread-anchor"><span class="mono">REQ-FCS-2216</span> · gain margin clause<span class="anchor-dot"></span></div>
+          <div class="dr-comment">
+            <span class="avatar">MA</span>
+            <div class="body">
+              <div class="head"><b>Maya Aldridge</b><span class="when">17 Apr · aero lead</span></div>
+              <div class="text">Tightening to 6 dB is consistent with the new winglet kinematics — but two approach corners haven't been re-verified. Holding review until VER-FCS-0418-d closes.</div>
+            </div>
+          </div>
+          <div class="dr-comment">
+            <span class="avatar" style="background:linear-gradient(135deg,#e8dcc8,#d4bfa3);">KS</span>
+            <div class="body">
+              <div class="head"><b>Kira Sato</b><span class="when">17 Apr</span></div>
+              <div class="text">Re-running the approach Bode sweep tonight. Will request re-validation as soon as both corners are green.</div>
+            </div>
+          </div>
+          <div class="thread-reply" tabindex="0">Reply, mention <span class="mono">@teammates</span>…</div>
+        </div>
+
+        <div class="thread" data-pin="r2218">
+          <div class="thread-anchor"><span class="mono">REQ-FCS-2218</span> · degraded-law clause</div>
+          <div class="dr-comment">
+            <span class="avatar">RO</span>
+            <div class="body">
+              <div class="head"><b>R. Okafor</b><span class="when">14 Apr</span></div>
+              <div class="text">Should we explicitly call out the FAA equivalent (14 CFR 25.147)? Cert team flagged it as ambiguous in the last gate.</div>
+            </div>
+          </div>
+          <div class="dr-comment">
+            <span class="avatar">MA</span>
+            <div class="body">
+              <div class="head"><b>Maya Aldridge</b><span class="when">15 Apr</span></div>
+              <div class="text">Yes — please add a parenthetical. I'll re-route the review.</div>
+            </div>
+          </div>
+          <div class="dr-comment">
+            <span class="avatar" style="background:linear-gradient(135deg,#e8dcc8,#d4bfa3);">JP</span>
+            <div class="body">
+              <div class="head"><b>Jun Park</b><span class="when">15 Apr</span></div>
+              <div class="text">Done in draft 2218.b — see edit history.</div>
+            </div>
+          </div>
+          <div class="thread-actions"><span class="link">Reply</span><span class="link">Resolve</span></div>
+        </div>
+      </aside>
+
+    </div>
+
+  </main>
+
+  <!-- STATUS BAR -->
+  <footer class="statusbar">
+    <span class="live">Document mode · auto-save on</span>
+    <span>Branch <b>main</b></span>
+    <span>Module 2.2.2 · 12 reqs · 3 suspect · 9 open comments</span>
+    <span class="right">
+      <span>Baseline <b class="mono">B-2026-04-12</b></span>
+      <span>Build <b class="mono">v1.42.0</b></span>
+    </span>
+  </footer>
+
+
+</div>
+
+<script>lucide.createIcons();</script>
+
+</body>
+</html>

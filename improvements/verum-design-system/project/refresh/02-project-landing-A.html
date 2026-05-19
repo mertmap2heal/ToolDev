@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Falcon-9R — Project landing</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .pl-body { padding: 16px 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow: auto; }
+
+  .pl-hero {
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg);
+    padding: 18px 20px;
+    display: grid; grid-template-columns: 1fr auto; gap: 24px;
+  }
+  .pl-hero h2 {
+    margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.012em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pl-hero h2 .dot { width: 10px; height: 10px; border-radius: 999px; background: var(--green); }
+  .pl-hero .sub {
+    font-family: var(--app-font-mono); font-size: 12px; color: var(--fg-3);
+  }
+  .pl-hero .sub .sep { color: var(--fg-4); margin: 0 6px; }
+  .pl-hero .pl-meta {
+    display: flex; gap: 24px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .pl-hero .pl-meta div { display: flex; flex-direction: column; gap: 3px; }
+  .pl-hero .pl-meta .l { font-size: 11px; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; }
+  .pl-hero .pl-meta .v { font-size: 13px; color: var(--fg); font-family: var(--app-font-mono); }
+
+  .pl-progress {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+    min-width: 220px;
+  }
+  .pl-progress .row {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+  }
+  .pl-progress .row .bar {
+    width: 160px; height: 5px; background: var(--surface-2);
+    border-radius: 3px; overflow: hidden; position: relative;
+  }
+  .pl-progress .row .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); border-radius: 3px; }
+  .pl-progress .row .pct { color: var(--fg); font-weight: 500; min-width: 38px; text-align: right; }
+  .pl-progress .row .lbl { width: 88px; color: var(--fg-3); }
+
+  /* V-model 3 columns */
+  .vm-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .vm-col { display: flex; flex-direction: column; gap: 6px; }
+  .vm-col .head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 6px;
+    margin-bottom: 4px;
+  }
+  .vm-col .head .accent { width: 10px; height: 10px; border-radius: 2px; }
+  .vm-col .head .lbl {
+    font-size: 11.5px; font-weight: 600; color: var(--fg);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .vm-col .head .ct {
+    margin-left: auto;
+    font-family: var(--app-font-mono); font-size: 11px;
+    color: var(--fg-3); background: var(--surface-2);
+    padding: 1px 7px; border-radius: 999px;
+  }
+  .vm-col[data-tone="dev"] .head { border-top: 2px solid var(--blue); }
+  .vm-col[data-tone="dev"] .head .accent { background: var(--blue); }
+  .vm-col[data-tone="sys"] .head { border-top: 2px solid var(--purple); }
+  .vm-col[data-tone="sys"] .head .accent { background: var(--purple); }
+  .vm-col[data-tone="asr"] .head { border-top: 2px solid var(--teal); }
+  .vm-col[data-tone="asr"] .head .accent { background: var(--teal); }
+
+  .mod {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .mod:hover { background: var(--surface-soft); border-color: var(--line-strong); }
+  .mod .ico {
+    width: 28px; height: 28px; border-radius: 5px;
+    background: var(--surface);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .vm-col[data-tone="dev"] .mod .ico { color: var(--blue); background: var(--blue-tint); }
+  .vm-col[data-tone="sys"] .mod .ico { color: var(--purple); background: var(--purple-tint); }
+  .vm-col[data-tone="asr"] .mod .ico { color: var(--teal); background: var(--teal-tint); }
+
+  .mod .body { flex: 1; min-width: 0; }
+  .mod .nm { font-size: 13px; font-weight: 500; color: var(--fg); }
+  .mod .sub { font-size: 11px; color: var(--fg-3); }
+  .mod .stats { display: flex; align-items: center; gap: 6px; }
+  .mod .stats .v { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-2); }
+  .mod .stats .v.warn { color: var(--amber-ink); }
+  .mod .stats .v.danger { color: var(--red); }
+  .mod .stats .arrow { color: var(--fg-4); }
+
+  /* sub-row 'health' meta */
+  .mod-row2 {
+    display: flex; gap: 6px; margin-top: 4px; padding-left: 38px;
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-3);
+  }
+  .mod-row2 .dot { width: 5px; height: 5px; border-radius: 999px; background: currentColor; vertical-align: middle; display: inline-block; margin-right: 4px; }
+  .mod-row2 .ok    { color: var(--green); }
+  .mod-row2 .warn  { color: var(--amber-ink); }
+  .mod-row2 .danger { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="02 Project Landing (A)">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item is-active" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb">
+        <a>Projects</a><span class="sep">/</span><b>Falcon-9R Avionics</b>
+      </div>
+      <div class="title-row">
+        <h1>Falcon-9R Avionics</h1>
+        <span class="meta">aerospace · DAL B · DO-178C · created <b>14 Jan 2026</b></span>
+        <div class="right">
+          <button class="btn"><i data-lucide="users" style="width:14px;height:14px;"></i>Team</button>
+          <button class="btn"><i data-lucide="git-branch" style="width:14px;height:14px;"></i>Branches</button>
+          <button class="btn"><i data-lucide="file-down" style="width:14px;height:14px;"></i>Audit pack</button>
+          <button class="btn primary"><i data-lucide="play" style="width:14px;height:14px;"></i>Open last screen</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab is-active" href="#">Overview</a>
+        <a class="tab" href="#">Modules</a>
+        <a class="tab" href="#">Roadmap</a>
+        <a class="tab" href="#">Team</a>
+        <span style="flex:1;"></span>
+        <a class="tab" href="02-project-landing-B.html" style="color:var(--fg-3);">Switch to status view ↗</a>
+      </div>
+    </div>
+
+    <div class="pl-body">
+
+      <!-- HERO -->
+      <div class="pl-hero">
+        <div>
+          <h2><span class="dot"></span>Falcon-9R Avionics</h2>
+          <div class="sub">aerospace<span class="sep">·</span>DAL B<span class="sep">·</span>DO-178C<span class="sep">·</span>baseline <b style="color:var(--fg-2);">B-2026-04-12</b></div>
+          <div class="pl-meta">
+            <div><span class="l">Owner</span><span class="v">M. Tan</span></div>
+            <div><span class="l">Phase</span><span class="v">PDR</span></div>
+            <div><span class="l">Next gate</span><span class="v" style="color:var(--amber);">SRR · 12 May</span></div>
+            <div><span class="l">Last sync</span><span class="v">a3f9e2c · 1 h ago</span></div>
+            <div><span class="l">Team</span><span class="v">7 members</span></div>
+          </div>
+        </div>
+        <div class="pl-progress">
+          <div class="row"><span class="lbl">Overall</span><span class="bar"><i style="width:68%;"></i></span><span class="pct">68%</span></div>
+          <div class="row"><span class="lbl">Requirements</span><span class="bar"><i style="width:87%; background:var(--green);"></i></span><span class="pct">87%</span></div>
+          <div class="row"><span class="lbl">Verification</span><span class="bar"><i style="width:72%;"></i></span><span class="pct">72%</span></div>
+          <div class="row"><span class="lbl">Safety</span><span class="bar"><i style="width:54%; background:var(--amber);"></i></span><span class="pct">54%</span></div>
+          <div class="row"><span class="lbl">Certification</span><span class="bar"><i style="width:31%;"></i></span><span class="pct">31%</span></div>
+        </div>
+      </div>
+
+      <!-- 3 COLUMNS -->
+      <div class="vm-grid">
+
+        <!-- DEVELOPMENT -->
+        <div class="vm-col" data-tone="dev">
+          <div class="head">
+            <span class="accent"></span>
+            <span class="lbl">Development &amp; Control</span>
+            <span class="ct">7</span>
+          </div>
+          <a class="mod" href="../requirements-page-v3.html">
+            <span class="ico"><i data-lucide="list-checks" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Requirements</div>
+              <div class="sub">define · trace · review</div>
+            </div>
+            <div class="stats">
+              <span class="v">1,247</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+          <div class="mod-row2"><span class="ok"><span class="dot"></span>1,084 released</span><span>·</span><span class="warn"><span class="dot"></span>12 suspect</span></div>
+
+          <a class="mod" href="../parameters-page-v2.html">
+            <span class="ico"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Parameters</div>
+              <div class="sub">numeric inputs · formulas</div>
+            </div>
+            <div class="stats">
+              <span class="v">312</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+          <div class="mod-row2"><span class="warn"><span class="dot"></span>4 out-of-sync · sync recommended</span></div>
+
+          <a class="mod" href="03-verification-A.html">
+            <span class="ico"><i data-lucide="code-2" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Verification</div>
+              <div class="sub">A/T/I/D · test runs</div>
+            </div>
+            <div class="stats">
+              <span class="v">72%</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+          <div class="mod-row2"><span class="ok"><span class="dot"></span>891 passed</span><span>·</span><span class="danger"><span class="dot"></span>17 failed</span></div>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="check-circle-2" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Validation</div>
+              <div class="sub">objectives · sign-off</div>
+            </div>
+            <div class="stats">
+              <span class="v">42%</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+          <div class="mod-row2"><span class="warn"><span class="dot"></span>3 pending sign-off</span></div>
+
+          <a class="mod" href="05-tasks.html">
+            <span class="ico"><i data-lucide="check-square" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Tasks</div>
+              <div class="sub">backlog · in progress</div>
+            </div>
+            <div class="stats">
+              <span class="v">38</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+          <div class="mod-row2"><span class="warn"><span class="dot"></span>4 overdue</span></div>
+
+          <a class="mod" href="06-issues.html">
+            <span class="ico"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Issues</div>
+              <div class="sub">defects · blockers</div>
+            </div>
+            <div class="stats">
+              <span class="v danger">6</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+          <div class="mod-row2"><span class="danger"><span class="dot"></span>1 critical · 2 high</span></div>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="git-pull-request" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Change requests</div>
+              <div class="sub">propose · review</div>
+            </div>
+            <div class="stats">
+              <span class="v">8</span>
+              <i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i>
+            </div>
+          </a>
+        </div>
+
+        <!-- SYSTEM -->
+        <div class="vm-col" data-tone="sys">
+          <div class="head">
+            <span class="accent"></span>
+            <span class="lbl">System Definition</span>
+            <span class="ct">5</span>
+          </div>
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="boxes" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Product breakdown</div>
+              <div class="sub">PBS · sub-systems</div>
+            </div>
+            <div class="stats"><span class="v">214 nodes</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="workflow" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">System functions</div>
+              <div class="sub">behaviour · allocation</div>
+            </div>
+            <div class="stats"><span class="v">68</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="git-merge" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Interfaces</div>
+              <div class="sub">ICDs · contracts</div>
+            </div>
+            <div class="stats"><span class="v">41</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <div class="mod-row2"><span class="warn"><span class="dot"></span>3 ICDs unsigned</span></div>
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="box" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Architecture</div>
+              <div class="sub">block diagrams</div>
+            </div>
+            <div class="stats"><span class="v">12 views</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="users" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Stakeholders</div>
+              <div class="sub">RACI · roles</div>
+            </div>
+            <div class="stats"><span class="v">22</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="layers" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">MBSE models</div>
+              <div class="sub">SysML · diagrams</div>
+            </div>
+            <div class="stats"><span class="v">4</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+        </div>
+
+        <!-- ASSURANCE -->
+        <div class="vm-col" data-tone="asr">
+          <div class="head">
+            <span class="accent"></span>
+            <span class="lbl">Assurance</span>
+            <span class="ct">7</span>
+          </div>
+          <a class="mod" href="04-safety-A.html">
+            <span class="ico"><i data-lucide="shield-check" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Safety analysis</div>
+              <div class="sub">FHA · FTA · Markov</div>
+            </div>
+            <div class="stats"><span class="v">80 haz</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <div class="mod-row2"><span class="danger"><span class="dot"></span>4 Catastrophic</span><span>·</span><span class="warn">18 Hazardous</span></div>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Risk matrix</div>
+              <div class="sub">5×5 · ALARP</div>
+            </div>
+            <div class="stats"><span class="v">14 open</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="badge-check" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Compliance check</div>
+              <div class="sub">DO-178C objectives</div>
+            </div>
+            <div class="stats"><span class="v">71/164</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+          <div class="mod-row2"><span class="warn"><span class="dot"></span>43% objectives covered</span></div>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="award" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Certification</div>
+              <div class="sub">objectives · evidence</div>
+            </div>
+            <div class="stats"><span class="v">31%</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+
+          <a class="mod" href="07-documentation.html">
+            <span class="ico"><i data-lucide="file-text" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Documentation</div>
+              <div class="sub">SDP · SVP · evidence packs</div>
+            </div>
+            <div class="stats"><span class="v">22</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="file-down" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Audit package</div>
+              <div class="sub">export · regulator</div>
+            </div>
+            <div class="stats"><span class="v">v1.4</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+
+          <a class="mod" href="#">
+            <span class="ico"><i data-lucide="git-commit" style="width:15px;height:15px;"></i></span>
+            <div class="body">
+              <div class="nm">Lifecycle &amp; CM</div>
+              <div class="sub">baselines · CIs</div>
+            </div>
+            <div class="stats"><span class="v">B-2026-04-12</span><i data-lucide="chevron-right" style="width:14px;height:14px;" class="arrow"></i></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Project <b>Falcon-9R Avionics</b></span>
+    <span>Baseline <span class="mono">B-2026-04-12</span></span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

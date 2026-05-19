@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Type — Verum brand</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="_card.css" />
+  <style>
+    .verum.card { background: var(--surface-base); }
+
+    .stack { display: flex; flex-direction: column; gap: 28px; }
+    .row { display: grid; grid-template-columns: 120px 1fr; gap: 32px; align-items: baseline; padding: 18px 0; border-bottom: 1px solid var(--border-default); }
+    .row:last-child { border-bottom: 0; }
+    .row__label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--ink-faint);
+      padding-top: 6px;
+    }
+    .row__spec {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .row__meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+    }
+
+    .specimen-h1 { font-family: var(--font-display); font-weight: 500; font-size: 72px; line-height: 1.05; letter-spacing: -0.03em; }
+    .specimen-h2 { font-family: var(--font-display); font-weight: 500; font-size: 56px; line-height: 1.08; letter-spacing: -0.03em; }
+    .specimen-h3 { font-family: var(--font-display); font-weight: 500; font-size: 40px; line-height: 1.10; letter-spacing: -0.02em; }
+    .specimen-h4 { font-family: var(--font-display); font-weight: 500; font-size: 24px; line-height: 1.20; letter-spacing: -0.01em; }
+    .specimen-body-lg { font-family: var(--font-body); font-size: 17px; line-height: 1.55; color: var(--ink-muted); max-width: 60ch; }
+    .specimen-body { font-family: var(--font-body); font-size: 15px; line-height: 1.55; max-width: 60ch; }
+    .specimen-mono { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-primary); }
+    .specimen-numerals { font-family: var(--font-display); font-weight: 500; font-size: 56px; letter-spacing: -0.02em; font-feature-settings: "tnum"; color: var(--accent-primary); }
+  </style>
+</head>
+<body class="verum">
+  <article class="card">
+    <header class="card__head">
+      <div>
+        <div class="card__eyebrow">01 · Type · Verum brand</div>
+        <h1 class="card__title">Editorial display, calm body, mono signal.</h1>
+        <p class="card__sub" style="margin-top:14px;">Fraunces variable-optical-size serif sets the tone — confident, archival, sentence-case. Geist sans handles every paragraph at a generous 15px / 1.55. JetBrains Mono carries codes, identifiers, eyebrows and engineering metadata.</p>
+      </div>
+    </header>
+
+    <section class="card__main stack">
+      <div class="row">
+        <div class="row__label">H1 / Display</div>
+        <div class="row__spec">
+          <div class="specimen-h1">Certify in months. Not years.</div>
+          <div class="row__meta">Fraunces 500 · 72 / 76 · −3% · sentence case</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">H2 / Section</div>
+        <div class="row__spec">
+          <div class="specimen-h2">Built around the objective.</div>
+          <div class="row__meta">Fraunces 500 · 56 / 60 · −3%</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">H3 / Sub</div>
+        <div class="row__spec">
+          <div class="specimen-h3">DO-178C, ARP4754A, DO-254.</div>
+          <div class="row__meta">Fraunces 500 · 40 / 44 · −2%</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">H4 / Card</div>
+        <div class="row__spec">
+          <div class="specimen-h4">A human disposes.</div>
+          <div class="row__meta">Fraunces 500 · 24 / 29 · −1%</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">Body — large</div>
+        <div class="row__spec">
+          <p class="specimen-body-lg">Requirements, verification, and audit evidence — built around DO-178C, not around ALM. Built for human-AI teams, not AI autonomy.</p>
+          <div class="row__meta">Geist 400 · 17 / 26 · ink-muted · max 60ch</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">Body — base</div>
+        <div class="row__spec">
+          <p class="specimen-body">Every AI suggestion is traceable. Every sign-off is human. Provenance is captured at the moment of authorship — author, model, prompt revision, baseline at signature.</p>
+          <div class="row__meta">Geist 400 · 15 / 23 · ink-primary · max 60ch</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">Mono · eyebrow</div>
+        <div class="row__spec">
+          <div class="specimen-mono">Compliance · DAL B · Baseline B-2026-04-12</div>
+          <div class="row__meta">JetBrains Mono 500 · 12 · uppercase · +12% tracking · accent</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row__label">Numerals</div>
+        <div class="row__spec">
+          <div class="specimen-numerals">15 · 1 · 0</div>
+          <div class="row__meta">Fraunces 500 · tabular · accent · used for hero metrics</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="card__foot">
+      <span>--font-display</span>
+      <span>--font-body</span>
+      <span>--font-mono</span>
+      <span>--display-xl 72</span>
+      <span>--display-lg 56</span>
+      <span>--display-md 40</span>
+      <span>--body-lg 17</span>
+      <span>--body-md 15</span>
+      <span>--caption 12</span>
+    </footer>
+  </article>
+</body>
+</html>

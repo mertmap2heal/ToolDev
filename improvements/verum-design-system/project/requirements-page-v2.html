@@ -1,0 +1,2330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Requirements — Engineering Tool</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  /* ============================================================
+     v2 — GitLab temperament, database-client density.
+     - Calm off-white surface, gray sidebars, real buttons (not links).
+     - Tight 32px rows, frozen Name column, inline-edit affordances.
+     - Inter for UI; JetBrains Mono for IDs / values / formulas / units.
+     - Sentence case throughout. No uppercase chrome labels.
+     - Blue (#0969da) for action; forest green for "released".
+     ============================================================ */
+  html, body { margin: 0; padding: 0; }
+  body { background: #ECEEF0; font-family: var(--app-font); }
+
+  .app {
+    /* Surfaces */
+    --bg:           #FBFBFA;       /* main canvas */
+    --surface:      #F4F5F2;       /* sidebar, toolbar, group rows */
+    --surface-2:    #ECEEEA;       /* hover, group emphasis */
+    --surface-soft: #F8F8F6;       /* table zebra */
+
+    /* Text */
+    --fg:           #1F2328;
+    --fg-2:         #424A53;
+    --fg-3:         #6E7781;
+    --fg-4:         #9DA4AB;
+
+    /* Lines */
+    --line:         #DEE0E2;       /* default */
+    --line-strong:  #C9CDD1;       /* heavier */
+    --line-soft:    #E8EAEC;       /* faintest */
+
+    /* Action */
+    --blue:         #0969DA;
+    --blue-hover:   #0860C7;
+    --blue-tint:    #DDF1FF;
+    --blue-ink:     #054EA3;
+
+    /* Status */
+    --green:        #1B4332;
+    --green-tint:   #E5EFE9;
+    --amber:        #B8860B;
+    --amber-tint:   #FBF0D8;
+    --red:          #B42318;
+    --red-tint:     #FBE9E7;
+    --gray-tint:    #ECEEF0;
+
+    width: 1440px;
+    margin: 0 auto;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-columns: 232px 1fr 0px;
+    border: 1px solid var(--line);
+    transition: grid-template-columns 180ms ease;
+  }
+  .app.has-drawer { grid-template-columns: 232px 1fr 520px; }
+  .app.has-drawer.drawer-expanded { grid-template-columns: 232px 0px 1fr; }
+  .app.is-collapsed { grid-template-columns: 0px 1fr 0px; }
+  .app.is-collapsed.has-drawer { grid-template-columns: 0px 1fr 520px; }
+  .app.is-collapsed.has-drawer.drawer-expanded { grid-template-columns: 0px 0px 1fr; }
+  .app.is-collapsed .sidebar { width: 0; padding: 0; border-right: 0; overflow: hidden; }
+  .app.is-collapsed .sidebar > * { display: none; }
+  .topbar-toggle { display: none !important; }
+  .app.is-collapsed .topbar-toggle { display: inline-flex !important; }
+  .inline-toggle {
+    width: 22px; height: 22px;
+    margin-right: 4px;
+    color: var(--fg-3);
+  }
+  .inline-toggle:hover { background: var(--surface-2); color: var(--fg); }
+
+  /* TOPBAR -------------------------------------------------- */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    height: 44px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark svg { display: block; }
+  .brand .name { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .brand .name .sub { display: block; font-size: 11px; color: var(--fg-3); font-weight: 400; line-height: 1.1; }
+  .topbar .search-global {
+    flex: 1; max-width: 420px;
+    display: flex; align-items: center; gap: 8px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 12px;
+  }
+  .topbar .search-global:hover { background: var(--bg); }
+  .topbar .search-global input { all: unset; flex: 1; color: var(--fg); }
+  .topbar .search-global input::placeholder { color: var(--fg-3); }
+  .topbar .search-global .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+    background: var(--bg);
+  }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); border-radius: 6px; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface); color: var(--fg); }
+  .topbar .avatar {
+    width: 26px; height: 26px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 4px;
+  }
+
+  /* SIDEBAR ------------------------------------------------- */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    padding: 8px 8px 0;
+    display: flex; flex-direction: column; gap: 1px;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .nav-item .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar { position: relative; }
+  .sidebar-toggle {
+    position: absolute;
+    top: 4px; right: 6px;
+    width: 24px; height: 24px;
+    color: var(--fg-3);
+    z-index: 2;
+  }
+  .sidebar-toggle:hover { background: var(--surface-2); color: var(--fg); }
+  .sidebar-foot {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 6px;
+    border-top: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .sidebar-foot:hover { color: var(--fg); }
+  .sidebar-foot .chev { display: inline-flex; transition: transform 180ms ease; }
+  .nav-cap {
+    font-size: 11px;
+    color: var(--fg-3);
+    font-weight: 500;
+    padding: 14px 10px 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 1.3;
+  }
+  .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+  .nav-item.is-active {
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .nav-item i { color: var(--fg-3); flex-shrink: 0; }
+  .nav-item.is-active i { color: var(--blue); }
+  .nav-item .pill-count {
+    margin-left: auto;
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3);
+    background: var(--surface-2);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .nav-item.is-active .pill-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* MAIN ---------------------------------------------------- */
+  .main {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  /* page header */
+  .page-head {
+    position: relative;
+    padding: 14px 20px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .page-head .crumb {
+    font-size: 12px; color: var(--fg-3);
+    margin-bottom: 0;
+    display: flex; align-items: center; gap: 0;
+    min-height: 22px;
+  }
+  .page-head .crumb + .stale { margin-top: 10px; }
+  .page-head .crumb b { color: var(--fg-2); font-weight: 500; }
+  .page-head .crumb a { color: var(--fg-3); text-decoration: none; }
+  .page-head .crumb a:hover { color: var(--blue); }
+
+  .title-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .title-row h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .title-row .meta {
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .title-row .meta b { color: var(--fg-2); font-weight: 500; }
+  .title-row .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface); border-color: var(--line-strong); }
+  .btn.primary {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+  }
+  .btn.primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+  .btn.ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+  .btn.ghost:hover { background: var(--surface); }
+  .btn .caret { color: var(--fg-3); margin-left: 2px; }
+  .btn-split { display: inline-flex; }
+  .btn-split .btn { border-radius: 6px 0 0 6px; }
+  .btn-split .btn + .btn { border-radius: 0 6px 6px 0; border-left: 0; padding: 0 8px; }
+
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    padding: 10px 14px 11px;
+    font-size: 13px;
+    color: var(--fg-3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tab .tab-count {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); background: var(--surface);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.is-active {
+    color: var(--fg);
+    border-bottom-color: var(--blue);
+    font-weight: 500;
+  }
+  .tab.is-active .tab-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* sub-toolbar (filters / search / view toggle) */
+  .subbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .subbar .search {
+    flex: 1; max-width: 360px;
+    display: flex; align-items: center; gap: 8px;
+    height: 30px;
+    padding: 0 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 13px;
+  }
+  .subbar .search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.15); }
+  .subbar .search input { all: unset; flex: 1; color: var(--fg); font-size: 13px; }
+  .subbar .search input::placeholder { color: var(--fg-3); }
+  .subbar .search .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+  }
+
+  .filter-pill {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 13px; color: var(--fg-2);
+    cursor: pointer;
+  }
+  .filter-pill.compact {
+    height: 26px;
+    padding: 0 4px 0 8px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .filter-pill.compact .key {
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  .filter-pill.compact .val {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    padding: 0;
+  }
+  .filter-pill.compact .x {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .filter-pill.compact.active {
+    background: var(--blue-tint);
+    border-color: #B6DCFE;
+    color: var(--blue-ink);
+  }
+  .filter-pill.compact.active .key { color: var(--blue-ink); opacity: 0.75; }
+  .filter-pill.compact .x:hover { background: rgba(9,105,218,0.15); }
+  .filter-pill.clear-all {
+    height: 26px; padding: 0 8px;
+    font-size: 11.5px;
+    color: var(--fg-3);
+    border: none;
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .filter-pill.clear-all:hover { color: var(--fg); background: transparent; }
+  .filter-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px;
+    margin-left: 2px;
+    padding: 0 5px;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: var(--app-font-mono);
+  }
+  .filter-pill:hover { background: var(--surface); }
+  .filter-pill.active {
+    background: var(--blue-tint); color: var(--blue-ink); border-color: #B6DCFE;
+  }
+  .filter-pill .x { color: var(--fg-3); }
+  .filter-pill.active .x { color: var(--blue-ink); }
+  .filter-pill .val { font-family: var(--app-font-mono); font-size: 12px; }
+  .filter-pill .key { color: var(--fg-3); }
+  .filter-pill.active .key { color: var(--blue-ink); }
+
+  .seg {
+    display: inline-flex; height: 30px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  .seg .seg-btn {
+    padding: 0 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--fg-2); cursor: pointer; background: var(--bg);
+  }
+  .seg .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+  .seg .seg-btn.is-active { background: var(--surface-2); color: var(--fg); font-weight: 500; }
+  .seg .seg-btn:hover:not(.is-active) { background: var(--surface); }
+
+  .subbar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* STALE BANNER ------------------------------------------- */
+  .page-head .stale {
+    margin: 8px -20px 12px;
+    border-top: 1px solid #EBD58A;
+  }
+  .stale {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 20px;
+    background: var(--amber-tint);
+    border-bottom: 1px solid #EBD58A;
+    font-size: 12px;
+    color: #5C4400;
+  }
+  .stale .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--amber); color: #fff;
+    padding: 2px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 500;
+  }
+  .stale b { font-weight: 600; }
+  .stale .mono { font-family: var(--app-font-mono); font-size: 11px; }
+  .stale .actions { margin-left: auto; display: flex; gap: 6px; }
+  .stale .link {
+    font-size: 12px; color: #5C4400; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  }
+  .stale .link:hover { color: var(--fg); }
+
+  /* WORKSPACE ---------------------------------------------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    overflow: hidden;
+    transition: grid-template-columns 180ms ease;
+  }
+  .workspace.tree-collapsed { grid-template-columns: 0px 1fr; }
+  .workspace.tree-collapsed .tree { border-right: 0; overflow: hidden; }
+  .workspace.tree-collapsed .tree > * { display: none; }
+  .tree-show {
+    display: none;
+    align-items: center; gap: 6px;
+    height: 26px; margin: 8px 0 0 8px;
+    padding: 0 8px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg-2); font-size: 12px;
+    cursor: pointer;
+    width: max-content;
+  }
+  .tree-show:hover { background: var(--surface); color: var(--fg); }
+  .tree-show .mono { font-family: var(--app-font-mono); color: var(--fg-3); font-size: 11px; }
+  .workspace.tree-collapsed .tree-show { display: inline-flex; }
+  .tree-head .hide-tree {
+    margin-left: auto;
+    width: 22px; height: 22px;
+  }
+  .tree-head .new { margin-left: 0 !important; }
+
+  /* TREE ---------------------------------------------------- */
+  .tree {
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .tree-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-head .lbl { font-weight: 600; font-size: 13px; }
+  .tree-head .ct { color: var(--fg-3); font-size: 12px; }
+  .tree-head .new { margin-left: auto; }
+  .tree-head .new .icon-btn { width: 24px; height: 24px; }
+
+  .tree-search {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-search .input {
+    display: flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 8px;
+    border: 1px solid var(--line); border-radius: 5px;
+    color: var(--fg-3); font-size: 12px;
+  }
+  .tree-search .input input { all: unset; flex: 1; color: var(--fg); font-size: 12px; }
+
+  .tree-list { flex: 1; overflow: auto; padding: 4px 4px; }
+
+  .tnode {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 5px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 18px;
+    user-select: none;
+  }
+  .tnode:hover { background: var(--surface); color: var(--fg); }
+  .tnode.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .tnode .chev {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .chev { color: var(--blue-ink); }
+  .tnode .chev.closed i { transform: rotate(-90deg); }
+  .tnode .ico {
+    width: 14px; height: 14px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3);
+  }
+  .tnode.is-selected .ico { color: var(--blue); }
+  .tnode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .tnode .count {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .count { color: var(--blue-ink); }
+
+  .tnode.depth-1 { padding-left: 22px; }
+  .tnode.depth-2 { padding-left: 40px; }
+  .tnode.depth-1 .name { font-weight: 400; color: var(--fg-2); }
+
+  /* TABLE PANE --------------------------------------------- */
+  .table-pane {
+    overflow: hidden;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .scroll-area { flex: 1; overflow: auto; }
+
+  /* table */
+  table.params {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+  table.params thead {
+    position: sticky; top: 0; z-index: 6;
+  }
+  table.params thead th {
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 12px;
+    white-space: nowrap;
+    user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.params thead .sortable { cursor: pointer; }
+  table.params thead .sortable:hover { color: var(--fg); }
+  table.params thead .sortmark {
+    color: var(--blue); margin-left: 4px;
+    display: inline-block;
+  }
+  table.params thead .resize {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 4px; cursor: col-resize;
+  }
+  table.params thead tr.qfilter th {
+    border-bottom: 1px solid var(--line);
+    padding: 4px 12px 6px;
+    background: var(--surface);
+    font-weight: 400;
+  }
+  table.params thead tr.qfilter th.col-check { background: var(--surface); }
+  table.params thead tr.qfilter th.col-name { background: var(--surface); }
+  .qf {
+    height: 22px;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 0 7px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-3);
+    font-size: 11.5px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: var(--app-font);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .qf .val {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+  }
+  .qf:hover { background: var(--bg); border-color: var(--fg-3); border-style: solid; color: var(--fg-2); }
+  .qf.active {
+    background: var(--blue-tint);
+    border: 1px solid #B6DCFE;
+    color: var(--blue-ink);
+    font-weight: 500;
+  }
+  .qf.active:hover { background: #CFE7FE; }
+  .qf .x { color: inherit; opacity: 0.7; }
+  .qf .val { font-family: var(--app-font-mono); font-size: 11px; }
+  .qf-row { font-size: 11px; }
+
+  table.params td {
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line-soft);
+    height: 32px;
+    color: var(--fg);
+    background: var(--bg);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  table.params tbody tr:hover td { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td { background: var(--blue-tint); }
+  table.params tbody tr.is-selected:hover td { background: #C9E4FE; }
+  table.params tbody tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue, #2563EB); }
+  table.params tbody tr.is-active:hover td { background: #DEEBF7; }
+
+  /* group rows */
+  table.params tr.group-row td {
+    background: var(--surface);
+    height: 30px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 0 12px;
+    color: var(--fg-2);
+    font-size: 12px;
+  }
+  table.params tr.group-row .gr-name { font-weight: 600; color: var(--fg); }
+  table.params tr.group-row .gr-meta { color: var(--fg-3); margin-left: 10px; }
+  table.params tr.group-row .gr-meta .dot { display: inline-block; width: 4px; height: 4px; border-radius: 999px; background: var(--fg-4); margin: 0 6px; vertical-align: middle; }
+  table.params tr.group-row .gr-stale { color: var(--amber); font-weight: 500; }
+  table.params tr.group-row .gr-deprecated { color: var(--red); font-weight: 500; }
+
+  /* frozen first columns (checkbox + name) */
+  table.params td.col-check, table.params th.col-check {
+    width: 36px; padding-left: 16px; padding-right: 6px;
+    position: sticky; left: 0; z-index: 4;
+    background: var(--bg);
+  }
+  table.params thead th.col-check { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-check { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-check { background: var(--blue-tint); }
+  table.params tr.group-row td.col-check { background: var(--surface); }
+
+  table.params td.col-name, table.params th.col-name {
+    width: 240px;
+    position: sticky; left: 36px; z-index: 4;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+  table.params thead th.col-name { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-name { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-name { background: var(--blue-tint); }
+  table.params tr.group-row td.col-name { background: var(--surface); }
+
+  /* cell content */
+  .cell-name { display: flex; align-items: center; gap: 8px; }
+  .cell-name .nm {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-name .id {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-4);
+    flex-shrink: 0;
+  }
+  .cell-name .star { color: var(--fg-4); cursor: pointer; }
+  .cell-name .star:hover { color: var(--amber); }
+  .cell-name .star.is-on { color: var(--amber); }
+
+  .cell-type {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+  }
+  .type-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-2);
+    line-height: 16px;
+  }
+  /* All requirement-type tags use the same neutral chip — type is signaled by the
+     glyph, not by color. Reduces the visual noise from a 4-color rainbow. */
+  .type-tag.float,
+  .type-tag.int,
+  .type-tag.bool,
+  .type-tag.str,
+  .type-tag.array { color: var(--fg-2); border-color: var(--line); background: var(--surface); }
+
+  .cell-value {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    text-align: right;
+    color: var(--fg);
+    white-space: nowrap;
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    overflow: hidden;
+  }
+  .cell-value.computed { color: var(--fg-2); }
+  .cell-value .num { overflow: hidden; text-overflow: ellipsis; }
+  .cell-value .fx {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--blue-tint);
+    color: var(--blue-ink);
+    font-family: var(--app-font-mono);
+    font-style: italic;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: help;
+    letter-spacing: 0.02em;
+  }
+  .cell-value .fx:hover { background: #CFE7FE; }
+
+  .cell-unit {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+
+  .cell-desc {
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12.5px;
+    max-width: 280px;
+    display: block;
+  }
+
+  .cell-source {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-source a { color: var(--blue-ink); text-decoration: none; }
+  .cell-source a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .cell-source .none { color: var(--fg-4); font-style: italic; font-family: var(--app-font); font-size: 12px; }
+
+  /* status */
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .status::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px;
+    background: currentColor;
+  }
+  .status.released   { color: var(--green); background: var(--green-tint); }
+  .status.review     { color: var(--amber); background: var(--amber-tint); }
+  .status.draft      { color: var(--fg-3); background: var(--gray-tint); }
+  .status.deprecated { color: var(--red);   background: var(--red-tint); }
+
+  /* Priority — uses the same 3-tier semantic palette as workflow status,
+     so the eye learns one mapping (red=attention, amber=caution, gray=quiet)
+     instead of two competing ones. */
+  .status.prio-crit { color: var(--red);   background: var(--red-tint); }
+  .status.prio-high { color: var(--amber); background: var(--amber-tint); }
+  .status.prio-med  { color: var(--fg-3);  background: var(--gray-tint); }
+  .status.prio-low  { color: var(--fg-3);  background: var(--gray-tint); }
+
+  /* Verification — same palette, different glyph in the leading icon */
+  .status.verif-pass    { color: var(--green); background: var(--green-tint); }
+  .status.verif-partial { color: var(--amber); background: var(--amber-tint); }
+  .status.verif-none    { color: var(--fg-3);  background: var(--gray-tint); }
+
+  .cell-used {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .cell-used .num { color: var(--fg); font-weight: 500; }
+  .cell-used .bar {
+    display: inline-block;
+    width: 38px; height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    margin-left: 6px;
+    vertical-align: middle;
+    position: relative; overflow: hidden;
+  }
+  .cell-used .bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--blue);
+    border-radius: 2px;
+  }
+
+  .cell-updated {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-3);
+    white-space: nowrap;
+  }
+
+  .col-actions { width: 36px; text-align: center; }
+  .row-actions {
+    display: inline-flex; gap: 2px; opacity: 0; align-items: center;
+  }
+  tr:hover .row-actions { opacity: 1; }
+  .row-actions .icon-btn { width: 22px; height: 22px; color: var(--fg-3); }
+
+  /* checkbox */
+  .check {
+    appearance: none;
+    width: 14px; height: 14px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+  }
+  .check:hover { border-color: var(--blue); }
+  .check:checked { background: var(--blue); border-color: var(--blue); }
+  .check:checked::after {
+    content: ""; position: absolute; left: 3px; top: 0px;
+    width: 5px; height: 9px;
+    border: solid #fff; border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .check:indeterminate, .check.is-indeterm {
+    background: var(--blue); border-color: var(--blue);
+  }
+  .check.is-indeterm::after {
+    content: ""; position: absolute; left: 2px; right: 2px; top: 5px;
+    height: 2px; background: #fff;
+  }
+
+  /* Bulk action dock */
+  .bulk-dock {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: var(--fg);
+    color: #FBFBFA;
+    border-radius: 8px;
+    padding: 4px 6px 4px 14px;
+    display: flex; align-items: center; gap: 4px;
+    box-shadow: 0 6px 24px rgba(15,20,25,0.18), 0 2px 6px rgba(15,20,25,0.12);
+    font-size: 13px;
+    z-index: 20;
+    min-width: 480px;
+  }
+  .bulk-dock .ct { font-weight: 500; margin-right: 8px; }
+  .bulk-dock .ct .num { font-family: var(--app-font-mono); }
+  .bulk-dock .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.2); margin: 0 4px; }
+  .bulk-dock .b {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 5px; cursor: pointer;
+    color: rgba(255,255,255,0.85); font-size: 12.5px;
+  }
+  .bulk-dock .b:hover { background: rgba(255,255,255,0.10); color: #fff; }
+  .bulk-dock .b.danger { color: #ff8e84; }
+  .bulk-dock .b.danger:hover { background: rgba(255,142,132,0.12); }
+  .bulk-dock .clear {
+    margin-left: auto;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer; padding: 5px 8px;
+  }
+  .bulk-dock .clear:hover { color: #fff; }
+
+  /* STATUS BAR --------------------------------------------- */
+  .statusbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .statusbar .live { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .live::before {
+    content: ""; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--green);
+  }
+  .statusbar b { color: var(--fg-2); font-weight: 500; }
+  .statusbar .right { margin-left: auto; display: flex; gap: 16px; }
+  .statusbar .right span { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .mono { font-family: var(--app-font-mono); font-size: 11.5px; }
+
+
+  /* tab-link-reset */
+  a.tab { text-decoration: none; color: inherit; }
+  a.tab:hover { color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="Requirements Page (v2)">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 18 18" width="18" height="18">
+          <path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <span class="icon-btn" title="Notifications"><i data-lucide="bell" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Help"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Theme"><i data-lucide="moon" style="width:15px;height:15px;"></i></span>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <span class="icon-btn sidebar-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Hide sidebar">
+      <i data-lucide="panel-left-close" style="width:14px;height:14px;"></i>
+    </span>
+    <div class="nav-cap">Overview</div>
+    <div class="nav-item" title="Dashboard"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></div>
+    <div class="nav-item" title="Projects"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></div>
+    <div class="nav-cap">Development</div>
+    <div class="nav-item" title="System definition"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></div>
+    <div class="nav-item is-active" title="Requirements"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></div>
+    <div class="nav-item" title="Parameters"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></div>
+    <div class="nav-item" title="Verification"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></div>
+    <div class="nav-item" title="Tasks"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></div>
+    <div class="nav-cap">Assurance</div>
+    <div class="nav-item" title="Safety analysis"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></div>
+    <div class="nav-item" title="Risk matrix"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></div>
+    <div class="nav-item" title="Audit package"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE HEAD -->
+    <div class="page-head">
+      <div class="crumb">
+        <span class="icon-btn topbar-toggle inline-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Show sidebar">
+          <i data-lucide="panel-left-open" style="width:14px;height:14px;"></i>
+        </span>
+        <a>Falcon-9R Avionics</a>
+        <span style="margin: 0 6px;">/</span>
+        <b>Requirements</b>
+      </div>
+      <!-- SUSPECT LINKS BANNER -->
+      <div class="stale">
+        <span class="badge"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i>Suspect links</span>
+        <span><b>12 requirements</b> have upstream changes since last review &middot; baseline <span class="mono">B-2026-04-12</span> &middot; oldest <span class="mono">2 d 04 h</span></span>
+        <div class="actions">
+          <span class="link">Open review queue</span>
+          <span class="link">Dismiss</span>
+          <button class="btn primary" style="height:26px; padding: 0 10px; font-size: 12px;">
+            <i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>Re-validate batch
+          </button>
+        </div>
+      </div>
+      <div class="title-row">
+        <h1>Requirements</h1>
+        <span class="meta"><b>1,247</b> records &middot; baseline <b>B-2026-04-12</b> &middot; <b>1,084</b> released &middot; <b>87</b> in review</span>
+        <div class="right">
+          <button class="btn" title="Open traceability matrix">
+            <i data-lucide="network" style="width:14px;height:14px;"></i>Traceability
+          </button>
+          <button class="btn" title="Manage baselines">
+            <i data-lucide="git-commit-vertical" style="width:14px;height:14px;"></i>Baseline
+          </button>
+          <button class="btn">
+            <i data-lucide="file-input" style="width:14px;height:14px;"></i>Import
+          </button>
+          <button class="btn">
+            <i data-lucide="download" style="width:14px;height:14px;"></i>Export<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span>
+          </button>
+          <button class="btn primary">
+            <i data-lucide="plus" style="width:14px;height:14px;"></i>New requirement
+          </button>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab is-active" href="requirements-page-v2.html">Requirements <span style="opacity:.55;font-size:11px;margin-left:4px;">List</span><span class="tab-count">1,247</span></a>
+        <a class="tab" href="requirements-document.html">Document<span class="tab-count">FCS-2.2</span></a>
+        <a class="tab" href="requirements-traceability.html">Traceability<span class="tab-count">3.2k</span></a>
+        <a class="tab" href="requirements-coverage.html">Coverage<span class="tab-count">87%</span></a>
+        <a class="tab" href="#">Baselines<span class="tab-count">14</span></a>
+        <a class="tab" href="#">Settings</a>
+      </div>
+    </div>
+
+    <!-- SUBBAR -->
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Filter requirements by ID, title, owner, tag…" />
+        <span class="kbd">⌘F</span>
+      </div>
+
+      <button class="filter-pill">
+        <i data-lucide="filter" style="width:13px;height:13px;"></i>
+        Filters<span class="filter-badge">3</span>
+      </button>
+      <button class="filter-pill clear-all" title="Clear all filters">Clear filters</button>
+
+      <div class="right">
+        <button class="filter-pill">
+          <i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>
+          Sort: PBS, then ID
+        </button>
+        <button class="filter-pill">
+          <i data-lucide="layers" style="width:13px;height:13px;"></i>
+          Group: PBS node
+        </button>
+        <button class="filter-pill">
+          <i data-lucide="columns-3" style="width:13px;height:13px;"></i>
+          Columns
+        </button>
+        <div class="seg" title="View">
+          <span class="seg-btn is-active"><i data-lucide="list" style="width:13px;height:13px;"></i>List</span>
+          <span class="seg-btn"><i data-lucide="file-text" style="width:13px;height:13px;"></i>Document</span>
+          <span class="seg-btn"><i data-lucide="share-2" style="width:13px;height:13px;"></i>Trace</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKSPACE -->
+    <div class="workspace">
+
+      <!-- "show hierarchy" affordance, shown only when tree is collapsed -->
+      <button class="tree-show" onclick="document.querySelector('.workspace').classList.remove('tree-collapsed')" title="Show hierarchy">
+        <i data-lucide="panel-left-open" style="width:13px;height:13px;"></i>
+        Hierarchy <span class="mono">PBS</span>
+      </button>
+
+      <!-- TREE -->
+      <aside class="tree">
+        <div class="tree-head">
+          <span class="lbl">Hierarchy</span>
+          <span class="ct">PBS</span>
+          <span class="new"><span class="icon-btn" title="New node"><i data-lucide="plus" style="width:14px;height:14px;"></i></span></span>
+          <span class="icon-btn hide-tree" onclick="document.querySelector('.workspace').classList.add('tree-collapsed')" title="Hide hierarchy">
+            <i data-lucide="panel-left-close" style="width:14px;height:14px;"></i>
+          </span>
+        </div>
+        <div class="tree-search" style="padding-bottom: 4px;">
+          <div class="seg" style="width: 100%; display:flex; gap: 0;">
+            <span class="seg-btn is-active" style="flex:1; justify-content:center;"><i data-lucide="boxes" style="width:12px;height:12px;"></i>PBS</span>
+            <span class="seg-btn" style="flex:1; justify-content:center;"><i data-lucide="workflow" style="width:12px;height:12px;"></i>Functions</span>
+            <span class="seg-btn" style="flex:1; justify-content:center;"><i data-lucide="shield-check" style="width:12px;height:12px;"></i>V&amp;V</span>
+          </div>
+        </div>
+        <div class="tree-search">
+          <div class="input">
+            <i data-lucide="search" style="width:12px;height:12px;color:var(--fg-3);"></i>
+            <input placeholder="Filter PBS" />
+          </div>
+        </div>
+        <div class="tree-list">
+
+          <div class="tnode is-selected">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="layers" style="width:13px;height:13px;"></i></span>
+            <span class="name">All requirements</span>
+            <span class="count">1,247</span>
+          </div>
+          <div class="tnode">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="alert-triangle" style="width:13px;height:13px;color:#A88200;"></i></span>
+            <span class="name">Suspect links</span>
+            <span class="count">12</span>
+          </div>
+          <div class="tnode">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="clock" style="width:13px;height:13px;"></i></span>
+            <span class="name">In review</span>
+            <span class="count">87</span>
+          </div>
+          <div class="tnode">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="user-round" style="width:13px;height:13px;"></i></span>
+            <span class="name">Assigned to me</span>
+            <span class="count">23</span>
+          </div>
+          <div class="tnode">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="star" style="width:13px;height:13px;"></i></span>
+            <span class="name">Starred</span>
+            <span class="count">9</span>
+          </div>
+
+          <div style="height: 8px; border-top: 1px solid var(--line-soft); margin: 6px 4px 4px;"></div>
+
+          <!-- 1.0 Vehicle -->
+          <div class="tnode">
+            <span class="chev"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="folder-open" style="width:13px;height:13px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">1.0</span>Vehicle</span>
+            <span class="count">412</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">1.1</span>Mission &amp; performance</span>
+            <span class="count">68</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">1.2</span>Aerodynamics</span>
+            <span class="count">94</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">1.3</span>Structures &amp; loads</span>
+            <span class="count">110</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">1.4</span>Propulsion</span>
+            <span class="count">140</span>
+          </div>
+
+          <!-- 2.0 Avionics -->
+          <div class="tnode">
+            <span class="chev"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="folder-open" style="width:13px;height:13px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.0</span>Avionics &amp; software</span>
+            <span class="count">486</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.1</span>Flight management</span>
+            <span class="count">128</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="folder-open" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.2</span>Flight control laws</span>
+            <span class="count">142</span>
+          </div>
+          <div class="tnode depth-2">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:11px;height:11px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.2.1</span>Pitch axis</span>
+            <span class="count">52</span>
+          </div>
+          <div class="tnode depth-2 is-selected">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:11px;height:11px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.2.2</span>Roll &amp; yaw</span>
+            <span class="count">48</span>
+          </div>
+          <div class="tnode depth-2">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:11px;height:11px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.2.3</span>Envelope protection</span>
+            <span class="count">42</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.3</span>Sensors &amp; ADS</span>
+            <span class="count">96</span>
+          </div>
+          <div class="tnode depth-1">
+            <span class="chev"></span>
+            <span class="ico"><i data-lucide="folder" style="width:12px;height:12px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">2.4</span>Crew interface</span>
+            <span class="count">120</span>
+          </div>
+
+          <div class="tnode">
+            <span class="chev closed"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">3.0</span>Electrical &amp; power</span>
+            <span class="count">148</span>
+          </div>
+          <div class="tnode">
+            <span class="chev closed"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">4.0</span>Hydraulics</span>
+            <span class="count">62</span>
+          </div>
+          <div class="tnode">
+            <span class="chev closed"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">5.0</span>Environmental control</span>
+            <span class="count">73</span>
+          </div>
+          <div class="tnode">
+            <span class="chev closed"><i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <span class="ico"><i data-lucide="shield-alert" style="width:13px;height:13px;"></i></span>
+            <span class="name"><span class="mono" style="color:var(--fg-3);font-size:10.5px;margin-right:6px;">9.0</span>Safety &amp; certification</span>
+            <span class="count">66</span>
+          </div>
+
+        </div>
+      </aside>
+
+      <!-- TABLE -->
+      <div class="table-pane">
+        <div class="scroll-area">
+          <table class="params">
+            <colgroup>
+              <col style="width: 36px;" />
+              <col style="width: 360px;" />     <!-- ID + Title -->
+              <col style="width: 96px;" />      <!-- type -->
+              <col style="width: 86px;" />      <!-- priority -->
+              <col style="width: 116px;" />     <!-- status -->
+              <col style="width: 124px;" />     <!-- verification -->
+              <col style="width: 220px;" />     <!-- rationale -->
+              <col style="width: 130px;" />     <!-- owner -->
+              <col style="width: 110px;" />     <!-- linked -->
+              <col style="width: 92px;" />      <!-- updated -->
+              <col style="width: 36px;" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="col-check"><input type="checkbox" class="check is-indeterm" /></th>
+                <th class="col-name sortable">ID &amp; Title <span class="sortmark"><i data-lucide="arrow-up" style="width:11px;height:11px;display:inline-block;vertical-align:-1px;"></i></span></th>
+                <th class="sortable">Type</th>
+                <th class="sortable">Priority</th>
+                <th>Status</th>
+                <th>Verification</th>
+                <th>Rationale</th>
+                <th>Owner</th>
+                <th>Linked</th>
+                <th class="sortable">Updated</th>
+                <th></th>
+              </tr>
+              <tr class="qfilter">
+                <th class="col-check"></th>
+                <th class="col-name"><button class="qf"><i data-lucide="filter" style="width:11px;height:11px;"></i>PBS, then ID</button></th>
+                <th><button class="qf active"><span class="val">functional +1</span><i data-lucide="x" style="width:10px;height:10px;" class="x"></i></button></th>
+                <th><button class="qf">Any priority</button></th>
+                <th><button class="qf active"><span class="val">released, in review</span><i data-lucide="x" style="width:10px;height:10px;" class="x"></i></button></th>
+                <th><button class="qf">Any state</button></th>
+                <th><button class="qf">All</button></th>
+                <th><button class="qf">Any owner</button></th>
+                <th><button class="qf">≥ 1 link</button></th>
+                <th><button class="qf active"><i data-lucide="clock" style="width:11px;height:11px;"></i><span>Last 30 d</span><i data-lucide="x" style="width:10px;height:10px;" class="x"></i></button></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <!-- ============================================================
+                   GROUP: 2.2.2 Roll & yaw  (selected PBS node)
+                   ============================================================ -->
+              <tr class="group-row">
+                <td class="col-check"></td>
+                <td class="col-name" colspan="10">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="folder-open" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="gr-name"><span class="mono" style="font-size:11px;color:var(--fg-3);margin-right:8px;">2.2.2</span>Roll &amp; yaw control laws</span>
+                  </span>
+                  <span class="gr-meta">
+                    48 records<span class="dot"></span>
+                    <span class="gr-stale">3 suspect</span><span class="dot"></span>
+                    DAL <span class="mono">A</span>
+                  </span>
+                </td>
+              </tr>
+
+              <tr class="is-selected">
+                <td class="col-check"><input type="checkbox" class="check" checked /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star is-on" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2214</span>
+                    <span class="nm" style="font-family:var(--app-font);">Roll rate command saturation at high AoA</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Functional</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Prevents departure when stick saturated above α<sub>stall</sub> − 2°.</td>
+                <td class="cell-source"><a>M. Aldridge</a></td>
+                <td class="cell-used"><span class="num">14</span> links<span class="bar"><i style="width: 88%;"></i></span></td>
+                <td class="cell-updated">17 Apr, 14:22</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2215</span>
+                    <span class="nm" style="font-family:var(--app-font);">Lateral-directional decoupling on engine-out</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Functional</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-partial">⏱ Partial</span></td>
+                <td class="cell-desc">Auto-rudder shall null sideslip within 800 ms of thrust asymmetry &gt;30%.</td>
+                <td class="cell-source"><a>M. Aldridge</a></td>
+                <td class="cell-used"><span class="num">22</span> links<span class="bar"><i style="width: 100%;"></i></span></td>
+                <td class="cell-updated">17 Apr, 11:08</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr class="is-selected">
+                <td class="col-check"><input type="checkbox" class="check" checked /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2216</span>
+                    <span class="nm" style="font-family:var(--app-font);">Yaw damper minimum gain margin</span>
+                    <span class="dr-pill" style="margin-left: 8px; height: 17px; padding: 0 6px; font-size: 10px; background: var(--amber-tint); color: #5C4400; border-color: #EBD58A;"><i data-lucide="alert-triangle" style="width:9px;height:9px;"></i>Suspect</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Performance</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status review">In review</span></td>
+                <td><span class="status verif-none">○ Not verified</span></td>
+                <td class="cell-desc">≥ 6 dB across cruise &amp; approach with 1 axis hardover.</td>
+                <td class="cell-source"><a>K. Sato</a></td>
+                <td class="cell-used"><span class="num">9</span> links<span class="bar"><i style="width: 56%;"></i></span></td>
+                <td class="cell-updated">17 Apr, 09:41</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2217</span>
+                    <span class="nm" style="font-family:var(--app-font);">Roll axis trim-rate limit</span>
+                  </div>
+                </td>
+                <td><span class="type-tag int">Performance</span></td>
+                <td><span class="status prio-high">High</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">≤ 4 °/s autopilot trim authority below 2,000 ft AGL.</td>
+                <td class="cell-source"><a>K. Sato</a></td>
+                <td class="cell-used"><span class="num">7</span> links<span class="bar"><i style="width: 44%;"></i></span></td>
+                <td class="cell-updated">15 Apr, 17:50</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2218</span>
+                    <span class="nm" style="font-family:var(--app-font);">Sideslip envelope hard limit</span>
+                    <span class="dr-pill" style="margin-left: 8px; height: 17px; padding: 0 6px; font-size: 10px; background: var(--amber-tint); color: #5C4400; border-color: #EBD58A;"><i data-lucide="alert-triangle" style="width:9px;height:9px;"></i>Suspect</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Safety</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status review">In review</span></td>
+                <td><span class="status verif-partial">⏱ Partial</span></td>
+                <td class="cell-desc">|β| ≤ 8° in normal law; degraded law allows 14°.</td>
+                <td class="cell-source"><a>R. Okafor</a></td>
+                <td class="cell-used"><span class="num">11</span> links<span class="bar"><i style="width: 68%;"></i></span></td>
+                <td class="cell-updated">14 Apr, 16:02</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <!-- ============================================================
+                   GROUP: 2.2.3 Envelope protection
+                   ============================================================ -->
+              <tr class="group-row">
+                <td class="col-check"></td>
+                <td class="col-name" colspan="10">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="folder-open" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="gr-name"><span class="mono" style="font-size:11px;color:var(--fg-3);margin-right:8px;">2.2.3</span>Envelope protection</span>
+                  </span>
+                  <span class="gr-meta">42 records<span class="dot"></span>DAL <span class="mono">A</span></span>
+                </td>
+              </tr>
+
+              <tr class="is-selected">
+                <td class="col-check"><input type="checkbox" class="check" checked /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star is-on" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2231</span>
+                    <span class="nm" style="font-family:var(--app-font);">Alpha-floor activation threshold</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Functional</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Auto-thrust to TOGA when α &gt; α<sub>floor</sub> for ≥ 0.5 s.</td>
+                <td class="cell-source"><a>M. Aldridge</a></td>
+                <td class="cell-used"><span class="num">18</span> links<span class="bar"><i style="width: 92%;"></i></span></td>
+                <td class="cell-updated">15 Apr, 10:11</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2232</span>
+                    <span class="nm" style="font-family:var(--app-font);">Bank angle protection ramp</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Functional</span></td>
+                <td><span class="status prio-high">High</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Soft return-to-33° when stick released past 67° bank.</td>
+                <td class="cell-source"><a>M. Aldridge</a></td>
+                <td class="cell-used"><span class="num">12</span> links<span class="bar"><i style="width: 75%;"></i></span></td>
+                <td class="cell-updated">14 Apr, 11:02</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2233</span>
+                    <span class="nm" style="font-family:var(--app-font);">Overspeed protection (V<sub>MO</sub>/M<sub>MO</sub>)</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Performance</span></td>
+                <td><span class="status prio-high">High</span></td>
+                <td><span class="status review">In review</span></td>
+                <td><span class="status verif-partial">⏱ Partial</span></td>
+                <td class="cell-desc">Pitch-up command beyond V<sub>MO</sub>+6 kt or M<sub>MO</sub>+0.006.</td>
+                <td class="cell-source"><a>R. Okafor</a></td>
+                <td class="cell-used"><span class="num">8</span> links<span class="bar"><i style="width: 50%;"></i></span></td>
+                <td class="cell-updated">16 Apr, 08:40</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-FCS-2234</span>
+                    <span class="nm" style="font-family:var(--app-font);">Pitch attitude protection ceiling</span>
+                  </div>
+                </td>
+                <td><span class="type-tag int">Functional</span></td>
+                <td><span class="status prio-high">High</span></td>
+                <td><span class="status draft">Draft</span></td>
+                <td><span class="status verif-none">○ Not verified</span></td>
+                <td class="cell-desc">Auto-recovery if θ exceeds ±25° for &gt; 1 s.</td>
+                <td class="cell-source"><a>R. Okafor</a></td>
+                <td class="cell-used"><span class="num">3</span> links<span class="bar"><i style="width: 19%;"></i></span></td>
+                <td class="cell-updated">17 Apr, 08:30</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <!-- ============================================================
+                   GROUP: 2.3 Sensors & ADS
+                   ============================================================ -->
+              <tr class="group-row">
+                <td class="col-check"></td>
+                <td class="col-name" colspan="10">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="folder-open" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="gr-name"><span class="mono" style="font-size:11px;color:var(--fg-3);margin-right:8px;">2.3</span>Sensors &amp; air-data</span>
+                  </span>
+                  <span class="gr-meta">
+                    96 records<span class="dot"></span>
+                    <span class="gr-stale">2 suspect</span><span class="dot"></span>
+                    <span class="gr-deprecated">1 deprecated</span>
+                  </span>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star is-on" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-ADS-3104</span>
+                    <span class="nm" style="font-family:var(--app-font);">Pitot-static heater redundancy</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Interface</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Three independently powered heaters; bus tie loss tolerated.</td>
+                <td class="cell-source"><a>L. Tanaka</a></td>
+                <td class="cell-used"><span class="num">31</span> links<span class="bar"><i style="width: 100%;"></i></span></td>
+                <td class="cell-updated">12 Apr, 16:08</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-ADS-3105</span>
+                    <span class="nm" style="font-family:var(--app-font);">AOA vane sample rate &amp; latency</span>
+                    <span class="dr-pill" style="margin-left: 8px; height: 17px; padding: 0 6px; font-size: 10px; background: var(--amber-tint); color: #5C4400; border-color: #EBD58A;"><i data-lucide="alert-triangle" style="width:9px;height:9px;"></i>Suspect</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Performance</span></td>
+                <td><span class="status prio-high">High</span></td>
+                <td><span class="status review">In review</span></td>
+                <td><span class="status verif-partial">⏱ Partial</span></td>
+                <td class="cell-desc">≥ 50 Hz, end-to-end latency ≤ 20 ms to control law.</td>
+                <td class="cell-source"><a>L. Tanaka</a></td>
+                <td class="cell-used"><span class="num">12</span> links<span class="bar"><i style="width: 75%;"></i></span></td>
+                <td class="cell-updated">17 Apr, 12:44</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-ADS-3106</span>
+                    <span class="nm" style="font-family:var(--app-font);">IRU alignment time on cold start</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Performance</span></td>
+                <td><span class="status prio-med">Medium</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">≤ 9 min at gate; ≤ 14 min at &gt;75°N latitude.</td>
+                <td class="cell-source"><a>K. Sato</a></td>
+                <td class="cell-used"><span class="num">5</span> links<span class="bar"><i style="width: 31%;"></i></span></td>
+                <td class="cell-updated">02 Apr, 09:11</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="lock" class="star" style="width:12px;height:12px;color:var(--fg-3);" title="Locked"></i>
+                    <span class="id">REQ-ADS-3107</span>
+                    <span class="nm" style="font-family:var(--app-font);color:var(--fg-3);">Legacy ARINC-429 bus interface (replaced)</span>
+                  </div>
+                </td>
+                <td><span class="type-tag int">Interface</span></td>
+                <td><span class="status prio-low">Low</span></td>
+                <td><span class="status deprecated">Deprecated</span></td>
+                <td><span class="status verif-none">— N/A</span></td>
+                <td class="cell-desc">Superseded by REQ-ADS-3204 (AFDX). Retained for retrofit fleet.</td>
+                <td class="cell-source"><a>L. Tanaka</a></td>
+                <td class="cell-used"><span class="num">0</span> links<span class="bar"><i style="width: 0%;"></i></span></td>
+                <td class="cell-updated">21 Mar, 13:02</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="star" class="star" style="width:13px;height:13px;"></i>
+                    <span class="id">REQ-ADS-3108</span>
+                    <span class="nm" style="font-family:var(--app-font);">Triplex AHRS voting algorithm</span>
+                  </div>
+                </td>
+                <td><span class="type-tag float">Functional</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Mid-value select with frozen-channel detection ≤ 200 ms.</td>
+                <td class="cell-source"><a>L. Tanaka</a></td>
+                <td class="cell-used"><span class="num">8</span> links<span class="bar"><i style="width: 50%;"></i></span></td>
+                <td class="cell-updated">02 Apr, 09:11</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <!-- ============================================================
+                   GROUP: 9.0 Safety & certification (constraints)
+                   ============================================================ -->
+              <tr class="group-row">
+                <td class="col-check"></td>
+                <td class="col-name" colspan="10">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="shield-alert" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="gr-name"><span class="mono" style="font-size:11px;color:var(--fg-3);margin-right:8px;">9.0</span>Safety &amp; certification — constraints</span>
+                  </span>
+                  <span class="gr-meta">22 records<span class="dot"></span>locked baseline</span>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="lock" class="star" style="width:12px;height:12px;color: var(--fg-3);" title="Locked"></i>
+                    <span class="id">REQ-CRT-9001</span>
+                    <span class="nm" style="font-family:var(--app-font);">Compliance with CS-25.1309</span>
+                  </div>
+                </td>
+                <td><span class="type-tag int">Constraint</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Catastrophic failure rate ≤ 1×10⁻⁹ per flight hour.</td>
+                <td class="cell-source"><a>EASA cert ref</a></td>
+                <td class="cell-used"><span class="num">94</span> links<span class="bar"><i style="width: 100%;"></i></span></td>
+                <td class="cell-updated">01 Jan, 00:00</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="lock" class="star" style="width:12px;height:12px;color: var(--fg-3);"></i>
+                    <span class="id">REQ-CRT-9002</span>
+                    <span class="nm" style="font-family:var(--app-font);">DO-178C DAL A software process</span>
+                  </div>
+                </td>
+                <td><span class="type-tag int">Constraint</span></td>
+                <td><span class="status prio-crit">Critical</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">Full MC/DC coverage; independent verification team.</td>
+                <td class="cell-source"><a>cert.do-178c</a></td>
+                <td class="cell-used"><span class="num">61</span> links<span class="bar"><i style="width: 88%;"></i></span></td>
+                <td class="cell-updated">01 Jan, 00:00</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+              <tr>
+                <td class="col-check"><input type="checkbox" class="check" /></td>
+                <td class="col-name">
+                  <div class="cell-name">
+                    <i data-lucide="lock" class="star" style="width:12px;height:12px;color: var(--fg-3);"></i>
+                    <span class="id">REQ-CRT-9003</span>
+                    <span class="nm" style="font-family:var(--app-font);">ARP4754A development assurance</span>
+                  </div>
+                </td>
+                <td><span class="type-tag int">Constraint</span></td>
+                <td><span class="status prio-high">High</span></td>
+                <td><span class="status released">Released</span></td>
+                <td><span class="status verif-pass">✓ Verified</span></td>
+                <td class="cell-desc">System-level assurance level allocation per ARP4761A.</td>
+                <td class="cell-source"><a>cert.arp-4754a</a></td>
+                <td class="cell-used"><span class="num">29</span> links<span class="bar"><i style="width: 78%;"></i></span></td>
+                <td class="cell-updated">01 Jan, 00:00</td>
+                <td class="col-actions"><span class="row-actions"><span class="icon-btn"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span></span></td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Bulk action dock -->
+        <div class="bulk-dock">
+          <span class="ct"><span class="num">3</span> selected</span>
+          <span class="b"><i data-lucide="folder-input" style="width:13px;height:13px;"></i>Move to PBS…</span>
+          <span class="b"><i data-lucide="circle-dot" style="width:13px;height:13px;"></i>Set status</span>
+          <span class="b"><i data-lucide="shield-check" style="width:13px;height:13px;"></i>Set verification</span>
+          <span class="b"><i data-lucide="user-round" style="width:13px;height:13px;"></i>Reassign owner</span>
+          <span class="b"><i data-lucide="link" style="width:13px;height:13px;"></i>Link to…</span>
+          <span class="b"><i data-lucide="download" style="width:13px;height:13px;"></i>Export</span>
+          <span class="sep"></span>
+          <span class="b danger"><i data-lucide="trash-2" style="width:13px;height:13px;"></i>Delete</span>
+          <span class="clear">✕</span>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- STATUS BAR -->
+  <footer class="statusbar">
+    <span class="live">Connected · Polarion · Jira · Git</span>
+    <span>Branch <b>main</b></span>
+    <span>1,247 records · 3 selected · 12 suspect</span>
+    <span class="right">
+      <span>Baseline <b class="mono">B-2026-04-12</b></span>
+      <span>Build <b class="mono">v1.42.0</b></span>
+    </span>
+  </footer>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+
+  <!-- HEADER -->
+  <div class="dr-head">
+    <span class="icon-btn" title="Star"><i data-lucide="star" style="width:14px;height:14px;color:var(--amber);fill:var(--amber);"></i></span>
+    <span class="dr-id" id="drId" style="font-family:var(--app-font-mono);font-size:11.5px;color:var(--fg-3);letter-spacing:0.02em;">REQ-FCS-2216</span>
+    <span class="dr-name" id="drName" style="font-weight:600;">Yaw damper minimum gain margin</span>
+    <span class="dr-spacer"></span>
+    <span class="icon-btn" title="Open in editor"><i data-lucide="external-link" style="width:14px;height:14px;"></i></span>
+    <span class="icon-btn" title="Copy reference"><i data-lucide="link-2" style="width:14px;height:14px;"></i></span>
+    <span class="icon-btn" id="drExpand" title="Expand"><i data-lucide="maximize-2" class="ic-expand" style="width:13px;height:13px;"></i><i data-lucide="minimize-2" class="ic-collapse" style="width:13px;height:13px;"></i></span>
+    <span class="icon-btn" title="More"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></span>
+    <span class="icon-btn" id="drClose" title="Close"><i data-lucide="x" style="width:15px;height:15px;"></i></span>
+  </div>
+
+  <!-- SUB-HEADER -->
+  <div class="dr-sub">
+    <div class="dr-pills">
+      <span class="dr-pill float">Performance</span>
+      <span class="dr-pill review"><i data-lucide="clock" style="width:11px;height:11px;"></i>In review</span>
+      <span class="dr-pill" style="background: rgba(180,35,24,0.08); color: #B42318; border-color: rgba(180,35,24,0.20);"><i data-lucide="alert-octagon" style="width:11px;height:11px;"></i>Critical</span>
+      <span class="dr-pill" style="background: var(--amber-tint); color: #5C4400; border-color: #EBD58A;"><i data-lucide="alert-triangle" style="width:11px;height:11px;"></i>Suspect link</span>
+      <span class="dr-pill"><i data-lucide="folder" style="width:11px;height:11px;"></i>2.2.2 Roll &amp; yaw</span>
+      <span class="dr-pill"><i data-lucide="shield-check" style="width:11px;height:11px;"></i>DAL A</span>
+    </div>
+    <div class="dr-title-row">
+      <span class="dr-display">Yaw damper minimum gain margin</span>
+    </div>
+    <p class="dr-desc">The yaw damper shall maintain a gain margin of at least <b>6 dB</b> across the cruise and approach envelopes when subjected to a single-axis hardover failure of the rudder actuator. Margin to be demonstrated by closed-loop frequency analysis at corner Mach numbers and CG limits.</p>
+  </div>
+
+  <!-- BODY (scrollable) -->
+  <div class="dr-body">
+
+    <!-- SUSPECT-LINK CALLOUT -->
+    <div class="dr-diff" id="drDiff">
+      <div class="row">
+        <span class="label">Upstream</span>
+        <span style="font-family:var(--app-font-mono);font-size:11.5px;">REQ-FCS-2200 — Roll/yaw axis stability targets</span>
+        <span class="meta">edited 2 d 04 h ago · M. Aldridge</span>
+      </div>
+      <div class="row">
+        <span class="label">Change</span>
+        <span class="from">stability margin ≥ 4 dB</span>
+        <i data-lucide="arrow-right" class="arrow" style="width:13px;height:13px;"></i>
+        <span class="to">≥ 6 dB across envelope</span>
+        <span class="meta">re-verify needed</span>
+      </div>
+    </div>
+
+    <!-- STATEMENT (the requirement text, called out) -->
+    <div class="dr-section">
+      <h4>Statement</h4>
+      <div class="dr-value" style="display:block;padding:14px 16px;font-family:var(--app-font);">
+        <span style="display:block;font-size:13.5px;line-height:1.6;color:var(--fg);font-weight:500;">
+          The yaw damper <b>shall</b> achieve a closed-loop gain margin
+          <span class="mono" style="background: var(--surface-2); padding: 1px 6px; border-radius: 3px;">≥ 6 dB</span>
+          and a phase margin
+          <span class="mono" style="background: var(--surface-2); padding: 1px 6px; border-radius: 3px;">≥ 45°</span>
+          across cruise (FL280–FL410) and approach (≤ 5,000 ft AGL) flight regimes, with one rudder servo channel held at hardover.
+        </span>
+        <span style="display:block;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:11px;color:var(--fg-3);">
+          <b style="color:var(--fg-2);">Acceptance:</b> Bode analysis at 6 corner points (M, h, CG) plus piloted-sim hardover demo VER-FCS-0418-c.
+        </span>
+      </div>
+    </div>
+
+    <!-- ATTRIBUTES -->
+    <div class="dr-section">
+      <h4>Attributes</h4>
+      <dl class="dr-kv">
+        <dt>Type</dt>
+        <dd><span class="mono">Performance</span> · safety-critical</dd>
+
+        <dt>Priority</dt>
+        <dd><span style="color:#B42318;font-weight:600;">Critical</span> — drives DAL A allocation</dd>
+
+        <dt>Verification method</dt>
+        <dd>Analysis &amp; Test (A+T) · piloted simulator</dd>
+
+        <dt>Verification status</dt>
+        <dd><span style="color:#7A5E00;">⏱ Partial</span> — 4 of 6 corners closed</dd>
+
+        <dt>Source standard</dt>
+        <dd><a class="src-link mono">CS-25.671(c)(2)</a> · <a class="src-link mono">ARP4754A §5.4</a></dd>
+
+        <dt>Tags</dt>
+        <dd>
+          <span class="dr-pill">flight-control</span>
+          <span class="dr-pill">stability</span>
+          <span class="dr-pill">single-failure</span>
+        </dd>
+      </dl>
+    </div>
+
+    <!-- TRACEABILITY -->
+    <div class="dr-section">
+      <h4>Traceability</h4>
+      <dl class="dr-kv">
+        <dt>Parent (derived from)</dt>
+        <dd><a class="src-link mono">REQ-FCS-2200</a> · Roll/yaw axis stability targets <span style="color:var(--fg-3);">— suspect</span></dd>
+
+        <dt>Children (derives)</dt>
+        <dd><a class="src-link mono">REQ-FCS-2216.a</a>, <a class="src-link mono">REQ-FCS-2216.b</a> <span style="color:var(--fg-3);">(2 sub-requirements)</span></dd>
+
+        <dt>Allocated to</dt>
+        <dd><span class="dr-pill"><i data-lucide="cpu" style="width:11px;height:11px;"></i>FCC-A</span> <span class="dr-pill"><i data-lucide="cpu" style="width:11px;height:11px;"></i>FCC-B</span></dd>
+
+        <dt>Owner</dt>
+        <dd><span class="author"><span class="avatar">KS</span>Kira Sato <span style="color:var(--fg-3);font-size:11px;">· flight controls</span></span></dd>
+
+        <dt>Reviewer</dt>
+        <dd><span class="author"><span class="avatar" style="background:linear-gradient(135deg,#e5d6c4,#cdb89a);">MA</span>Maya Aldridge <span style="color:var(--fg-3);font-size:11px;">· aero lead · pending</span></span></dd>
+      </dl>
+    </div>
+
+    <!-- LINKED ITEMS -->
+    <div class="dr-section">
+      <h4>Linked items <span style="color:var(--fg-3);font-weight:400;text-transform:none;letter-spacing:0;">— 9 references</span></h4>
+      <div class="dr-refs">
+        <div class="dr-ref">
+          <span class="ref-kind req"><i data-lucide="list-checks" style="width:13px;height:13px;"></i></span>
+          <span class="ref-id">REQ-FCS-2200</span>
+          <span class="ref-title">Roll/yaw axis stability targets <span style="color:#7A5E00;font-size:11px;">· upstream changed</span></span>
+          <span class="ref-meta">parent</span>
+        </div>
+        <div class="dr-ref">
+          <span class="ref-kind req"><i data-lucide="list-checks" style="width:13px;height:13px;"></i></span>
+          <span class="ref-id">REQ-FCS-2216.a</span>
+          <span class="ref-title">Cruise corner-point gain margin demonstration</span>
+          <span class="ref-meta">child</span>
+        </div>
+        <div class="dr-ref">
+          <span class="ref-kind param"><i data-lucide="sliders-horizontal" style="width:13px;height:13px;"></i></span>
+          <span class="ref-id">PRM-0192</span>
+          <span class="ref-title"><span class="mono" style="font-size:11.5px;">aero.clp</span> · roll-damping derivative used in margin model</span>
+          <span class="ref-meta">parameter</span>
+        </div>
+        <div class="dr-ref">
+          <span class="ref-kind test"><i data-lucide="code-2" style="width:13px;height:13px;"></i></span>
+          <span class="ref-id">VER-FCS-0418-c</span>
+          <span class="ref-title">Piloted-sim hardover demonstration · clean cruise</span>
+          <span class="ref-meta">passing</span>
+        </div>
+        <div class="dr-ref">
+          <span class="ref-kind test"><i data-lucide="code-2" style="width:13px;height:13px;"></i></span>
+          <span class="ref-id">VER-FCS-0418-d</span>
+          <span class="ref-title">Frequency analysis · approach configuration</span>
+          <span class="ref-meta" style="color:#7A5E00;">2 corners open</span>
+        </div>
+      </div>
+      <span class="more-link">View full trace tree (9 items) →</span>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="dr-section">
+      <h4>Recent history</h4>
+      <div class="dr-timeline">
+        <div class="dr-event is-stale">
+          <div class="e-row">
+            <span class="e-action"><b>Marked suspect</b> — parent REQ-FCS-2200 edited</span>
+            <span class="e-meta">2 d 04 h</span>
+          </div>
+          <div class="e-detail">stability margin tightened 4 dB → 6 dB</div>
+        </div>
+        <div class="dr-event is-edit">
+          <div class="e-row">
+            <span class="e-action"><b>Statement edited</b> — added phase-margin clause</span>
+            <span class="e-meta">17 Apr</span>
+          </div>
+          <div class="e-detail">+ "and a phase margin ≥ 45°" · K. Sato</div>
+        </div>
+        <div class="dr-event is-publish">
+          <div class="e-row">
+            <span class="e-action"><b>Released</b> on baseline B-2026-04-12</span>
+            <span class="e-meta">14 Apr</span>
+          </div>
+          <div class="e-detail">Approved by Maya Aldridge · 4 reviewers</div>
+        </div>
+        <div class="dr-event">
+          <div class="e-row">
+            <span class="e-action"><b>Created</b> from CS-25.671 derivation</span>
+            <span class="e-meta">02 Mar</span>
+          </div>
+          <div class="e-detail">Initial author B. Liu · derived from REQ-FCS-2200</div>
+        </div>
+      </div>
+      <span class="more-link">View full audit log →</span>
+    </div>
+
+    <!-- DISCUSSION -->
+    <div class="dr-section">
+      <h4>Discussion <span style="color:var(--fg-3);font-weight:400;text-transform:none;letter-spacing:0;">— 2 comments</span></h4>
+      <div class="dr-comment">
+        <span class="avatar">MA</span>
+        <div class="body">
+          <div class="head"><b>Maya Aldridge</b><span class="when">17 Apr · aero lead</span></div>
+          <div class="text">Tightening to 6 dB is consistent with the new winglet kinematics — but two approach corners haven't been re-verified yet. Holding review until <span class="mono" style="background:var(--surface-2);padding:1px 4px;border-radius:3px;">VER-FCS-0418-d</span> closes.</div>
+        </div>
+      </div>
+      <div class="dr-comment">
+        <span class="avatar" style="background:linear-gradient(135deg,#e8dcc8,#d4bfa3);">KS</span>
+        <div class="body">
+          <div class="head"><b>Kira Sato</b><span class="when">17 Apr</span></div>
+          <div class="text">Re-running the approach Bode sweep tonight. Will request re-validation as soon as both corners are green.</div>
+        </div>
+      </div>
+      <div class="dr-comment-add" tabindex="0">Write a comment, mention <span class="mono">@teammates</span> or link <span class="mono">REQ-/PRM-/VER-</span>…</div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="dr-foot">
+    <span class="left">
+      <i data-lucide="alert-triangle" style="width:12px;height:12px;color:#A88200;"></i>
+      Suspect link · awaiting re-validation
+    </span>
+    <span class="right">
+      <button class="dr-btn ghost">Open trace</button>
+      <button class="dr-btn">View diff</button>
+      <button class="dr-btn primary"><i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>Re-validate</button>
+    </span>
+  </div>
+
+</aside>
+</div>
+
+<script>lucide.createIcons();</script>
+
+<!-- ============================================================
+     PARAMETER DETAIL DRAWER
+     ============================================================ -->
+<style>
+  /* DOCKED side-by-side: drawer is the third grid column of .app.
+     Width is 0 until .app.has-drawer; full-overlay when .drawer-expanded. */
+  .drawer {
+    background: var(--bg, #FBFBFA);
+    border-left: 1px solid var(--line, #DEE0E2);
+    display: flex;
+    flex-direction: column;
+    font-family: var(--app-font);
+    color: var(--fg, #1F2328);
+    overflow: hidden;
+    min-width: 0;
+    grid-row: 2;
+    grid-column: 3;
+  }
+  /* hidden state — column collapses to 0, hide content so border doesn't show */
+  .app:not(.has-drawer) .drawer { border-left: 0; visibility: hidden; }
+  .app.drawer-expanded .drawer {
+    grid-column: 2 / 4;
+    box-shadow: -8px 0 32px rgba(15, 23, 28, 0.10);
+  }
+
+  /* SQUEEZE: when drawer is open, the table compresses — only the frozen
+     check + name columns stay visible. Other cells collapse to 0 width. */
+  .app.has-drawer table.params thead th:not(.col-check):not(.col-name),
+  .app.has-drawer table.params tbody td:not(.col-check):not(.col-name) {
+    display: none;
+  }
+  .app.has-drawer table.params td.col-name,
+  .app.has-drawer table.params th.col-name {
+    width: auto;
+    border-right: 0;
+  }
+  /* group rows already use colspan="10" — let them stretch full width */
+  .app.has-drawer table.params tr.group-row td.col-name { width: auto; }
+  /* hide the frozen-column right border shadow when squeezed */
+  .app.has-drawer .table-area { overflow-x: hidden; }
+  /* hide the bulk-dock action labels in squeezed mode (keep dock visible but compact) */
+  .app.has-drawer .bulk-dock { font-size: 11.5px; }
+  /* fully expanded drawer: hide table entirely */
+  .app.drawer-expanded .table-area,
+  .app.drawer-expanded .toolbar,
+  .app.drawer-expanded .stale,
+  .app.drawer-expanded .tabs,
+  .app.drawer-expanded .page-head { visibility: hidden; }
+
+  /* HEADER */
+  .dr-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line, #DEE0E2);
+    background: var(--surface, #F4F5F2);
+  }
+  .dr-head .dr-id {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3, #6E7781);
+    letter-spacing: 0.02em;
+  }
+  .dr-head .dr-name {
+    font-family: var(--app-font);
+    font-size: 13.5px; font-weight: 600;
+    color: var(--fg, #1F2328);
+  }
+  .dr-head .dr-spacer { flex: 1; }
+  .dr-head .icon-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3, #6E7781); cursor: pointer;
+  }
+  .dr-head .icon-btn:hover { background: var(--surface-2, #ECEEEA); color: var(--fg); }
+
+  /* expand/collapse icon swap (driven by .drawer-expanded on .app) */
+  #drExpand .ic-collapse { display: none; }
+  .app.drawer-expanded #drExpand .ic-expand { display: none; }
+  .app.drawer-expanded #drExpand .ic-collapse { display: inline-flex; }
+
+  /* SUB-HEADER: pills strip + title */
+  .dr-sub {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--line, #DEE0E2);
+    background: var(--bg);
+  }
+  .dr-pills { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .dr-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 20px; padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px; font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg-2, #424A53);
+  }
+  .dr-pill.released { background: var(--green-tint, #E5EFE9); color: var(--green, #1B4332); border-color: rgba(27, 67, 50, 0.18); }
+  .dr-pill.review { background: var(--amber-tint, #FBF0D8); color: #5C4400; border-color: #EBD58A; }
+  .dr-pill.deprecated { background: var(--red-tint, #FBE9E7); color: var(--red, #B42318); border-color: rgba(180, 35, 24, 0.18); }
+  .dr-pill.locked { background: var(--surface-2); color: var(--fg-2); }
+  .dr-pill.float, .dr-pill.int { font-family: var(--app-font-mono); font-size: 10.5px; padding: 0 6px; }
+  .dr-pill.float { background: rgba(9, 105, 218, 0.07); color: var(--blue-ink, #054EA3); border-color: rgba(9, 105, 218, 0.18); }
+  .dr-pill.int { background: rgba(91, 33, 182, 0.06); color: #5B21B6; border-color: rgba(91, 33, 182, 0.18); }
+
+  .dr-title-row {
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .dr-title-row .dr-display {
+    font-family: var(--app-font);
+    font-size: 22px; font-weight: 600; letter-spacing: -0.01em;
+    color: var(--fg);
+  }
+  .dr-title-row .dr-display-id {
+    font-family: var(--app-font-mono); font-size: 12px; color: var(--fg-3);
+  }
+  .dr-desc {
+    margin-top: 8px;
+    color: var(--fg-2);
+    font-size: 13px; line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  /* DIFF banner (stale callout) */
+  .dr-diff {
+    margin: 12px 20px 0;
+    border: 1px solid #EBD58A;
+    background: var(--amber-tint, #FBF0D8);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: #5C4400;
+  }
+  .dr-diff .row { display: flex; align-items: center; gap: 10px; }
+  .dr-diff .row + .row { margin-top: 6px; }
+  .dr-diff .label { color: #7C5E1A; min-width: 60px; }
+  .dr-diff .from { font-family: var(--app-font-mono); color: var(--fg-3); text-decoration: line-through; }
+  .dr-diff .to { font-family: var(--app-font-mono); color: #5C4400; font-weight: 600; }
+  .dr-diff .arrow { color: #7C5E1A; }
+  .dr-diff .meta { margin-left: auto; font-family: var(--app-font-mono); font-size: 11px; color: #7C5E1A; }
+
+  /* BODY */
+  .dr-body {
+    flex: 1; overflow-y: auto;
+    background: var(--bg);
+  }
+  .dr-section {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line, #DEE0E2);
+  }
+  .dr-section:last-child { border-bottom: 0; }
+  .dr-section h4 {
+    margin: 0 0 10px;
+    font-size: 11px; font-weight: 600;
+    color: var(--fg-3, #6E7781);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* VALUE block */
+  .dr-value {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-soft, #F8F8F6);
+  }
+  .dr-value .val {
+    font-family: var(--app-font-mono);
+    font-size: 28px; font-weight: 600;
+    color: var(--fg); letter-spacing: -0.01em;
+  }
+  .dr-value .unit {
+    font-family: var(--app-font-mono);
+    font-size: 14px; color: var(--fg-2);
+  }
+  .dr-value .vsep { flex: 1; }
+  .dr-value .baseline {
+    font-size: 11px; color: var(--fg-3);
+    text-align: right; line-height: 1.4;
+  }
+  .dr-value .baseline b {
+    font-family: var(--app-font-mono); font-weight: 600; color: var(--fg-2); display: block;
+  }
+  .dr-formula {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(9, 105, 218, 0.06);
+    border: 1px dashed rgba(9, 105, 218, 0.30);
+    border-radius: 6px;
+    font-family: var(--app-font-mono); font-size: 12px;
+    color: var(--blue-ink, #054EA3);
+    display: none;
+  }
+  .dr-formula.is-on { display: block; }
+  .dr-formula .f { font-style: italic; margin-right: 6px; }
+
+  /* KEY-VALUE grid */
+  .dr-kv {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    row-gap: 8px; column-gap: 16px;
+    font-size: 13px;
+  }
+  .dr-kv dt { color: var(--fg-3); font-weight: 400; }
+  .dr-kv dd { margin: 0; color: var(--fg); }
+  .dr-kv .mono { font-family: var(--app-font-mono); font-size: 12.5px; }
+  .dr-kv .src-link { color: var(--blue, #0969DA); text-decoration: none; cursor: pointer; }
+  .dr-kv .src-link:hover { text-decoration: underline; }
+  .dr-kv .author {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .dr-kv .author .avatar {
+    width: 18px; height: 18px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 9px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* USED-IN refs */
+  .dr-refs { display: flex; flex-direction: column; gap: 6px; }
+  .dr-ref {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .dr-ref:hover { background: var(--surface-soft); border-color: var(--line-strong); }
+  .dr-ref .ref-kind {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 4px;
+    background: var(--surface-2); color: var(--fg-3);
+  }
+  .dr-ref .ref-kind.req { background: rgba(9,105,218,0.10); color: var(--blue-ink); }
+  .dr-ref .ref-kind.test { background: rgba(27, 67, 50, 0.08); color: var(--green); }
+  .dr-ref .ref-kind.param { background: rgba(91, 33, 182, 0.08); color: #5B21B6; }
+  .dr-ref .ref-id {
+    font-family: var(--app-font-mono); font-size: 11px;
+    color: var(--fg-3); min-width: 84px;
+  }
+  .dr-ref .ref-title { color: var(--fg); flex: 1; }
+  .dr-ref .ref-meta { color: var(--fg-3); font-size: 11px; }
+  .dr-section .more-link {
+    display: inline-block; margin-top: 8px;
+    color: var(--blue); font-size: 12px; cursor: pointer;
+  }
+  .dr-section .more-link:hover { text-decoration: underline; }
+
+  /* HISTORY timeline */
+  .dr-timeline { position: relative; padding-left: 18px; }
+  .dr-timeline::before {
+    content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px;
+    width: 1px; background: var(--line);
+  }
+  .dr-event {
+    position: relative; padding: 0 0 14px;
+    font-size: 12.5px;
+  }
+  .dr-event:last-child { padding-bottom: 0; }
+  .dr-event::before {
+    content: ''; position: absolute; left: -15px; top: 5px;
+    width: 7px; height: 7px; border-radius: 999px;
+    background: var(--bg); border: 2px solid var(--fg-4);
+  }
+  .dr-event.is-publish::before { border-color: var(--green); }
+  .dr-event.is-edit::before { border-color: var(--blue); }
+  .dr-event.is-stale::before { border-color: var(--amber); }
+  .dr-event .e-row { display: flex; align-items: center; gap: 8px; }
+  .dr-event .e-action { color: var(--fg); }
+  .dr-event .e-action b { font-weight: 600; }
+  .dr-event .e-meta {
+    margin-left: auto; color: var(--fg-3); font-size: 11px;
+    font-family: var(--app-font-mono);
+  }
+  .dr-event .e-detail {
+    margin-top: 3px; color: var(--fg-3);
+    font-family: var(--app-font-mono); font-size: 11.5px;
+  }
+
+  /* DISCUSSION */
+  .dr-comment {
+    display: flex; gap: 10px; padding: 10px 0;
+    border-bottom: 1px dashed var(--line-soft);
+  }
+  .dr-comment:last-of-type { border-bottom: 0; }
+  .dr-comment .avatar {
+    flex-shrink: 0;
+    width: 24px; height: 24px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 10px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .dr-comment .body { flex: 1; font-size: 12.5px; }
+  .dr-comment .head { display: flex; align-items: baseline; gap: 8px; }
+  .dr-comment .head b { font-size: 12.5px; font-weight: 600; color: var(--fg); }
+  .dr-comment .head .when { color: var(--fg-3); font-size: 11px; }
+  .dr-comment .text { color: var(--fg-2); margin-top: 2px; line-height: 1.5; }
+  .dr-comment-add {
+    margin-top: 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    color: var(--fg-3);
+    background: var(--bg);
+    cursor: text;
+  }
+  .dr-comment-add:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.12); }
+
+  /* FOOTER */
+  .dr-foot {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .dr-foot .left { display: flex; align-items: center; gap: 6px; color: var(--fg-3); font-size: 11px; }
+  .dr-foot .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .dr-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 12px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 12.5px; color: var(--fg);
+    cursor: pointer;
+  }
+  .dr-btn:hover { background: var(--surface-soft); }
+  .dr-btn.primary {
+    background: var(--blue); color: #fff; border-color: var(--blue);
+  }
+  .dr-btn.primary:hover { background: var(--blue-hover); }
+  .dr-btn.ghost { border-color: transparent; background: transparent; color: var(--fg-2); }
+  .dr-btn.ghost:hover { background: var(--surface-2); }
+</style>
+
+<script>
+  (function () {
+    var app = document.querySelector('.app');
+    var drawer = document.getElementById('drawer');
+    var closeBtn = document.getElementById('drClose');
+    var expandBtn = document.getElementById('drExpand');
+
+    function openDrawer(row) {
+      if (row) {
+        var nm = row.querySelector('.cell-name .nm');
+        var id = row.querySelector('.cell-name .id');
+        if (nm) document.getElementById('drName').textContent = nm.textContent;
+        if (id) document.getElementById('drId').textContent = id.textContent;
+        var disp = document.querySelector('.dr-display');
+        if (disp && nm) disp.textContent = nm.textContent;
+        // mark active row
+        document.querySelectorAll('table.params tbody tr.is-active').forEach(function (r) { r.classList.remove('is-active'); });
+        row.classList.add('is-active');
+      }
+      app.classList.add('has-drawer');
+      drawer.setAttribute('aria-hidden', 'false');
+      if (window.lucide && lucide.createIcons) lucide.createIcons();
+    }
+    function closeDrawer() {
+      app.classList.remove('has-drawer');
+      app.classList.remove('drawer-expanded');
+      drawer.setAttribute('aria-hidden', 'true');
+      document.querySelectorAll('table.params tbody tr.is-active').forEach(function (r) { r.classList.remove('is-active'); });
+      expandBtn.setAttribute('title', 'Expand');
+    }
+    function toggleExpand() {
+      var expanded = app.classList.toggle('drawer-expanded');
+      expandBtn.setAttribute('title', expanded ? 'Collapse' : 'Expand');
+    }
+
+    closeBtn.addEventListener('click', closeDrawer);
+    expandBtn.addEventListener('click', toggleExpand);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeDrawer();
+    });
+
+    // Wire row clicks
+    document.querySelectorAll('table.params tbody tr').forEach(function (tr) {
+      if (tr.classList.contains('group-row')) return;
+      if (tr.classList.contains('filter-row')) return;
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t.closest('input, button, a, .icon-btn, .star, .row-actions')) return;
+        openDrawer(tr);
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

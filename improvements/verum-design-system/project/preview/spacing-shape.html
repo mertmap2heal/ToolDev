@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Spacing & Shape</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="_card.css" />
+  <style>
+    .verum.card { background: var(--surface-base); }
+    .grp { display: flex; flex-direction: column; gap: 18px; }
+    .grp__title { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-muted); padding-bottom: 8px; border-bottom: 1px solid var(--border-default); }
+    .row { display: grid; grid-template-columns: 100px 1fr 200px; gap: 24px; align-items: center; }
+    .row__name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); }
+    .row__bar { background: var(--accent-primary); height: 14px; border-radius: 0; }
+    .row__use { font-family: var(--font-body); font-size: 13px; color: var(--ink-muted); }
+
+    .radii { display: flex; gap: 16px; flex-wrap: wrap; }
+    .radii__item { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+    .radii__chip { width: 88px; height: 88px; background: var(--surface-raised); border: 1px solid var(--border-strong); }
+    .radii__lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-muted); text-transform: uppercase; }
+
+    .container-demo { background: repeating-linear-gradient(90deg, transparent 0 11.11%, rgba(27,67,50,0.06) 11.11% 12.5%); padding: 32px 0; border-top: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default); }
+    .container-demo__inner { max-width: 1200px; padding: 0 32px; margin: 0 auto; background: var(--surface-base); border: 1px solid var(--accent-primary); height: 80px; display: flex; align-items: center; padding-left: 32px; padding-right: 32px; }
+    .container-demo__lbl { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-primary); }
+  </style>
+</head>
+<body class="verum">
+  <article class="card">
+    <header class="card__head">
+      <div>
+        <div class="card__eyebrow">05 · Spacing &amp; Shape</div>
+        <h1 class="card__title">Editorial rhythm. Square corners.</h1>
+        <p class="card__sub" style="margin-top:14px;">Verum spans an editorial scale up to <span class="mono">128px</span> for hero margins; the app keeps a dense <span class="mono">8 / 12 / 20</span> rhythm. Both are nearly square — radius is a hairline of softness, not a feature.</p>
+      </div>
+    </header>
+
+    <section class="card__main" style="gap: 36px;">
+      <div class="grp">
+        <div class="grp__title">Verum · spacing scale (px)</div>
+        <div class="row"><div class="row__name">space-2</div><div class="row__bar" style="width:8px"></div><div class="row__use">8 · inline gap</div></div>
+        <div class="row"><div class="row__name">space-3</div><div class="row__bar" style="width:16px"></div><div class="row__use">16 · paragraph rhythm</div></div>
+        <div class="row"><div class="row__name">space-4</div><div class="row__bar" style="width:24px"></div><div class="row__use">24 · stack</div></div>
+        <div class="row"><div class="row__name">space-5</div><div class="row__bar" style="width:32px"></div><div class="row__use">32 · container side padding</div></div>
+        <div class="row"><div class="row__name">space-tight</div><div class="row__bar" style="width:64px"></div><div class="row__use">64 · tight section padding (y)</div></div>
+        <div class="row"><div class="row__name">space-section</div><div class="row__bar" style="width:96px"></div><div class="row__use">96 · default section padding (y)</div></div>
+        <div class="row"><div class="row__name">space-loose</div><div class="row__bar" style="width:128px"></div><div class="row__use">128 · hero / pitch sections</div></div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">App · spacing scale (px) — Tailwind <span class="mono">2 / 3 / 4 / 5 / 6</span></div>
+        <div class="row"><div class="row__name">8 / gap-2</div><div class="row__bar" style="width:8px;background:#0969da"></div><div class="row__use">tight icon ↔ label</div></div>
+        <div class="row"><div class="row__name">12 / gap-3</div><div class="row__bar" style="width:12px;background:#0969da"></div><div class="row__use">toolbar control gap</div></div>
+        <div class="row"><div class="row__name">16 / gap-4</div><div class="row__bar" style="width:16px;background:#0969da"></div><div class="row__use">card padding base</div></div>
+        <div class="row"><div class="row__name">20 / gap-5</div><div class="row__bar" style="width:20px;background:#0969da"></div><div class="row__use">page gutter</div></div>
+        <div class="row"><div class="row__name">24 / gap-6</div><div class="row__bar" style="width:24px;background:#0969da"></div><div class="row__use">section header offset</div></div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Radius</div>
+        <div class="radii">
+          <div class="radii__item"><div class="radii__chip" style="border-radius:0"></div><div class="radii__lbl">0 · square (default)</div></div>
+          <div class="radii__item"><div class="radii__chip" style="border-radius:2px"></div><div class="radii__lbl">2 · verum chip</div></div>
+          <div class="radii__item"><div class="radii__chip" style="border-radius:4px"></div><div class="radii__lbl">4 · pill / app sm</div></div>
+          <div class="radii__item"><div class="radii__chip" style="border-radius:6px"></div><div class="radii__lbl">6 · app input</div></div>
+          <div class="radii__item"><div class="radii__chip" style="border-radius:8px"></div><div class="radii__lbl">8 · app card</div></div>
+          <div class="radii__item"><div class="radii__chip" style="border-radius:999px"></div><div class="radii__lbl">∞ · status pill</div></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Container · Verum max-width 1200 / padding 32</div>
+        <div class="container-demo">
+          <div class="container-demo__inner">
+            <span class="container-demo__lbl">Container · 1200 max · 32 side padding</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="card__foot">
+      <span>--space-section 96</span>
+      <span>--radius-xs 2</span>
+      <span>--radius-sm 4</span>
+      <span>app · gap-2 / 3 / 4 / 5 / 6</span>
+      <span>app · rounded-md 6</span>
+      <span>app · rounded-lg 8</span>
+    </footer>
+  </article>
+</body>
+</html>

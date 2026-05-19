@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Workflow improvements · proposals</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #ECEEF0;
+    font-family: var(--app-font);
+    color: #1F2328;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .doc {
+    --bg: #FBFBFA;
+    --surface: #F4F5F2;
+    --surface-2: #ECEEEA;
+    --surface-soft: #F8F8F6;
+    --fg: #1F2328;
+    --fg-2: #424A53;
+    --fg-3: #6E7781;
+    --fg-4: #9DA4AB;
+    --line: #DEE0E2;
+    --line-strong: #C9CDD1;
+    --line-soft: #E8EAEC;
+    --blue: #0969DA;
+    --blue-tint: #DDF1FF;
+    --blue-ink: #054EA3;
+    --green: #1B4332;
+    --green-tint: #E5EFE9;
+    --amber: #B8860B;
+    --amber-tint: #FBF0D8;
+    --amber-ink: #5C4400;
+    --red: #B42318;
+    --red-tint: #FBE9E7;
+    --purple: #6F42C1;
+    --purple-tint: #F1E8FF;
+    --teal: #117165;
+    --teal-tint: #E1F0EE;
+
+    max-width: 940px;
+    margin: 0 auto;
+    background: var(--bg);
+    color: var(--fg);
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    min-height: 100vh;
+  }
+  .doc .mono { font-family: var(--app-font-mono); font-size: 12.5px; }
+
+  /* HERO */
+  .hero {
+    padding: 56px 64px 36px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .crumb {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .hero h1 {
+    margin: 0 0 14px;
+    font-size: 36px; font-weight: 600; letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .hero .lede {
+    font-size: 16px; color: var(--fg-2); line-height: 1.6; max-width: 720px;
+  }
+  .hero .lede b { color: var(--fg); font-weight: 600; }
+
+  .summary {
+    margin-top: 28px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-soft);
+  }
+  .summary h3 {
+    margin: 0;
+    padding: 12px 16px;
+    font-size: 11px; color: var(--fg-3); font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .summary ol {
+    margin: 0; padding: 4px 0 8px 0;
+    list-style: none;
+    counter-reset: pr;
+  }
+  .summary li {
+    counter-increment: pr;
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .summary li:last-child { border-bottom: 0; }
+  .summary li::before {
+    content: counter(pr, decimal-leading-zero);
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3);
+    text-align: center;
+  }
+  .summary li a {
+    color: var(--fg); text-decoration: none; font-weight: 500;
+  }
+  .summary li a:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+  .summary li .why { color: var(--fg-3); font-size: 12.5px; }
+  .summary li .impact {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    padding: 2px 7px; border-radius: 999px;
+    background: var(--surface); color: var(--fg-3); border: 1px solid var(--line);
+  }
+  .summary li .impact.hi { color: var(--red); border-color: rgba(180,35,24,0.30); background: rgba(180,35,24,0.05); }
+  .summary li .impact.mh { color: var(--amber-ink); border-color: #EBD58A; background: var(--amber-tint); }
+  .summary li .impact.md { color: var(--blue-ink); border-color: #B6DCFE; background: var(--blue-tint); }
+
+  /* BODY */
+  .body {
+    padding: 40px 64px 64px;
+  }
+  .proposal {
+    margin-bottom: 56px;
+    scroll-margin-top: 24px;
+  }
+  .proposal h2 {
+    margin: 0 0 6px;
+    font-size: 22px; font-weight: 600; letter-spacing: -0.012em;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .proposal h2 .num {
+    font-family: var(--app-font-mono);
+    font-size: 13px; color: var(--fg-4); font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .proposal .tagline {
+    margin: 0 0 18px;
+    font-size: 14.5px; color: var(--fg-3); font-style: italic;
+    line-height: 1.5;
+  }
+  .proposal p {
+    margin: 0 0 12px;
+    font-size: 13.5px; line-height: 1.65;
+    text-wrap: pretty;
+    max-width: 740px;
+  }
+  .proposal p b { font-weight: 600; color: var(--fg); }
+  .proposal .pain, .proposal .why-good {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 14px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line-soft);
+    align-items: baseline;
+  }
+  .proposal .label {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase;
+    text-align: right;
+    padding-top: 2px;
+    font-weight: 500;
+  }
+  .proposal .pain .label { color: var(--red); }
+  .proposal .why-good .label { color: var(--green); }
+  .proposal .pain p, .proposal .why-good p { margin: 0; }
+
+  .mockup {
+    margin: 18px 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .mockup .caption {
+    padding: 6px 14px;
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-3);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    background: var(--surface-soft);
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  /* COMMAND PALETTE MOCK */
+  .cmdp {
+    background: var(--surface-soft);
+    padding: 32px 22px;
+  }
+  .cmdp .pal {
+    margin: 0 auto;
+    max-width: 540px;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(15,20,25,0.12), 0 2px 8px rgba(15,20,25,0.08);
+    overflow: hidden;
+  }
+  .cmdp .ip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px;
+  }
+  .cmdp .ip .cur {
+    color: var(--fg);
+  }
+  .cmdp .ip .cur b { color: var(--blue-ink); font-weight: 500; }
+  .cmdp .ip .caret {
+    width: 1.5px; height: 17px; background: var(--blue);
+    animation: bl 1s steps(2) infinite;
+  }
+  @keyframes bl { 50% { opacity: 0; } }
+  .cmdp .ip .kbd { margin-left: auto; font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); border: 1px solid var(--line); padding: 1px 6px; border-radius: 3px; }
+  .cmdp .sec { padding: 6px 14px 2px; font-size: 10.5px; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; }
+  .cmdp .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 16px;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .cmdp .row .ico { width: 18px; height: 18px; color: var(--fg-3); display: inline-flex; align-items: center; justify-content: center; }
+  .cmdp .row .lbl { color: var(--fg); flex: 1; }
+  .cmdp .row .lbl mark { background: transparent; color: var(--blue-ink); font-weight: 600; }
+  .cmdp .row .sub { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .cmdp .row.is-sel { background: var(--blue-tint); }
+  .cmdp .row.is-sel .ico { color: var(--blue); }
+  .cmdp .row.is-sel .lbl mark { color: var(--blue-ink); }
+  .cmdp .row .arrow { color: var(--fg-4); }
+  .cmdp .row.is-sel .arrow { color: var(--blue); }
+  .cmdp .foot {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--line-soft);
+    background: var(--surface-soft);
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-3);
+  }
+  .cmdp .foot .kbd { border: 1px solid var(--line); padding: 1px 5px; border-radius: 3px; margin-right: 3px; }
+
+  /* INBOX MOCK */
+  .inbox {
+    background: var(--surface-soft);
+    padding: 18px;
+  }
+  .inbox .pane {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .inbox .head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .inbox .head h4 { margin: 0; font-size: 15px; font-weight: 600; }
+  .inbox .head .sub { color: var(--fg-3); font-size: 12px; }
+  .inbox .head .seg {
+    margin-left: auto;
+    display: inline-flex; height: 24px;
+    border: 1px solid var(--line); border-radius: 5px; overflow: hidden;
+    font-size: 11.5px;
+  }
+  .inbox .head .seg .b { padding: 0 8px; display: inline-flex; align-items: center; gap: 4px; color: var(--fg-3); cursor: pointer; }
+  .inbox .head .seg .b + .b { border-left: 1px solid var(--line); }
+  .inbox .head .seg .b.is-active { background: var(--surface-2); color: var(--fg); font-weight: 500; }
+  .inbox .ibrow {
+    display: grid;
+    grid-template-columns: 22px 22px 96px 1fr 90px 100px 70px;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 13px;
+  }
+  .inbox .ibrow:last-child { border-bottom: 0; }
+  .inbox .ibrow.is-active { background: var(--blue-tint); box-shadow: inset 2px 0 0 var(--blue); }
+  .inbox .ibrow .ico {
+    width: 22px; height: 22px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .inbox .ibrow .ico.sign { background: var(--blue-tint); color: var(--blue-ink); }
+  .inbox .ibrow .ico.fail { background: var(--red-tint); color: var(--red); }
+  .inbox .ibrow .ico.review { background: var(--amber-tint); color: var(--amber-ink); }
+  .inbox .ibrow .ico.mention { background: var(--purple-tint); color: var(--purple); }
+  .inbox .ibrow .ico.due { background: var(--surface-2); color: var(--fg-2); }
+  .inbox .ibrow .pri {
+    width: 6px; height: 6px; border-radius: 999px;
+    margin: 0 auto;
+  }
+  .inbox .ibrow .pri.crit { background: var(--red); }
+  .inbox .ibrow .pri.high { background: var(--amber); }
+  .inbox .ibrow .pri.med { background: var(--blue); }
+  .inbox .ibrow .pri.low { background: var(--fg-4); }
+  .inbox .ibrow .src {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-3); letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .inbox .ibrow .what { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox .ibrow .what .ref { font-family: var(--app-font-mono); font-size: 12px; color: var(--blue-ink); }
+  .inbox .ibrow .ow {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--fg-2);
+  }
+  .inbox .ibrow .ow .av {
+    width: 18px; height: 18px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    font-size: 8.5px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .inbox .ibrow .due-cell { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .inbox .ibrow .due-cell.urgent { color: var(--red); font-weight: 500; }
+  .inbox .ibrow .act-cell {
+    display: flex; gap: 4px; justify-content: flex-end;
+  }
+  .inbox .ibrow .act-cell .a {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    padding: 2px 7px; border-radius: 3px;
+    background: var(--surface); color: var(--fg-2);
+    border: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .inbox .ibrow .act-cell .a.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .inbox .ibrow.group {
+    padding: 8px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    color: var(--fg-3);
+    grid-template-columns: 1fr;
+    font-size: 11px;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    font-weight: 500;
+  }
+  .inbox .ibrow.group .gh {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .inbox .ibrow.group b { color: var(--fg); }
+
+  /* TRIAGE DRAWER MOCK */
+  .triage {
+    background: var(--surface-soft);
+    display: grid;
+    grid-template-columns: 1fr 480px;
+    min-height: 480px;
+  }
+  .triage .behind { padding: 18px; opacity: 0.42; }
+  .triage .behind .b-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--bg);
+    font-size: 12.5px;
+  }
+  .triage .behind .b-row .id {
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+    width: 80px;
+  }
+  .triage .behind .b-row .t { flex: 1; }
+  .triage .drawer {
+    border-left: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .triage .dr-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .triage .dr-head .id {
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+  }
+  .triage .dr-head h4 {
+    margin: 4px 0 10px; font-size: 15px; font-weight: 600; line-height: 1.4;
+  }
+  .triage .delta {
+    display: flex; gap: 8px; align-items: center;
+    font-family: var(--app-font-mono); font-size: 12px;
+    color: var(--red);
+    background: var(--red-tint); border: 1px solid #F2C2B9;
+    padding: 6px 10px; border-radius: 5px;
+  }
+  .triage .delta b { color: var(--red); font-weight: 600; }
+
+  /* Stepper */
+  .stepper {
+    display: flex; align-items: center; gap: 0;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-soft);
+  }
+  .stepper .step {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 10.5px; color: var(--fg-3);
+    flex: 1; position: relative;
+  }
+  .stepper .step .dot {
+    width: 22px; height: 22px; border-radius: 999px;
+    background: var(--surface-2); color: var(--fg-3);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--app-font-mono); font-size: 10.5px; font-weight: 600;
+    border: 1px solid var(--line);
+  }
+  .stepper .step.done .dot { background: var(--green); color: #fff; border-color: var(--green); }
+  .stepper .step.curr .dot { background: var(--blue); color: #fff; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(9,105,218,0.18); }
+  .stepper .step.curr .lbl { color: var(--fg); font-weight: 600; }
+  .stepper .step .lbl { font-size: 11px; }
+  .stepper .step::after {
+    content: ""; position: absolute; left: calc(50% + 14px); right: calc(-50% + 14px); top: 10px; height: 1px;
+    background: var(--line);
+  }
+  .stepper .step:last-child::after { display: none; }
+  .stepper .step.done::after, .stepper .step.curr::after { background: var(--green); }
+
+  .triage .body-x {
+    padding: 14px 18px; flex: 1; display: flex; flex-direction: column; gap: 12px;
+  }
+  .triage .field {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .triage .field .lbl {
+    font-size: 11px; color: var(--fg-3);
+    letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500;
+  }
+  .triage .field .v {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    color: var(--fg);
+    line-height: 1.5;
+  }
+  .triage .field .v.input { border: 1px solid var(--line); background: var(--bg); }
+  .triage .field .v.ai { border-left: 3px solid var(--purple); }
+  .triage .field .v .ai-label {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--purple); margin-right: 6px;
+  }
+  .triage .field .small {
+    font-family: var(--app-font-mono); font-size: 10.5px; color: var(--fg-3);
+  }
+  .triage .splits {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .triage .ct {
+    padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 5px;
+    background: var(--bg);
+    display: flex; flex-direction: column; gap: 2px;
+    cursor: pointer;
+  }
+  .triage .ct.sel { border-color: var(--blue); background: var(--blue-tint); }
+  .triage .ct .h { font-size: 12px; font-weight: 500; }
+  .triage .ct .s { font-size: 10.5px; color: var(--fg-3); }
+  .triage .ct.sel .s { color: var(--blue-ink); }
+
+  .triage .dr-foot {
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; gap: 8px; align-items: center;
+  }
+  .triage .dr-foot .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 12px;
+    font-size: 12.5px; font-weight: 500;
+    border-radius: 5px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--fg);
+    cursor: pointer;
+  }
+  .triage .dr-foot .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .triage .dr-foot .stamp { margin-left: auto; font-family: var(--app-font-mono); font-size: 10.5px; color: var(--fg-3); }
+
+  /* SUSPECT BANNER MOCK */
+  .suspect-mock {
+    padding: 18px;
+    background: var(--surface-soft);
+  }
+  .suspect-row {
+    display: grid;
+    grid-template-columns: 24px 1fr 220px;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .suspect-row .check {
+    appearance: none;
+    width: 14px; height: 14px;
+    border: 1px solid var(--line-strong);
+    background: var(--blue); border-color: var(--blue);
+    border-radius: 3px;
+    position: relative;
+  }
+  .suspect-row .check::after {
+    content: ""; position: absolute; left: 3px; top: 0px;
+    width: 5px; height: 9px; border: solid #fff; border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .suspect-row .body { min-width: 0; }
+  .suspect-row .body .head {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+    margin-bottom: 4px;
+  }
+  .suspect-row .body .head .ref { color: var(--blue-ink); }
+  .suspect-row .body .head .arrow { color: var(--fg-4); }
+  .suspect-row .body .t {
+    color: var(--fg); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .suspect-row .delta { display: flex; flex-direction: column; gap: 4px; }
+  .suspect-row .delta .pair {
+    display: grid; grid-template-columns: 80px 1fr;
+    gap: 8px;
+    align-items: center;
+    font-family: var(--app-font-mono); font-size: 11px;
+  }
+  .suspect-row .delta .pair .l { color: var(--fg-3); }
+  .suspect-row .delta .pair .v.old { color: var(--fg-3); text-decoration: line-through; text-decoration-color: var(--fg-4); }
+  .suspect-row .delta .pair .v.new { color: var(--green); font-weight: 500; }
+  .suspect-row .ai-rec {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--purple);
+    margin-top: 2px;
+  }
+
+  /* AUDIT GAUGE MOCK */
+  .audit-mock {
+    padding: 26px;
+    background: var(--surface-soft);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 28px;
+    align-items: center;
+  }
+  .audit-mock svg { display: block; }
+  .audit-mock .legend { display: flex; flex-direction: column; gap: 6px; }
+  .audit-mock .legend .row {
+    display: grid; grid-template-columns: 14px 130px 1fr auto;
+    align-items: center; gap: 10px;
+    font-size: 12.5px;
+  }
+  .audit-mock .legend .dot { width: 10px; height: 10px; border-radius: 2px; }
+  .audit-mock .legend .lbl { color: var(--fg-2); }
+  .audit-mock .legend .bar { height: 4px; background: var(--surface-2); border-radius: 2px; position: relative; overflow: hidden; }
+  .audit-mock .legend .bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; }
+  .audit-mock .legend .v { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg); min-width: 60px; text-align: right; }
+
+  /* FOOTER */
+  .footer {
+    padding: 24px 64px 56px;
+    border-top: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .footer b { color: var(--fg-2); }
+  .footer a { color: var(--blue-ink); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  /* CALLOUT */
+  .callout {
+    margin: 14px 0;
+    padding: 12px 16px;
+    background: var(--blue-tint);
+    border: 1px solid #B6DCFE;
+    border-radius: 6px;
+    font-size: 13px; color: var(--blue-ink);
+    line-height: 1.55;
+    display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+    max-width: 740px;
+  }
+  .callout svg, .callout i { color: var(--blue); }
+  .callout b { color: var(--blue-ink); }
+
+  .pill-row { display: inline-flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 14px; }
+  .pill-row .pill {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--surface); color: var(--fg-3); border: 1px solid var(--line);
+    line-height: 16px;
+  }
+  .pill-row .pill.green { color: var(--green); background: var(--green-tint); border-color: #BFD9C9; }
+  .pill-row .pill.blue  { color: var(--blue-ink); background: var(--blue-tint); border-color: #B6DCFE; }
+  .pill-row .pill.purple { color: var(--purple); background: var(--purple-tint); border-color: #D9C6F2; }
+  .pill-row .pill.amber { color: var(--amber-ink); background: var(--amber-tint); border-color: #EBD58A; }
+
+  /* TOC nav (fixed-ish) */
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" style="display: block; min-height: 0;">
+<div class="doc" data-screen-label="Workflow improvements">
+
+  <div class="hero">
+    <div class="crumb">Verum design system · proposals · May 2026</div>
+    <h1>Make the everyday painless.</h1>
+    <p class="lede">
+      The refresh fixed the look. Now the workflows — where the day-to-day pain
+      actually lives. Below are <b>ten proposals</b>, ordered by leverage, each
+      with the pain it removes, what it looks like, and roughly what we'd build.
+      The common thread: <b>collapse multi-screen dances into single motions</b>,
+      <b>surface what needs attention</b> rather than make you go fetch it, and
+      <b>let the system suggest the obvious next step</b> instead of asking the
+      engineer to remember it.
+    </p>
+
+    <div class="summary">
+      <h3>Ten proposals · sorted by leverage</h3>
+      <ol>
+        <li><a href="#p1">Today queue — the cross-module inbox</a><span class="why">one list of what's blocking your day, across every module</span><span class="impact hi">high</span></li>
+        <li><a href="#p2">Failure triage drawer</a><span class="why">fail → issue → CR → re-run, in one motion not five screens</span><span class="impact hi">high</span></li>
+        <li><a href="#p3">Action-first command palette (⌘K)</a><span class="why">stop hunting menus — type the verb</span><span class="impact hi">high</span></li>
+        <li><a href="#p4">Smart suspect-link resolver</a><span class="why">when a baseline shifts, batch-revalidate with AI suggestions</span><span class="impact hi">high</span></li>
+        <li><a href="#p5">Always-on audit pack readiness</a><span class="why">no end-game scramble; gaps surface daily</span><span class="impact mh">med-high</span></li>
+        <li><a href="#p6">Auto-link suggester</a><span class="why">creating a hazard? we'll guess which 3 reqs to link</span><span class="impact mh">med-high</span></li>
+        <li><a href="#p7">Saved views — role-shaped not feature-shaped</a><span class="why">"safety lead today" not "filter by 7 things again"</span><span class="impact md">med</span></li>
+        <li><a href="#p8">Universal baseline diff</a><span class="why">one screen to answer "what changed since last baseline?"</span><span class="impact md">med</span></li>
+        <li><a href="#p9">Keyboard-first navigation everywhere</a><span class="why">j/k/o/r/⌘↩ — power users go 4× faster</span><span class="impact md">med</span></li>
+        <li><a href="#p10">Notification clustering &amp; quiet hours</a><span class="why">stop pinging on every keystroke; respect deep work</span><span class="impact md">med</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- 01 ============================================== -->
+    <div class="proposal" id="p1">
+      <h2><span class="num">01</span> Today queue — the cross-module inbox</h2>
+      <p class="tagline">A single, ranked list of "things I need to do right now," indifferent to which module produced them.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>Today, to answer "what do I need to deal with?", an engineer opens the Dashboard, then Requirements review queue, then Verification failures, then Issues assigned-to-me, then Documents awaiting my sign-off, then Tasks overdue, then notification bell — five clicks, six modules, then they forget which had the urgent one. Sign-offs frequently slip not because they're hard but because they're invisible.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>One <b>Today</b> screen that pulls every actionable item — sign-off requests, failed runs you own, suspect links you cleared last week, mentions, overdue tasks, CR reviews — and ranks them by deadline + criticality. Inline actions: approve, request changes, re-run, snooze. The bell icon's only job becomes "you have new items in Today."</p>
+      </div>
+
+      <div class="mockup">
+        <div class="caption">Inbox · today · 12 items · ranked by deadline + DAL</div>
+        <div class="inbox">
+          <div class="pane">
+            <div class="head">
+              <h4>Today</h4>
+              <span class="sub">12 items · 3 overdue · 4 due ≤ 4 h</span>
+              <span class="seg">
+                <span class="b is-active"><i data-lucide="inbox" style="width:12px;height:12px;"></i>All</span>
+                <span class="b"><i data-lucide="user" style="width:12px;height:12px;"></i>From me</span>
+                <span class="b"><i data-lucide="bookmark" style="width:12px;height:12px;"></i>Snoozed</span>
+              </span>
+            </div>
+
+            <div class="ibrow group"><span class="gh"><i data-lucide="alert-triangle" style="width:11px;height:11px;color:var(--red);"></i> Overdue · <b>3</b></span></div>
+
+            <div class="ibrow is-active">
+              <span class="ico fail"><i data-lucide="x" style="width:11px;height:11px;"></i></span>
+              <span class="pri crit"></span>
+              <span class="src">verification</span>
+              <span class="what">Re-run <span class="ref">VER-0301</span> failed on rig 02 — root cause likely stale almanac</span>
+              <div class="ow"><span class="av">LR</span>L. Rivera</div>
+              <span class="due-cell urgent">2 d late</span>
+              <span class="act-cell"><span class="a primary">Open</span><span class="a">⌘1</span></span>
+            </div>
+
+            <div class="ibrow">
+              <span class="ico sign"><i data-lucide="signature" style="width:11px;height:11px;"></i></span>
+              <span class="pri crit"></span>
+              <span class="src">documentation</span>
+              <span class="what">Sign off <span class="ref">SDP v3.2</span> · last approver</span>
+              <div class="ow"><span class="av">NV</span>You</div>
+              <span class="due-cell urgent">SLA -4 h</span>
+              <span class="act-cell"><span class="a primary">Sign</span><span class="a">⌘2</span></span>
+            </div>
+
+            <div class="ibrow">
+              <span class="ico review"><i data-lucide="git-pull-request" style="width:11px;height:11px;"></i></span>
+              <span class="pri high"></span>
+              <span class="src">change request</span>
+              <span class="what">Review <span class="ref">CR-0142</span> · firmware bump for GPS almanac</span>
+              <div class="ow"><span class="av">RS</span>R. Solano</div>
+              <span class="due-cell urgent">1 d late</span>
+              <span class="act-cell"><span class="a">Approve</span><span class="a">Comment</span></span>
+            </div>
+
+            <div class="ibrow group"><span class="gh"><i data-lucide="clock" style="width:11px;height:11px;color:var(--amber);"></i> Due today · <b>4</b></span></div>
+
+            <div class="ibrow">
+              <span class="ico mention"><i data-lucide="at-sign" style="width:11px;height:11px;"></i></span>
+              <span class="pri high"></span>
+              <span class="src">requirement</span>
+              <span class="what">M. Tan mentioned you on <span class="ref">REQ-1024</span> · "is the cache flush rule still active?"</span>
+              <div class="ow"><span class="av">MT</span>M. Tan</div>
+              <span class="due-cell">2 h</span>
+              <span class="act-cell"><span class="a">Reply</span><span class="a">Open</span></span>
+            </div>
+
+            <div class="ibrow">
+              <span class="ico due"><i data-lucide="check-square" style="width:11px;height:11px;"></i></span>
+              <span class="pri high"></span>
+              <span class="src">task</span>
+              <span class="what">Promote 17 reviewed requirements to released after PDR</span>
+              <div class="ow"><span class="av">RS</span>R. Solano</div>
+              <span class="due-cell">today</span>
+              <span class="act-cell"><span class="a">Bulk</span><span class="a">Open</span></span>
+            </div>
+
+            <div class="ibrow">
+              <span class="ico review"><i data-lucide="alert-triangle" style="width:11px;height:11px;"></i></span>
+              <span class="pri med"></span>
+              <span class="src">safety</span>
+              <span class="what">Mitigation review · <span class="ref">HAZ-018</span> · GPS lock loss · Catastrophic</span>
+              <div class="ow"><span class="av">KP</span>K. Park</div>
+              <span class="due-cell">4 h</span>
+              <span class="act-cell"><span class="a">Open</span><span class="a">Snooze</span></span>
+            </div>
+
+            <div class="ibrow group"><span class="gh"><i data-lucide="circle" style="width:11px;height:11px;color:var(--fg-4);"></i> This week · <b>5</b></span></div>
+
+            <div class="ibrow">
+              <span class="ico sign"><i data-lucide="signature" style="width:11px;height:11px;"></i></span>
+              <span class="pri med"></span>
+              <span class="src">documentation</span>
+              <span class="what">Sign off <span class="ref">ICD-014 v1.2</span> · Avionics ↔ Power bus</span>
+              <div class="ow"><span class="av">SF</span>S. Fuentes</div>
+              <span class="due-cell">Fri</span>
+              <span class="act-cell"><span class="a">Sign</span><span class="a">Open</span></span>
+            </div>
+
+            <div class="ibrow">
+              <span class="ico review"><i data-lucide="list-checks" style="width:11px;height:11px;"></i></span>
+              <span class="pri low"></span>
+              <span class="src">requirement</span>
+              <span class="what">Re-validate 12 suspect requirements after baseline shift</span>
+              <div class="ow"><span class="av">RS</span>R. Solano</div>
+              <span class="due-cell">Mon</span>
+              <span class="act-cell"><span class="a">Resolver →</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill blue">routing rules</span>
+        <span class="pill blue">priority = dl + DAL</span>
+        <span class="pill">snooze · 1h / today / next week</span>
+        <span class="pill">inline approve / reply / re-run</span>
+        <span class="pill green">replaces the bell badge</span>
+      </div>
+
+      <div class="callout">
+        <i data-lucide="lightbulb" style="width:16px;height:16px;"></i>
+        <div><b>Side benefit:</b> sign-offs stop being invisible. Right now the bottleneck of every audit submission is finding the last approver. If they live in Today, they get done.</div>
+      </div>
+    </div>
+
+    <!-- 02 ============================================== -->
+    <div class="proposal" id="p2">
+      <h2><span class="num">02</span> Failure triage drawer — fail → issue → CR → re-run, in one motion</h2>
+      <p class="tagline">The single most common path in the tool — "a verification failed, now what?" — is currently five screens. Make it one.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>Today: open Verification, see <span class="mono">VER-0301</span> red, click into it, copy the run ID, switch to Issues, click New, paste, link the requirement (which requires opening Requirements in another tab to find the right one), assign someone, go back to Verification, find a place to record "investigating", switch to Change Requests, open new CR, link… seven tabs and twenty minutes. By the time you're done, half the context is lost.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>One <b>triage drawer</b> opens from any failed run. It already knows the run, the requirement, the previous passing baseline, and the suspected delta. It offers three buttons: <b>investigate</b> (creates an issue with everything pre-filled), <b>propose change</b> (creates a CR draft), or <b>retest</b> (queues a re-run). Pick one or several; the drawer assembles the links between them automatically. AI suggests a title and likely root cause from the run logs.</p>
+      </div>
+
+      <div class="mockup">
+        <div class="caption">Triage drawer · opened from a failed verification run</div>
+        <div class="triage">
+          <!-- behind-list pretend -->
+          <div class="behind">
+            <div class="b-row">
+              <span class="id">VER-0298</span>
+              <span class="t">IMU drift bias ≤ 0.05 °/s after 6 min</span>
+            </div>
+            <div class="b-row">
+              <span class="id">VER-0301</span>
+              <span class="t">GPS reacquisition &lt; 1.2 s after 6g maneuver</span>
+            </div>
+            <div class="b-row">
+              <span class="id">VER-0285</span>
+              <span class="t">Wing loading at 1.5g below max design stress</span>
+            </div>
+            <div class="b-row">
+              <span class="id">VER-0277</span>
+              <span class="t">Connector pin allocation matches ICD-014</span>
+            </div>
+          </div>
+
+          <!-- drawer -->
+          <div class="drawer">
+            <div class="dr-head">
+              <div class="id">VER-0301 · run R-7 · rig 02 · 14 m ago</div>
+              <h4>Triage failure · GPS reacquisition &lt; 1.2 s after 6g maneuver</h4>
+              <div class="delta">
+                <i data-lucide="trending-down" style="width:14px;height:14px;"></i>
+                Result: <b>1.84 s</b> · tolerance 1.20 s · last pass at baseline <span class="mono" style="font-size: 11px;">B-2026-03-22</span>
+              </div>
+            </div>
+
+            <div class="stepper">
+              <div class="step done"><span class="dot">✓</span><span class="lbl">Detect</span></div>
+              <div class="step done"><span class="dot">✓</span><span class="lbl">Classify</span></div>
+              <div class="step curr"><span class="dot">3</span><span class="lbl">Resolve</span></div>
+              <div class="step"><span class="dot">4</span><span class="lbl">Verify</span></div>
+              <div class="step"><span class="dot">5</span><span class="lbl">Close</span></div>
+            </div>
+
+            <div class="body-x">
+
+              <div class="field">
+                <span class="lbl">Suspected cause</span>
+                <div class="v ai">
+                  <span class="ai-label"><i data-lucide="sparkles" style="width:10px;height:10px;"></i>AI</span>
+                  Stale GPS almanac in receiver cache; cache flush rule activates at bank&gt;45°. Same pattern seen on <b>Hyperion-X</b> in Feb. <a href="#" style="color: var(--blue-ink);">view 3 similar past failures →</a>
+                </div>
+              </div>
+
+              <div class="field">
+                <span class="lbl">Linked to</span>
+                <div class="v">
+                  <span class="mono" style="color: var(--blue-ink); font-size: 11.5px;">↑ REQ-1024</span> ·
+                  <span class="mono" style="color: var(--blue-ink); font-size: 11.5px;">↑ HAZ-018</span> ·
+                  <span class="mono" style="color: var(--fg-3); font-size: 11.5px;">3 watchers</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <span class="lbl">Next action — pick one or more</span>
+                <div class="splits">
+                  <div class="ct sel">
+                    <span class="h"><i data-lucide="circle-alert" style="width:11px;height:11px; vertical-align:-1px;"></i> Open issue</span>
+                    <span class="s">ISS-0119 · auto-filled · assigned L. Rivera</span>
+                  </div>
+                  <div class="ct sel">
+                    <span class="h"><i data-lucide="git-pull-request" style="width:11px;height:11px; vertical-align:-1px;"></i> Draft CR</span>
+                    <span class="s">CR-0142 · "GPS almanac retention" · MT reviews</span>
+                  </div>
+                  <div class="ct">
+                    <span class="h"><i data-lucide="play" style="width:11px;height:11px; vertical-align:-1px;"></i> Re-run after fix</span>
+                    <span class="s">queue 3× on rig 02 + SIL</span>
+                  </div>
+                  <div class="ct">
+                    <span class="h"><i data-lucide="bookmark" style="width:11px;height:11px; vertical-align:-1px;"></i> Defer</span>
+                    <span class="s">snooze 24 h, no public update</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field">
+                <span class="lbl">Issue title <span class="small">· AI suggested · edit before commit</span></span>
+                <div class="v input">GPS lock loss during high-G banking exceeds 1.2 s ceiling</div>
+              </div>
+
+              <div class="field">
+                <span class="lbl">Notify · 3 selected</span>
+                <div class="v" style="display: flex; align-items: center; gap: 6px;">
+                  <span style="display: inline-flex;"><span style="width: 18px; height: 18px; border-radius: 999px; background: linear-gradient(135deg, #f3d8c6, #e8baa1); font-size: 8.5px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-2); font-weight: 600;">MT</span><span style="width: 18px; height: 18px; border-radius: 999px; background: linear-gradient(135deg, #d4e1c8, #b4cda1); font-size: 8.5px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-2); font-weight: 600; margin-left: -4px;">KP</span><span style="width: 18px; height: 18px; border-radius: 999px; background: linear-gradient(135deg, #e6d4eb, #cdb1d9); font-size: 8.5px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-2); font-weight: 600; margin-left: -4px;">RS</span></span>
+                  M. Tan · K. Park · R. Solano <span class="small" style="margin-left: auto;">+ #flight-control on Slack</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="dr-foot">
+              <button class="btn primary"><i data-lucide="play" style="width:12px;height:12px;"></i>Commit · 2 items</button>
+              <button class="btn">Save draft</button>
+              <span class="stamp">⌘↩ to commit · esc to cancel</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill blue">five tabs → one drawer</span>
+        <span class="pill purple">AI seeds title + cause</span>
+        <span class="pill">pre-linked: REQ / HAZ / past failures</span>
+        <span class="pill green">consistent audit trail</span>
+      </div>
+    </div>
+
+    <!-- 03 ============================================== -->
+    <div class="proposal" id="p3">
+      <h2><span class="num">03</span> Action-first command palette (⌘K)</h2>
+      <p class="tagline">Stop hunting menus. Type the verb, see the object, hit return.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>The current ⌘K is a search box; it finds <i>things</i>. But day-to-day, engineers want to <i>do</i> things — "release the 17 reviewed reqs", "re-run failed verifications", "open the audit pack", "sign off SDP". Each currently takes 3–8 clicks across a couple of pages.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>A two-mode palette. Plain typing is still global search (today's behavior). Typing a <b>verb first</b> — <span class="mono">release</span>, <span class="mono">re-run</span>, <span class="mono">link</span>, <span class="mono">sign</span>, <span class="mono">export</span>, <span class="mono">baseline</span> — switches into action mode and offers actionable candidates, scoped to context. Hit ⌘↩ to execute. Power-users acquire ten muscle-memory shortcuts and become 4× faster.</p>
+      </div>
+
+      <div class="mockup">
+        <div class="caption">⌘K in action mode · user has typed "release " · candidates are scoped to their open project</div>
+        <div class="cmdp">
+          <div class="pal">
+            <div class="ip">
+              <i data-lucide="zap" style="width:16px;height:16px;color:var(--blue);"></i>
+              <span class="cur"><b>release </b>17 reviewed reqs</span>
+              <span class="caret"></span>
+              <span class="kbd">esc</span>
+            </div>
+
+            <div class="sec">Actions · matching "release"</div>
+
+            <div class="row is-sel">
+              <span class="ico"><i data-lucide="git-commit-vertical" style="width:14px;height:14px;"></i></span>
+              <span class="lbl"><mark>Release</mark> 17 reviewed requirements to baseline</span>
+              <span class="sub">REQ · ⌘↩</span>
+              <span class="arrow">→</span>
+            </div>
+
+            <div class="row">
+              <span class="ico"><i data-lucide="rocket" style="width:14px;height:14px;"></i></span>
+              <span class="lbl"><mark>Release</mark> documentation set as PDF bundle</span>
+              <span class="sub">DOC</span>
+              <span class="arrow">→</span>
+            </div>
+
+            <div class="row">
+              <span class="ico"><i data-lucide="git-branch" style="width:14px;height:14px;"></i></span>
+              <span class="lbl">Promote &amp; <mark>release</mark> baseline B-2026-04-12 to main</span>
+              <span class="sub">CM · 11 sign-offs needed</span>
+              <span class="arrow">→</span>
+            </div>
+
+            <div class="sec">Recent · same verb</div>
+
+            <div class="row">
+              <span class="ico"><i data-lucide="history" style="width:14px;height:14px;"></i></span>
+              <span class="lbl">Release 4 parameters · <span class="sub">M. Tan · yesterday</span></span>
+              <span class="arrow">→</span>
+            </div>
+
+            <div class="foot">
+              <span><span class="kbd">↑</span><span class="kbd">↓</span>navigate</span>
+              <span><span class="kbd">⌘↩</span>execute</span>
+              <span><span class="kbd">tab</span>preview</span>
+              <span style="margin-left: auto;">try: <span class="mono">re-run</span> · <span class="mono">sign</span> · <span class="mono">baseline</span> · <span class="mono">export</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill blue">verbs: release · re-run · sign · link · export · baseline · diff · open</span>
+        <span class="pill">preview before commit</span>
+        <span class="pill">scoped to current project</span>
+        <span class="pill green">memorizable shortcuts</span>
+      </div>
+    </div>
+
+    <!-- 04 ============================================== -->
+    <div class="proposal" id="p4">
+      <h2><span class="num">04</span> Smart suspect-link resolver</h2>
+      <p class="tagline">When a baseline shifts, batch-revalidate dozens of suspect items with AI-summarized deltas. No more whack-a-mole.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>A baseline rolls forward. Twelve requirements, six hazards and a handful of verification plans get flagged <b>suspect</b>. The engineer must click into each one, read the diff, decide if the change still applies, and re-validate. It's death by a thousand cuts and people put it off — which is why the suspect badge sits at 12 for weeks.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>A dedicated resolver that <b>summarizes the delta</b> for each suspect item (old value vs new, with the upstream change linked) and recommends one of three actions: <b>keep as-is</b> (nothing meaningful changed), <b>re-affirm with note</b> (compatible change, add evidence), or <b>open CR</b> (incompatible, action needed). Bulk-select rows, hit "Re-affirm all green," done.</p>
+      </div>
+
+      <div class="mockup">
+        <div class="caption">Suspect resolver · 12 items · AI-classified, ranked by uncertainty</div>
+        <div class="suspect-mock">
+          <div class="suspect-row">
+            <input type="checkbox" class="check" />
+            <div class="body">
+              <div class="head"><span class="ref">REQ-1018</span><span class="arrow">←</span><span class="ref">PRM-0142</span><span class="arrow">·</span><span>wing.area_ref</span></div>
+              <div class="t">IMU drift bias ≤ 0.05 °/s after 6 min un-cal flight</div>
+            </div>
+            <div class="delta">
+              <div class="pair"><span class="l">area_ref</span><span class="v old">124.86 m²</span></div>
+              <div class="pair"><span class="l">→</span><span class="v new">126.04 m²</span></div>
+              <span class="ai-rec"><i data-lucide="sparkles" style="width:10px;height:10px;"></i>AI: <span style="color: var(--green);">keep · downstream invariant</span></span>
+            </div>
+          </div>
+
+          <div class="suspect-row" style="background: var(--blue-tint); border-color: #B6DCFE;">
+            <input type="checkbox" class="check" />
+            <div class="body">
+              <div class="head"><span class="ref">REQ-1024</span><span class="arrow">←</span><span class="ref">PRM-0144</span><span class="arrow">·</span><span>wing.chord_mac</span></div>
+              <div class="t">GPS reacquisition shall complete within 1.2 s after 6g maneuver</div>
+            </div>
+            <div class="delta">
+              <div class="pair"><span class="l">chord_mac</span><span class="v old">3.488 m</span></div>
+              <div class="pair"><span class="l">→</span><span class="v new">3.521 m</span></div>
+              <span class="ai-rec" style="color: var(--amber-ink);"><i data-lucide="sparkles" style="width:10px;height:10px;"></i>AI: <b>re-affirm with note</b> · 1% change, no behavior shift</span>
+            </div>
+          </div>
+
+          <div class="suspect-row" style="border-color: rgba(180,35,24,0.3); background: rgba(180,35,24,0.03);">
+            <input type="checkbox" class="check" />
+            <div class="body">
+              <div class="head"><span class="ref">HAZ-018</span><span class="arrow">←</span><span class="ref">REQ-1024</span></div>
+              <div class="t">Loss of GPS lock during banking · Catastrophic</div>
+            </div>
+            <div class="delta">
+              <div class="pair"><span class="l">tolerance</span><span class="v old">1.20 s</span></div>
+              <div class="pair"><span class="l">→</span><span class="v new" style="color: var(--red);">1.50 s · loosened</span></div>
+              <span class="ai-rec" style="color: var(--red);"><i data-lucide="sparkles" style="width:10px;height:10px;"></i>AI: <b>open CR</b> · widens hazard envelope</span>
+            </div>
+          </div>
+
+          <div style="margin: 10px 0 0; display: flex; align-items: center; gap: 8px; font-size: 12.5px;">
+            <button style="height: 28px; padding: 0 12px; background: var(--blue); color: #fff; border: 1px solid var(--blue); border-radius: 5px; font-weight: 500; font-size: 12.5px;"><i data-lucide="check" style="width:11px;height:11px; vertical-align:-1px; margin-right: 4px;"></i>Re-affirm 8 green</button>
+            <button style="height: 28px; padding: 0 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; font-size: 12.5px;">Open CR for 1 red</button>
+            <button style="height: 28px; padding: 0 12px; background: transparent; color: var(--fg-3); border: 0; border-radius: 5px; font-size: 12.5px;">Snooze 3 amber</button>
+            <span style="margin-left: auto; font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);">12 total · 8 keep · 3 re-affirm · 1 open CR</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill blue">AI classifies each delta</span>
+        <span class="pill green">bulk re-affirm</span>
+        <span class="pill amber">amber = needs human note</span>
+        <span class="pill" style="color: var(--red); background: var(--red-tint); border-color: #F2C2B9;">red = open CR</span>
+      </div>
+    </div>
+
+    <!-- 05 ============================================== -->
+    <div class="proposal" id="p5">
+      <h2><span class="num">05</span> Always-on audit pack readiness</h2>
+      <p class="tagline">Stop building the audit pack at the end. Show its completeness daily, with explicit gaps.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>Today, the audit pack is built as a deliberate end-of-phase action. Gaps — a missing sign-off, an un-released test report, an unlinked hazard — only surface when someone clicks "Build pack" in the last week before submission. Result: a frantic 10-day scramble where people are chasing missing evidence instead of doing engineering.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>The pack is <b>continuously assembled</b>. A single readiness gauge sits in the project header (and on the dashboard) and is updated on every commit. Click in and you see exactly which sections are gating, who owns the next step, and a one-click "build current draft." When the gauge hits 100%, you're already submitting.</p>
+      </div>
+
+      <div class="mockup">
+        <div class="caption">Audit pack readiness · always visible · drill-in by section</div>
+        <div class="audit-mock">
+          <!-- semi-circle gauge -->
+          <svg viewBox="0 0 180 110" width="200" height="120">
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#B42318"/>
+                <stop offset="50%" stop-color="#B8860B"/>
+                <stop offset="100%" stop-color="#1B4332"/>
+              </linearGradient>
+            </defs>
+            <!-- background arc -->
+            <path d="M 20 100 A 70 70 0 0 1 160 100" fill="none" stroke="#ECEEEA" stroke-width="14" stroke-linecap="round"/>
+            <!-- filled arc · 64% -->
+            <path d="M 20 100 A 70 70 0 0 1 134 35" fill="none" stroke="url(#g1)" stroke-width="14" stroke-linecap="round"/>
+            <!-- needle -->
+            <line x1="90" y1="100" x2="134" y2="36" stroke="#1F2328" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="90" cy="100" r="6" fill="#1F2328"/>
+            <!-- pct -->
+            <text x="90" y="78" font-family="JetBrains Mono" font-size="22" font-weight="600" fill="#1F2328" text-anchor="middle">64%</text>
+            <text x="90" y="92" font-family="Inter" font-size="9" fill="#6E7781" text-anchor="middle">audit pack ready</text>
+          </svg>
+
+          <div class="legend">
+            <div class="row">
+              <span class="dot" style="background: #1B4332;"></span>
+              <span class="lbl">SRS · Software Requirements</span>
+              <span class="bar"><i style="width:100%; background: var(--green);"></i></span>
+              <span class="v">complete</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background: #1B4332;"></span>
+              <span class="lbl">SDD · Design</span>
+              <span class="bar"><i style="width:100%; background: var(--green);"></i></span>
+              <span class="v">complete</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background: #B8860B;"></span>
+              <span class="lbl">SVP · Verification plan</span>
+              <span class="bar"><i style="width:60%; background: var(--amber);"></i></span>
+              <span class="v">v3.3 draft</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background: #B8860B;"></span>
+              <span class="lbl">Test reports</span>
+              <span class="bar"><i style="width:84%; background: var(--amber);"></i></span>
+              <span class="v">23/27</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background: #B42318;"></span>
+              <span class="lbl">Safety analyses</span>
+              <span class="bar"><i style="width:42%; background: var(--red);"></i></span>
+              <span class="v">11 missing links</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background: #B42318;"></span>
+              <span class="lbl">Sign-offs</span>
+              <span class="bar"><i style="width:58%; background: var(--red);"></i></span>
+              <span class="v">11/19</span>
+            </div>
+            <div class="row">
+              <span class="dot" style="background: #1B4332;"></span>
+              <span class="lbl">Trace matrix</span>
+              <span class="bar"><i style="width:100%; background: var(--green);"></i></span>
+              <span class="v">auto-generated</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill blue">always visible in project header</span>
+        <span class="pill">click to drill in to gaps</span>
+        <span class="pill green">each gap has owner + next action</span>
+        <span class="pill green">no end-of-phase scramble</span>
+      </div>
+    </div>
+
+    <!-- 06 ============================================== -->
+    <div class="proposal" id="p6">
+      <h2><span class="num">06</span> Auto-link suggester</h2>
+      <p class="tagline">When you create a hazard, requirement, or task, the system guesses which 3-5 items it should be linked to.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>Most missing-link audit gaps are not because engineers don't want to link items — it's because they don't remember which requirements relate to a new hazard they just wrote. The current workflow is: write hazard, hit save, mentally note "I should link this to something," forget, audit gap appears 8 weeks later.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>On every create form, after typing the title/text, surface a <b>"links you probably want"</b> strip — 3-5 ranked candidates based on text similarity, function/PBS node, and historical linking patterns from this and similar projects. One click links each. Massively reduces the "11 missing links" backlog that gates audit pack readiness.</p>
+      </div>
+
+      <div class="mockup">
+        <div class="caption">Suggested links · shown inline on the create-hazard form</div>
+        <div style="padding: 20px 22px; background: var(--surface-soft); display: grid; grid-template-columns: 1fr; gap: 12px;">
+
+          <div style="padding: 11px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px;">
+            <span style="display: block; font-size: 11px; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; margin-bottom: 4px;">Hazard title</span>
+            <span style="font-weight: 500; color: var(--fg);">Loss of GPS lock causes loss of attitude reference during banking</span>
+          </div>
+
+          <div style="padding: 11px 14px; background: var(--purple-tint); border: 1px solid #D9C6F2; border-radius: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--purple); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; margin-bottom: 8px;">
+              <i data-lucide="sparkles" style="width:11px;height:11px;"></i>
+              Links you probably want · 5 suggestions
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: grid; grid-template-columns: 88px 1fr 60px auto; gap: 10px; align-items: center; padding: 6px 8px; background: var(--bg); border-radius: 4px; font-size: 12px;">
+                <span style="font-family: var(--app-font-mono); font-size: 11px; color: var(--blue-ink);">↑ REQ-1024</span>
+                <span>GPS reacquisition &lt; 1.2 s after 6g maneuver</span>
+                <span style="font-family: var(--app-font-mono); font-size: 10.5px; color: var(--purple); text-align: right;">98% match</span>
+                <button style="height: 22px; padding: 0 8px; font-size: 11px; background: var(--blue); color: #fff; border: 0; border-radius: 3px;">link</button>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 88px 1fr 60px auto; gap: 10px; align-items: center; padding: 6px 8px; background: var(--bg); border-radius: 4px; font-size: 12px;">
+                <span style="font-family: var(--app-font-mono); font-size: 11px; color: var(--blue-ink);">↑ REQ-1018</span>
+                <span>IMU drift bias ≤ 0.05 °/s after 6 min</span>
+                <span style="font-family: var(--app-font-mono); font-size: 10.5px; color: var(--purple); text-align: right;">87% match</span>
+                <button style="height: 22px; padding: 0 8px; font-size: 11px; background: var(--blue); color: #fff; border: 0; border-radius: 3px;">link</button>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 88px 1fr 60px auto; gap: 10px; align-items: center; padding: 6px 8px; background: var(--bg); border-radius: 4px; font-size: 12px;">
+                <span style="font-family: var(--app-font-mono); font-size: 11px; color: var(--blue-ink);">↑ REQ-0344</span>
+                <span>GPS solution shall use ≥ 4 SVs above 5° elevation</span>
+                <span style="font-family: var(--app-font-mono); font-size: 10.5px; color: var(--purple); text-align: right;">71% match</span>
+                <button style="height: 22px; padding: 0 8px; font-size: 11px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 3px;">link</button>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 88px 1fr 60px auto; gap: 10px; align-items: center; padding: 6px 8px; background: var(--bg); border-radius: 4px; font-size: 12px;">
+                <span style="font-family: var(--app-font-mono); font-size: 11px; color: var(--blue-ink);">↑ VER-0301</span>
+                <span>Test campaign · GPS reacquisition</span>
+                <span style="font-family: var(--app-font-mono); font-size: 10.5px; color: var(--purple); text-align: right;">94% match</span>
+                <button style="height: 22px; padding: 0 8px; font-size: 11px; background: var(--blue); color: #fff; border: 0; border-radius: 3px;">link</button>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 88px 1fr 60px auto; gap: 10px; align-items: center; padding: 6px 8px; background: var(--bg); border-radius: 4px; font-size: 12px;">
+                <span style="font-family: var(--app-font-mono); font-size: 11px; color: var(--blue-ink);">↑ ICD-014</span>
+                <span>Avionics ↔ Power bus interface</span>
+                <span style="font-family: var(--app-font-mono); font-size: 10.5px; color: var(--purple); text-align: right;">52% match</span>
+                <button style="height: 22px; padding: 0 8px; font-size: 11px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 3px;">link</button>
+              </div>
+            </div>
+            <div style="font-family: var(--app-font-mono); font-size: 10.5px; color: var(--purple); margin-top: 8px;">Based on text similarity · F-02 Navigation function · 14 similar hazards in Hyperion-X</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill purple">text + function + history</span>
+        <span class="pill">one-click link</span>
+        <span class="pill green">attacks "missing links" gap directly</span>
+        <span class="pill">also works on tasks, CRs, doc artefacts</span>
+      </div>
+    </div>
+
+    <!-- 07 ============================================== -->
+    <div class="proposal" id="p7">
+      <h2><span class="num">07</span> Saved views — role-shaped not feature-shaped</h2>
+      <p class="tagline">Built-in starter views shaped around how people actually work, not which module the data lives in.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>A safety lead's morning isn't "open hazards page." It's: "check overdue mitigations, review my FTAs in progress, see what's been suspect-flagged since yesterday, glance at this week's submissions." Today that's six filter operations across three pages every single morning.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>Ship a handful of <b>built-in role views</b> — Safety Lead, V&amp;V Lead, Requirements Owner, Certification, QA Approver, Project Manager — each a curated multi-module dashboard the user lands on by default. They're fully editable; users can save their own variations. View switcher sits as a single dropdown in the topbar. Drops "what filters do I want today?" down to zero.</p>
+      </div>
+      <div class="pill-row">
+        <span class="pill blue">six built-in role views</span>
+        <span class="pill">multi-module, single screen</span>
+        <span class="pill">save custom · share with team</span>
+      </div>
+    </div>
+
+    <!-- 08 ============================================== -->
+    <div class="proposal" id="p8">
+      <h2><span class="num">08</span> Universal baseline diff</h2>
+      <p class="tagline">"What changed since baseline X" in one screen, every module included.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>"What's actually different in B-2026-04-12 vs B-2026-03-22?" requires comparing each module separately — requirements diff in one place, parameters diff in another, hazard changes nowhere. The answer matters for sign-offs, regulator submissions, and stakeholder updates. Today it takes half a day to assemble.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>One <b>diff view</b> that picks two baselines and shows changes grouped by impact: <b>new</b>, <b>modified</b>, <b>removed</b>, <b>suspect-resolved</b>. Each row links to the live record. Filterable by module, owner, DAL. Exportable as a single PDF "changelog for regulators." This becomes the canonical artefact for every milestone communication.</p>
+      </div>
+      <div class="pill-row">
+        <span class="pill blue">B-2026-03-22 → B-2026-04-12</span>
+        <span class="pill">grouped: new · modified · removed</span>
+        <span class="pill">cross-module</span>
+        <span class="pill green">exportable changelog</span>
+      </div>
+    </div>
+
+    <!-- 09 ============================================== -->
+    <div class="proposal" id="p9">
+      <h2><span class="num">09</span> Keyboard-first everywhere</h2>
+      <p class="tagline">For power users: j/k to navigate, o to open, e to edit, r to reply, ⌘↩ to commit.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>Engineers spend hours per day in tables — requirements, verifications, hazards, tasks. The mouse round-trip from one row to the next, then to the action button, then to the next row, is the largest hidden tax in the product. People who use Linear, Superhuman, or vim know what they're missing.</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>Adopt a small, universal shortcut vocabulary: <span class="mono">j</span>/<span class="mono">k</span> = next/prev row, <span class="mono">o</span> = open detail, <span class="mono">e</span> = edit in place, <span class="mono">r</span> = reply/comment, <span class="mono">x</span> = select, <span class="mono">⌘↩</span> = commit/primary action, <span class="mono">⌘k</span> = palette, <span class="mono">?</span> = cheat sheet. Identical across every module. A discoverable cheat-sheet overlay (<span class="mono">?</span> key) onboards new users.</p>
+      </div>
+      <div class="pill-row">
+        <span class="pill blue">10 keys, every page</span>
+        <span class="pill">? overlay to discover</span>
+        <span class="pill green">4× faster for daily ops</span>
+      </div>
+    </div>
+
+    <!-- 10 ============================================== -->
+    <div class="proposal" id="p10">
+      <h2><span class="num">10</span> Notification clustering &amp; quiet hours</h2>
+      <p class="tagline">Stop pinging on every keystroke. Cluster related events, respect deep work.</p>
+
+      <div class="pain">
+        <span class="label">Pain</span>
+        <p>The notification firehose: <span class="mono">REQ-1024</span> changed, then changed again, then a comment, then a relink, then changed once more — five pings for one "event" in human terms. Engineers turn notifications off entirely, miss the one that actually mattered (a sign-off request).</p>
+      </div>
+      <div class="why-good">
+        <span class="label">Fix</span>
+        <p>Group related events on the same object into a single notification ("<span class="mono">REQ-1024</span> changed 3 times today by M. Tan and L. Rivera"). Promote sign-off requests, blocking failures, and direct mentions; demote everything else into the digest. Respect a per-user quiet window (e.g. 09:00–11:00) where only criticals interrupt. Pair with Today (proposal #01) — the inbox is the source of truth, notifications are just nudges.</p>
+      </div>
+      <div class="pill-row">
+        <span class="pill blue">cluster by object + author</span>
+        <span class="pill">criticals only during quiet hours</span>
+        <span class="pill">digest the rest</span>
+      </div>
+    </div>
+
+    <!-- WRAP -->
+    <div style="margin-top: 56px; padding: 20px 22px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px;">
+      <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600;">If we ship only three…</h3>
+      <p style="margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--fg-2);">
+        Today (#1), the failure triage drawer (#2), and the audit pack readiness gauge (#5) cover the three highest-frequency, highest-frustration paths in the product. Together they touch every module, take the bell-and-search-bar pattern off life support, and make the audit-submission scramble a memory. The other seven are wonderful — but those three are the wedge.
+      </p>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    These proposals are <b>not</b> committed designs — they're a thinking pass. Each has a one-screen mock here for shape; the actual flows would need a round of clickable prototypes and engineering scoping before committing.<br/><br/>
+    <b>Next step suggestions</b> — pick a top-three, I'll build a clickable prototype of each so you can put them in front of an engineer and watch what happens. Or, if you'd rather go wide, we can pick the cross-module patterns (palette, Today, role views) and prototype them first since they touch every page. <a href="index.html">← back to refresh index</a>
+  </div>
+
+</div>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

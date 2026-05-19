@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Colors — App (Light + Midnight)</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="_card.css" />
+  <style>
+    .duo { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+    .pane { padding: 48px 48px 56px; display: flex; flex-direction: column; gap: 28px; }
+    .pane.app { background: var(--theme-bg); }
+
+    .head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 16px; border-bottom: 1px solid var(--theme-border); }
+    .head .eyebrow { font-size: var(--app-text-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--theme-text-muted); font-weight: 500; }
+    .head .title { font-size: 22px; font-weight: 700; color: var(--theme-text); letter-spacing: -0.01em; }
+    .head .sub { font-size: var(--app-text-md); color: var(--theme-text-muted); max-width: 50ch; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .swatch {
+      border: 1px solid var(--theme-border);
+      border-radius: var(--app-radius-md);
+      overflow: hidden;
+      background: var(--theme-surface);
+    }
+    .swatch__chip { height: 56px; }
+    .swatch__meta { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+    .swatch__role { font-size: var(--app-text-md); font-weight: 600; color: var(--theme-text); }
+    .swatch__hex { font-family: var(--app-font-mono); font-size: var(--app-text-sm); color: var(--theme-text-muted); }
+
+    .group {
+      font-size: var(--app-text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--theme-text-muted);
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    /* status pill row */
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { font-size: var(--app-text-xs); padding: 3px 8px; border-radius: 999px; font-weight: 500; }
+    .pill.ok      { background: color-mix(in oklab, var(--theme-success) 15%, transparent); color: var(--theme-success); }
+    .pill.warn    { background: color-mix(in oklab, var(--theme-warning) 15%, transparent); color: var(--theme-warning); }
+    .pill.danger  { background: color-mix(in oklab, var(--theme-danger) 15%, transparent); color: var(--theme-danger); }
+    .pill.info    { background: var(--theme-accent-subtle); color: var(--theme-accent); }
+    .pill.neutral { background: var(--theme-surface); color: var(--theme-text-muted); border: 1px solid var(--theme-border); }
+
+    /* in-situ button row */
+    .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      font-size: var(--app-text-md); font-weight: 500;
+      padding: 6px 12px; border-radius: var(--app-radius-md);
+      border: 1px solid var(--theme-border); background: var(--theme-bg); color: var(--theme-text);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--theme-accent); border-color: var(--theme-accent); color: #fff; }
+    .btn.danger  { background: var(--theme-danger); border-color: var(--theme-danger); color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="duo">
+    <!-- LIGHT -->
+    <div class="pane app" data-theme="light">
+      <div class="head">
+        <div class="eyebrow">04 · Color · App · Light</div>
+        <div class="title">GitHub-inspired light theme.</div>
+        <div class="sub">Saturated blue (<span class="mono">#0969da</span>) is the only color used for action. Status hues appear only on pills.</div>
+      </div>
+
+      <div class="group">SURFACES</div>
+      <div class="grid">
+        <div class="swatch"><div class="swatch__chip" style="background:#ffffff"></div><div class="swatch__meta"><div class="swatch__role">Background</div><div class="swatch__hex">#ffffff · --theme-bg</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#f6f8fa"></div><div class="swatch__meta"><div class="swatch__role">Surface / Sidebar</div><div class="swatch__hex">#f6f8fa · --theme-surface</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#d0d7de"></div><div class="swatch__meta"><div class="swatch__role">Border</div><div class="swatch__hex">#d0d7de · --theme-border</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#ddf4ff"></div><div class="swatch__meta"><div class="swatch__role">Accent subtle</div><div class="swatch__hex">#ddf4ff</div></div></div>
+      </div>
+
+      <div class="group">TEXT &amp; ACTION</div>
+      <div class="grid">
+        <div class="swatch"><div class="swatch__chip" style="background:#1f2328"></div><div class="swatch__meta"><div class="swatch__role">Text</div><div class="swatch__hex">#1f2328 · --theme-text</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#656d76"></div><div class="swatch__meta"><div class="swatch__role">Text muted</div><div class="swatch__hex">#656d76</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#0969da"></div><div class="swatch__meta"><div class="swatch__role">Accent (blue)</div><div class="swatch__hex">#0969da · --theme-accent</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#22c55e"></div><div class="swatch__meta"><div class="swatch__role">Success</div><div class="swatch__hex">#22c55e</div></div></div>
+      </div>
+
+      <div class="group">STATUS &amp; PILLS</div>
+      <div class="pills">
+        <span class="pill ok">Verified</span>
+        <span class="pill warn">3 open</span>
+        <span class="pill danger">Blocked</span>
+        <span class="pill info">Draft</span>
+        <span class="pill neutral">Archived</span>
+      </div>
+
+      <div class="group">BUTTONS</div>
+      <div class="btnrow">
+        <button class="btn primary">Save changes</button>
+        <button class="btn">Cancel</button>
+        <button class="btn danger">Delete project</button>
+      </div>
+    </div>
+
+    <!-- MIDNIGHT -->
+    <div class="pane app" data-theme="midnight">
+      <div class="head">
+        <div class="eyebrow">04 · Color · App · Midnight</div>
+        <div class="title">GitHub-inspired dark theme.</div>
+        <div class="sub">Same semantic roles, GitHub-dark surface ramp. Sidebar drops to <span class="mono">#010409</span> for visual separation from <span class="mono">#0d1117</span> bg.</div>
+      </div>
+
+      <div class="group">SURFACES</div>
+      <div class="grid">
+        <div class="swatch"><div class="swatch__chip" style="background:#0d1117"></div><div class="swatch__meta"><div class="swatch__role">Background</div><div class="swatch__hex">#0d1117</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#161b22"></div><div class="swatch__meta"><div class="swatch__role">Surface</div><div class="swatch__hex">#161b22</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#010409"></div><div class="swatch__meta"><div class="swatch__role">Sidebar</div><div class="swatch__hex">#010409</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#30363d"></div><div class="swatch__meta"><div class="swatch__role">Border</div><div class="swatch__hex">#30363d</div></div></div>
+      </div>
+
+      <div class="group">TEXT &amp; ACTION</div>
+      <div class="grid">
+        <div class="swatch"><div class="swatch__chip" style="background:#e6edf3"></div><div class="swatch__meta"><div class="swatch__role">Text</div><div class="swatch__hex">#e6edf3</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#8b949e"></div><div class="swatch__meta"><div class="swatch__role">Text muted</div><div class="swatch__hex">#8b949e</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#2f81f7"></div><div class="swatch__meta"><div class="swatch__role">Accent (blue)</div><div class="swatch__hex">#2f81f7</div></div></div>
+        <div class="swatch"><div class="swatch__chip" style="background:#1f3a5f"></div><div class="swatch__meta"><div class="swatch__role">Accent subtle</div><div class="swatch__hex">#1f3a5f</div></div></div>
+      </div>
+
+      <div class="group">STATUS &amp; PILLS</div>
+      <div class="pills">
+        <span class="pill ok">Verified</span>
+        <span class="pill warn">3 open</span>
+        <span class="pill danger">Blocked</span>
+        <span class="pill info">Draft</span>
+        <span class="pill neutral">Archived</span>
+      </div>
+
+      <div class="group">BUTTONS</div>
+      <div class="btnrow">
+        <button class="btn primary">Save changes</button>
+        <button class="btn">Cancel</button>
+        <button class="btn danger">Delete project</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
