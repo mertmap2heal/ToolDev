@@ -1055,8 +1055,9 @@ test.describe('Requirements — INCOSE/EARS quality gate', () => {
   }
 
   /**
-   * Fill the create modal's required fields (title + a non-Test MoC) so a
-   * footer submit click passes field validation and reaches the quality gate.
+   * Fill the create modal's required fields (title + a non-Test MoC + the
+   * now-required Lifecycle) so a footer submit click passes native field
+   * validation and reaches the INCOSE/EARS quality gate.
    * Returns false when MoC seed data is absent (caller should skip).
    */
   async function fillTitleAndMoc(
@@ -1088,6 +1089,28 @@ test.describe('Requirements — INCOSE/EARS quality gate', () => {
       return false
     })
     if (!pickedNonTest) await mocSelect.selectOption({ index: 1 })
+
+    // The Lifecycle <select> is `required` whenever applicable lifecycles exist
+    // (CreateRequirementModal.tsx). Native HTML form validation blocks submit
+    // before the quality gate runs unless a real option is selected. Its only
+    // value-less option is a disabled placeholder, so a real option is one
+    // with a non-empty value.
+    const lifecycleSelect = modal
+      .locator('label')
+      .filter({ hasText: /Lifecycle Model/ })
+      .locator('..')
+      .locator('select')
+      .first()
+    if (await lifecycleSelect.isVisible().catch(() => false)) {
+      await lifecycleSelect.evaluate((el: HTMLSelectElement) => {
+        for (let i = 0; i < el.options.length; i++) {
+          if (!el.options[i].value) continue
+          el.selectedIndex = i
+          el.dispatchEvent(new Event('change', { bubbles: true }))
+          return
+        }
+      })
+    }
     return true
   }
 
