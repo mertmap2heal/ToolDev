@@ -24,60 +24,39 @@ import type {
   DashboardKpis,
   ProjectRollup,
   ModuleHealthMetric,
-  GateState,
   QueueItem,
   ActivityItem,
   HealthLevel,
   RollupTeamMember,
 } from '../../../shared/types/dashboard/_compiled/index.js'
+// RF-3 (#487) extracted the module-health primitives into one shared module so
+// the portfolio aggregate (here) and the single-project landing aggregate
+// derive health identically. `deriveGate` / `GateSignal` are re-exported below
+// for backwards compatibility with `deriveGate.test.ts`.
+import {
+  DAL_ORDER,
+  VER_PASS_STATUSES,
+  VER_RUN_STATUSES,
+  verCoverageHealth,
+  suspectHealth,
+  issueHealth,
+  hazardHealth,
+  deriveGate,
+} from './projectHealth.shared'
+import type { GateSignal } from './projectHealth.shared'
+
+// Re-export so existing importers (`deriveGate.test.ts`) keep their import path.
+export { deriveGate }
+export type { GateSignal }
 
 /** Recent-activity feed cap (one bounded `take`). */
 const ACTIVITY_FEED_LIMIT = 25
 /** My-queue cap per source — three bounded `take`s. */
 const MY_QUEUE_PER_SOURCE_LIMIT = 25
 
-/** DAL letters ordered most-critical-first; `A` is the highest assurance. */
-const DAL_ORDER = ['A', 'B', 'C', 'D', 'E'] as const
-
 /** Aerospace hazard severities counted as the project's "open hazards". */
 const HAZARD_SEVERITY_CATASTROPHIC = 'Catastrophic'
 const HAZARD_SEVERITY_HAZARDOUS = 'Hazardous'
-
-/** Verification result statuses that count as "passed" for coverage. */
-const VER_PASS_STATUSES = new Set(['PASS', 'PASSED_WITH_ERRORS'])
-/** Verification result statuses that count toward the coverage denominator. */
-const VER_RUN_STATUSES = new Set(['PASS', 'PASSED_WITH_ERRORS', 'FAIL', 'BLOCKED', 'SKIPPED'])
-
-// --- health-derive thresholds (the service owns these — keeps the UI dumb) ---
-
-/** Verification coverage %: >=85 ok, >=50 warn, else danger. */
-function verCoverageHealth(pct: number | null): HealthLevel {
-  if (pct === null) return 'ok' // no runs yet — not a problem, just absent
-  if (pct >= 85) return 'ok'
-  if (pct >= 50) return 'warn'
-  return 'danger'
-}
-
-/** Suspect trace links: 0 ok, <=10 warn, else danger. */
-function suspectHealth(count: number): HealthLevel {
-  if (count === 0) return 'ok'
-  if (count <= 10) return 'warn'
-  return 'danger'
-}
-
-/** Open issues: 0 ok, <=5 warn, else danger. */
-function issueHealth(count: number): HealthLevel {
-  if (count === 0) return 'ok'
-  if (count <= 5) return 'warn'
-  return 'danger'
-}
-
-/** Open hazards: 0 ok, <=20 warn, else danger. */
-function hazardHealth(count: number): HealthLevel {
-  if (count === 0) return 'ok'
-  if (count <= 20) return 'warn'
-  return 'danger'
-}
 
 /** A count metric whose health is always `ok` (requirement count is informational). */
 function infoMetric(count: number): ModuleHealthMetric {
@@ -102,66 +81,6 @@ function summariseAction(action: string): string {
   const readable = verb.replace(/[-_]/g, ' ').toLowerCase().trim()
   const moduleName = colon >= 0 ? action.slice(0, colon) : ''
   return moduleName ? `${moduleName} — ${readable}` : readable || action
-}
-
-/**
- * Per-project health inputs for the gate-state derivation. Sourced from the
- * same roll-up signals the dashboard table already shows, so the gate chip
- * never contradicts the module-health chips next to it.
- */
-export interface GateSignal {
-  /** Any module-health verdict is `danger` (failing coverage, too many issues/hazards/suspect links). */
-  hasDangerHealth: boolean
-  /** Any module-health verdict is `warn`. */
-  hasWarnHealth: boolean
-  /** Count of the project's sign-offs pending longer than the overdue threshold. */
-  overdueSignOffs: number
-  /** Project completion percentage (`Project.progress`, 0-100). */
-  progress: number
-}
-
-/**
- * Derive a lifecycle-gate chip from a phase row plus the project's health.
- *
- * The five `GateState.state` values:
- *  - `none`     — no lifecycle phase set (pre-SRR / pre-lifecycle).
- *  - `released` — the terminal phase (name matches release/closed/complete).
- *  - `at-risk`  — an active phase the project is NOT on track to clear: any
- *                 module-health verdict is `danger`, OR sign-offs are overdue.
- *                 Renders the red gate chip.
- *  - `cleared`  — an active phase whose exit criteria look met but the project
- *                 has not yet advanced to the terminal phase: the project is
- *                 healthy (no `danger`/`warn` health, no overdue sign-offs)
- *                 AND fully progressed (`progress` >= 100). Renders green.
- *  - `current`  — an active phase, in progress, neither at-risk nor cleared.
- *
- * `released` / `at-risk` take precedence: a terminal phase is always released,
- * and a project with a real problem is at-risk regardless of progress.
- *
- * Exported for unit testing — it is a pure function of its two arguments.
- */
-export function deriveGate(
-  phase: { name: string; orderIndex: number; isInitial: boolean } | null,
-  signal: GateSignal,
-): GateState {
-  if (!phase) return { code: 'pre-SRR', state: 'none' }
-  const code = phase.name.length <= 12 ? phase.name : phase.name.slice(0, 12)
-  // The terminal "released" phase reads as released first — a delivered
-  // project is not "at-risk" even if late issues remain open.
-  if (/release|closed|complete/i.test(phase.name)) {
-    return { code, state: 'released' }
-  }
-  // A blocked / failing project in an active phase: red gate chip.
-  if (signal.hasDangerHealth || signal.overdueSignOffs > 0) {
-    return { code, state: 'at-risk' }
-  }
-  // Exit criteria look met (healthy + fully progressed) but the project has
-  // not yet been advanced to the terminal phase: green "cleared" chip.
-  if (!signal.hasWarnHealth && signal.progress >= 100) {
-    return { code, state: 'cleared' }
-  }
-  // The normal in-progress case.
-  return { code, state: 'current' }
 }
 
 /**
