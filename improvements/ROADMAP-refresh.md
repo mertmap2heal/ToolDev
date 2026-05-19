@@ -48,7 +48,7 @@ The chats scoped the refresh but did **not** record a per-page A/B verdict. **D1
 | Ticket | Page(s) | Variant | Surface | Effort |
 |---|---|---|---|---|
 | **RF-2 — Dashboard** — Issue #484 — Shipped 2026-05-19, PR #485, merge `92df567` | `DashboardPage` | per D1 | **fullstack** — needs a `dashboard-summary` aggregate endpoint (module roll-ups, gate state, sparkline series; B also my-queue + activity) | L |
-| **RF-3 — Project landing** | `ProjectLandingPage` | A (D2) | fullstack (light) — per-discipline progress + per-module health counts; shares RF-2's aggregate | M |
+| **RF-3 — Project landing** — Issue #487 — Shipped 2026-05-19, PR #498, merge `2f068c7` | `ProjectLandingPage` | A (D2) | fullstack (light) — per-discipline progress + per-module health counts; shares RF-2's aggregate | M |
 | **RF-4 — Verification** | `VerificationPage` + `TraceabilityMatrixView` (under `CertModuleLayout`) | A Runs tab + B Matrix tab | fullstack (light) — run-history series, value-vs-tolerance fields (verify they exist on `VerTestResult`) | L |
 | **RF-5 — Safety** | `HazardsPage` + `SafetyOverviewPage` (under `SafetyLayoutPage`) | A Hazards tab + B Overview tab | **fullstack — audit Safety persistence first** (FTA/Markov/risk-matrix/method-coverage; NX-9 landed only Hazard+FMEA). May be heavy. | M-L |
 | **RF-6 — Tasks** | `TasksPage` | single | frontend-only — Tasks data model is mature | M |
