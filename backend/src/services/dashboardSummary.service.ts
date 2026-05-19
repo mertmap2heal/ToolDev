@@ -104,17 +104,63 @@ function summariseAction(action: string): string {
   return moduleName ? `${moduleName} — ${readable}` : readable || action
 }
 
-/** Derive a lifecycle-gate chip from a phase row (null = no phase set). */
-function deriveGate(
+/**
+ * Per-project health inputs for the gate-state derivation. Sourced from the
+ * same roll-up signals the dashboard table already shows, so the gate chip
+ * never contradicts the module-health chips next to it.
+ */
+export interface GateSignal {
+  /** Any module-health verdict is `danger` (failing coverage, too many issues/hazards/suspect links). */
+  hasDangerHealth: boolean
+  /** Any module-health verdict is `warn`. */
+  hasWarnHealth: boolean
+  /** Count of the project's sign-offs pending longer than the overdue threshold. */
+  overdueSignOffs: number
+  /** Project completion percentage (`Project.progress`, 0-100). */
+  progress: number
+}
+
+/**
+ * Derive a lifecycle-gate chip from a phase row plus the project's health.
+ *
+ * The five `GateState.state` values:
+ *  - `none`     — no lifecycle phase set (pre-SRR / pre-lifecycle).
+ *  - `released` — the terminal phase (name matches release/closed/complete).
+ *  - `at-risk`  — an active phase the project is NOT on track to clear: any
+ *                 module-health verdict is `danger`, OR sign-offs are overdue.
+ *                 Renders the red gate chip.
+ *  - `cleared`  — an active phase whose exit criteria look met but the project
+ *                 has not yet advanced to the terminal phase: the project is
+ *                 healthy (no `danger`/`warn` health, no overdue sign-offs)
+ *                 AND fully progressed (`progress` >= 100). Renders green.
+ *  - `current`  — an active phase, in progress, neither at-risk nor cleared.
+ *
+ * `released` / `at-risk` take precedence: a terminal phase is always released,
+ * and a project with a real problem is at-risk regardless of progress.
+ *
+ * Exported for unit testing — it is a pure function of its two arguments.
+ */
+export function deriveGate(
   phase: { name: string; orderIndex: number; isInitial: boolean } | null,
+  signal: GateSignal,
 ): GateState {
   if (!phase) return { code: 'pre-SRR', state: 'none' }
   const code = phase.name.length <= 12 ? phase.name : phase.name.slice(0, 12)
-  // The terminal "released" phase reads as released; everything else is the
-  // current gate.
+  // The terminal "released" phase reads as released first — a delivered
+  // project is not "at-risk" even if late issues remain open.
   if (/release|closed|complete/i.test(phase.name)) {
     return { code, state: 'released' }
   }
+  // A blocked / failing project in an active phase: red gate chip.
+  if (signal.hasDangerHealth || signal.overdueSignOffs > 0) {
+    return { code, state: 'at-risk' }
+  }
+  // Exit criteria look met (healthy + fully progressed) but the project has
+  // not yet been advanced to the terminal phase: green "cleared" chip.
+  if (!signal.hasWarnHealth && signal.progress >= 100) {
+    return { code, state: 'cleared' }
+  }
+  // The normal in-progress case.
   return { code, state: 'current' }
 }
 
@@ -351,8 +397,30 @@ export async function composeDashboardSummary(callerUserId: string): Promise<Das
     include: { user: { select: { name: true } } },
   })
 
-  // --- Step 13: assemble in memory — no I/O past this point ---
+  // --- Step 13: pending sign-offs across the visible set (1 query) ---
+  // Drives both the portfolio `signOffsPending` KPI and the per-project
+  // overdue count the gate-state derivation reads.
   const now = Date.now()
+  const allPendingReviewers = await prisma.requirementReviewer.findMany({
+    where: {
+      projectId: { in: projectIds },
+      status: { in: ['pending', 'in_progress'] },
+    },
+    select: { projectId: true, reviewerId: true, createdAt: true },
+  })
+  const overdueThreshold = now - 7 * 24 * 60 * 60 * 1000
+  // Per-project count of sign-offs pending longer than the overdue threshold.
+  const overdueSignOffsByProject = new Map<string, number>()
+  for (const r of allPendingReviewers) {
+    if (r.createdAt.getTime() < overdueThreshold) {
+      overdueSignOffsByProject.set(
+        r.projectId,
+        (overdueSignOffsByProject.get(r.projectId) ?? 0) + 1,
+      )
+    }
+  }
+
+  // --- Step 14: assemble in memory — no I/O past this point ---
   const projectNameById = new Map(projects.map((p) => [p.id, p.name]))
 
   const projectRollups: ProjectRollup[] = projects.map((p) => {
@@ -374,6 +442,14 @@ export async function composeDashboardSummary(callerUserId: string): Promise<Das
       ? { userId: ownerRow.id, name: ownerRow.name, avatarUrl: ownerRow.avatarUrl ?? null }
       : null
 
+    // Module-health verdicts — also fed into the gate-state derivation so the
+    // gate chip never contradicts the health chips on the same row.
+    const verHealth = verCoverageHealth(verPct)
+    const susHealth = suspectHealth(suspectCount)
+    const issHealth = issueHealth(issueCount)
+    const hazHealth = hazardHealth(hazardCount)
+    const healths: HealthLevel[] = [verHealth, susHealth, issHealth, hazHealth]
+
     return {
       projectId: p.id,
       slug: p.slug ?? p.id,
@@ -386,11 +462,19 @@ export async function composeDashboardSummary(callerUserId: string): Promise<Das
       teamMembers,
       updatedAt: p.updatedAt.toISOString(),
       reqCount: infoMetric(reqCount),
-      verCoverage: { count: verPct, health: verCoverageHealth(verPct) },
-      suspectCount: { count: suspectCount, health: suspectHealth(suspectCount) },
-      issueCount: { count: issueCount, health: issueHealth(issueCount) },
-      hazardCount: { count: hazardCount, health: hazardHealth(hazardCount) },
-      gate: deriveGate(p.currentPhaseId ? phaseById.get(p.currentPhaseId) ?? null : null),
+      verCoverage: { count: verPct, health: verHealth },
+      suspectCount: { count: suspectCount, health: susHealth },
+      issueCount: { count: issueCount, health: issHealth },
+      hazardCount: { count: hazardCount, health: hazHealth },
+      gate: deriveGate(
+        p.currentPhaseId ? phaseById.get(p.currentPhaseId) ?? null : null,
+        {
+          hasDangerHealth: healths.includes('danger'),
+          hasWarnHealth: healths.includes('warn'),
+          overdueSignOffs: overdueSignOffsByProject.get(p.id) ?? 0,
+          progress: p.progress,
+        },
+      ),
     }
   })
 
@@ -426,16 +510,8 @@ export async function composeDashboardSummary(callerUserId: string): Promise<Das
     issuesOpenTotal += issueCountByProject.get(id) ?? 0
   }
 
-  // Sign-offs pending — RequirementReviewer pending/in_progress across the
-  // visible set; `overdue` = older than 7 days; `mine` = the caller's own.
-  const allPendingReviewers = await prisma.requirementReviewer.findMany({
-    where: {
-      projectId: { in: projectIds },
-      status: { in: ['pending', 'in_progress'] },
-    },
-    select: { reviewerId: true, createdAt: true },
-  })
-  const overdueThreshold = now - 7 * 24 * 60 * 60 * 1000
+  // Sign-offs pending — derived from the Step-13 `allPendingReviewers` fetch.
+  // `overdue` = older than 7 days; `mine` = the caller's own.
   const signOffsTotal = allPendingReviewers.length
   const signOffsOverdue = allPendingReviewers.filter(
     (r) => r.createdAt.getTime() < overdueThreshold,
