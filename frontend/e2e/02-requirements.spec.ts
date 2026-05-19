@@ -1447,12 +1447,6 @@ test.describe('Requirements — Excel import (NX-4-followup)', () => {
     })
     // The validation summary names how many rows will import.
     await expect(wizard.getByText(/rows will import/i)).toBeVisible({ timeout: 5_000 })
-    // The per-cell table is a real <table> with the documented caption.
-    const reportTable = wizard.locator('table').filter({
-      has: page.getByText('Per-cell validation findings'),
-    })
-    // The "fast" row produces an INCOSE/EARS advisory warning row.
-    await expect(reportTable.getByText(/Warning/).first()).toBeVisible({ timeout: 5_000 })
 
     // Import the 3 rows.
     await wizard.getByRole('button', { name: /import 3 requirements/i }).click()
@@ -1462,6 +1456,19 @@ test.describe('Requirements — Excel import (NX-4-followup)', () => {
       timeout: 15_000,
     })
     await expect(wizard.getByText(/all 3 rows imported/i)).toBeVisible({ timeout: 5_000 })
+
+    // The INCOSE/EARS validator runs server-side on commit, not in the preview
+    // forecast — its advisory warnings surface in the result step's per-cell
+    // report. The "The system shall be fast." row yields a not-measurable
+    // finding. Assert the warning row AND its INCOSE reason so the check is
+    // not weakened to a bare "a warning exists".
+    const reportTable = wizard.locator('table').filter({
+      has: page.getByText('Per-cell validation findings'),
+    })
+    await expect(reportTable.getByText(/Warning/).first()).toBeVisible({ timeout: 5_000 })
+    await expect(reportTable.getByText(/is not measurable/i).first()).toBeVisible({
+      timeout: 5_000,
+    })
 
     await wizard.getByRole('button', { name: /^close$/i }).click()
     await expect(page.locator(MODAL_OVERLAY)).toHaveCount(0, { timeout: 5_000 })
