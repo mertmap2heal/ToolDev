@@ -19,17 +19,17 @@ This roadmap defines both. **Track RF executes first.** Track WF is a second, in
 
 ## 2. Open decisions — RESOLVE BEFORE RF-2
 
-The chats scoped the refresh but did **not** record a per-page A/B verdict. These must be answered before page tickets start. RF-0 and RF-1 do not depend on them and can begin immediately.
+The chats scoped the refresh but did **not** record a per-page A/B verdict. **D1, D2, D7 were resolved by the user on 2026-05-19** (see table). D3/D4 are settled (both variants ship — they are tabs). D5/D6/D8 proceed on the stated recommendation.
 
-| # | Decision | Recommendation | Why |
+| # | Decision | Resolution | Why |
 |---|---|---|---|
-| D1 | **Dashboard variant A or B** | **B** (genuinely close; A if cost-driven) | B's right-rail "My queue" is the management-visibility thesis in one component. A is a cheaper incremental upgrade of today's card grid. |
-| D2 | **Project-landing variant A or B** | **A** | The current page is already a 3-column V-model navigator; A enriches it. B is a net-new status page — fold B's analytics into a future tab. |
+| D1 | **Dashboard variant A or B** | **RESOLVED → B** (user, 2026-05-19) | B's right-rail "My queue" is the management-visibility thesis in one component. |
+| D2 | **Project-landing variant A or B** | **RESOLVED → A** (user, 2026-05-19) | The current page is already a 3-column V-model navigator; A enriches it. |
 | D3 | **Verification A vs B** | **Ship both** — not a choice | A (Runs) and B (Coverage matrix) are two existing tabs of one module. Both restyle their real screen. |
 | D4 | **Safety A vs B** | **Ship both** — not a choice | Same: A (Hazards) and B (Overview) are two existing Safety pages. |
 | D5 | **Midnight theme** | Author palette-C midnight values in RF-0 | The refresh mockups are light-only ("decide for me" → light). The app ships a midnight theme; refreshed pages would otherwise regress dark-mode users. |
 | D6 | **Re-introduce the StatusBar** | Yes | The refresh chrome re-adds the always-on baseline/branch/version footer (currently commented out in `MainLayout.tsx`). On-theme for management visibility. |
-| D7 | **Track WF scope** | Confirm whether "implement the design" includes the workflow memo, or just the 8-page restyle | The memo itself calls its 10 items "a thinking pass, not committed designs." |
+| D7 | **Track WF scope** | **RESOLVED → build both tracks** (user, 2026-05-19) | Track RF (8-page restyle) and Track WF (the 10 workflow features) are both in scope. RF executes first; WF is the second track. |
 | D8 | **App accent colour** | App surface keeps **blue** action accent; `design-system.md` §3.1 forest accent applies to the **Verum marketing** surface only | The refresh is App-surface and deliberately blue-action (forest only for passed/released status). RF-0 records this so it does not collide with R-9 Phase B. |
 
 ---
