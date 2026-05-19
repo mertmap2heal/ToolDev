@@ -50,6 +50,12 @@ export interface BannerProps {
   badge?: ReactNode
   /** Right-aligned action area (buttons / links). */
   actions?: ReactNode
+  /**
+   * ARIA live-region role. Defaults per variant: `danger` → `alert`
+   * (assertive — an error interrupts the screen reader); every other
+   * variant → `status` (polite). Pass this only to override the default.
+   */
+  role?: 'status' | 'alert'
   children: ReactNode
   className?: string
   style?: CSSProperties
@@ -60,15 +66,21 @@ export function Banner({
   variant = 'warning',
   badge,
   actions,
+  role,
   children,
   className,
   style,
 }: BannerProps) {
   const c = BANNER_STYLE[variant]
+  // A `danger` banner is an error / failure / blocked notice — it should be
+  // announced assertively (`role="alert"`). Every other variant is advisory
+  // and is announced politely (`role="status"`). `warning` stays polite: a
+  // review-pending / caution notice does not warrant interrupting the user.
+  const resolvedRole = role ?? (variant === 'danger' ? 'alert' : 'status')
   return (
     <div
       className={className}
-      role="status"
+      role={resolvedRole}
       style={{
         display: 'flex',
         alignItems: 'center',
