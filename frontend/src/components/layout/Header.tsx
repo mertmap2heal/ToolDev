@@ -5,7 +5,7 @@ import {
   Bell,
   Search,
   Loader2,
-  Sparkles,
+  Wand2,
   Menu,
 } from 'lucide-react'
 import UserMenu from './UserMenu'
@@ -94,22 +94,22 @@ export default function Header({ onMobileMenuOpen }: { onMobileMenuOpen: () => v
 
   return (
     <header
-      className="flex items-center h-11 px-4 gap-3 shrink-0 border-b"
+      className="flex items-center h-11 px-4 gap-4 shrink-0 border-b"
       style={{
         borderColor: 'var(--theme-border)',
-        backgroundColor: 'var(--theme-surface)',
+        backgroundColor: 'var(--theme-bg)',
       }}
     >
-      {/* Mobile: hamburger */}
+      {/* Mobile: hamburger — `.icon-btn` 28x28 treatment */}
       <button
-        className="md:hidden p-1.5 rounded-md shrink-0"
+        className="md:hidden shrink-0 inline-flex items-center justify-center rounded-md"
         onClick={onMobileMenuOpen}
         aria-label="Open navigation"
-        style={{ color: 'var(--theme-text-muted)' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+        style={{ width: 28, height: 28, color: 'var(--theme-text-muted)', background: 'transparent', border: 0, cursor: 'pointer' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-surface)' }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent' }}
       >
-        <Menu size={18} />
+        <Menu size={16} />
       </button>
 
       {/* Left: Breadcrumbs */}
@@ -117,75 +117,86 @@ export default function Header({ onMobileMenuOpen }: { onMobileMenuOpen: () => v
         <Breadcrumbs />
       </div>
 
-      {/* Mobile: search icon button */}
+      {/* Mobile: search icon button — `.icon-btn` 28x28 treatment */}
       <button
         onClick={() => setIsSearchOpen(true)}
-        className="flex lg:hidden p-1.5 rounded-md shrink-0"
+        className="flex lg:hidden shrink-0 items-center justify-center rounded-md"
         aria-label="Search"
-        style={{ color: 'var(--theme-text-muted)' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+        style={{ width: 28, height: 28, color: 'var(--theme-text-muted)', background: 'transparent', border: 0, cursor: 'pointer' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-surface)' }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent' }}
       >
-        <Search size={18} />
+        <Search size={16} />
       </button>
 
-      {/* Desktop: Search pill */}
+      {/* Desktop: Search pill — `_chrome.css` `.search-global` (28px, modal-triggered) */}
       <button
         onClick={() => setIsSearchOpen(true)}
-        className="hidden lg:flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs w-52 cursor-text transition-colors"
+        className="hidden lg:flex flex-1 items-center gap-2 cursor-text transition-colors"
         style={{
+          maxWidth: 420,
+          height: 28,
+          padding: '0 10px',
+          borderRadius: 6,
           border: '1px solid var(--theme-border)',
-          backgroundColor: 'var(--theme-bg)',
+          backgroundColor: 'var(--theme-surface)',
           color: 'var(--theme-text-muted)',
+          fontSize: 12,
         }}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.borderColor = 'var(--theme-accent)'
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-bg)'
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.borderColor = 'var(--theme-border)'
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-surface)'
         }}
       >
         <Search size={13} />
-        <span className="flex-1 text-left">Search...</span>
+        <span className="flex-1 text-left">Search…</span>
         <kbd
-          className="text-[10px] font-mono px-1 py-0.5 rounded"
+          className="font-mono"
           style={{
-            backgroundColor: 'var(--theme-surface)',
+            fontSize: 10,
+            color: 'var(--theme-text-muted)',
+            backgroundColor: 'var(--theme-bg)',
             border: '1px solid var(--theme-border)',
+            padding: '0 5px',
+            lineHeight: '14px',
+            borderRadius: 3,
           }}
         >
-          Ctrl K
+          ⌘K
         </kbd>
       </button>
 
       {/* Right: AI Guide + Bell + User */}
       <div className="flex items-center gap-1 shrink-0">
-        {/* AI Guide */}
+        {/* AI Guide — neutral Wand2 glyph (design-system §4: no Sparkles for AI) */}
         <button
           onClick={toggleAIGuide}
-          className="p-1.5 rounded-md transition-colors"
+          className="rounded-md transition-colors inline-flex items-center justify-center"
           title="AI Guide"
-          style={{ color: 'var(--theme-text-muted)' }}
+          aria-label="AI Guide"
+          style={{ width: 28, height: 28, color: 'var(--theme-text-muted)', background: 'transparent', border: 0, cursor: 'pointer' }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)'
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-surface)'
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
           }}
         >
-          <Sparkles size={16} />
+          <Wand2 size={16} />
         </button>
 
-        {/* Bell */}
+        {/* Bell — `.icon-btn` 28x28 treatment */}
         <div className="relative" ref={bellRef}>
           <button
             onClick={() => setBellOpen(!bellOpen)}
-            className="p-1.5 rounded-md transition-colors relative"
+            className="rounded-md transition-colors relative inline-flex items-center justify-center"
             aria-expanded={bellOpen}
             aria-label="Notifications"
-            style={{ color: 'var(--theme-text-muted)' }}
+            style={{ width: 28, height: 28, color: 'var(--theme-text-muted)', background: 'transparent', border: 0, cursor: 'pointer' }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)'
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-surface)'
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
@@ -193,7 +204,10 @@ export default function Header({ onMobileMenuOpen }: { onMobileMenuOpen: () => v
           >
             <Bell size={16} />
             {unreadCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center text-[8px] font-medium bg-red-500 text-white rounded-full">
+              <span
+                className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center text-[8px] font-medium rounded-full"
+                style={{ backgroundColor: 'var(--status-danger)', color: '#fff' }}
+              >
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}

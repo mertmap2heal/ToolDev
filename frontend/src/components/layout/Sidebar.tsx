@@ -21,6 +21,7 @@ import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 import { useAuthStore } from '../../store/authStore'
 import { useProjectStore } from '../../store/projectStore'
 import { useThemeStore } from '../../store/themeStore'
+import { Avatar } from '../ui'
 import Logo from '../Logo'
 
 // ---------------------------------------------------------------------------
@@ -65,41 +66,48 @@ interface NavItemProps {
 
 function NavItem({ icon: Icon, label, to, collapsed, active }: NavItemProps) {
   const [hovered, setHovered] = useState(false)
+  // RF-1: `_chrome.css` `.nav-item` — 6px/10px row, 6px radius. `.is-active`
+  // is the `--theme-bg` tone with an inset 1px ring and an accent-coloured
+  // icon; hover is the raised surface tone.
   return (
     <Link
       to={to}
       title={collapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: collapsed ? '8px 0' : '8px 12px',
+        gap: 10,
+        padding: collapsed ? '7px 0' : '6px 10px',
         justifyContent: collapsed ? 'center' : 'flex-start',
-        borderRadius: 5,
-        fontSize: 12,
+        borderRadius: 6,
+        fontSize: 13,
         fontWeight: active ? 500 : 400,
+        lineHeight: 1.3,
         cursor: 'pointer',
         textDecoration: 'none',
-        color: active
-          ? 'var(--theme-text)'
-          : hovered
-          ? 'var(--theme-text)'
-          : 'var(--theme-text-muted)',
+        color: active || hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
         backgroundColor: active
-          ? 'var(--theme-sidebar-item-active)'
+          ? 'var(--theme-bg)'
           : hovered
-          ? 'var(--theme-sidebar-item-hover)'
+          ? 'var(--theme-surface)'
           : 'transparent',
-        borderLeft: active ? '2px solid var(--theme-accent)' : '2px solid transparent',
-        transition: 'background-color 0.1s, color 0.1s',
+        boxShadow: active ? 'inset 0 0 0 1px var(--theme-border)' : undefined,
+        transition: 'background-color 80ms ease-out, color 80ms ease-out',
         flexShrink: 0,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Icon size={15} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
+      <Icon
+        size={15}
+        style={{
+          flexShrink: 0,
+          color: active ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+        }}
+      />
       {!collapsed && (
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.3' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
           {label}
         </span>
       )}
@@ -131,6 +139,7 @@ function SectionLabel({ label, sectionKey, collapsed, open, onToggle }: SectionL
       }} />
     )
   }
+  // RF-1: `_chrome.css` `.nav-cap` — an 11px / 500 muted section label.
   return (
     <button
       onClick={() => onToggle(sectionKey)}
@@ -141,26 +150,24 @@ function SectionLabel({ label, sectionKey, collapsed, open, onToggle }: SectionL
         alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
-        padding: '8px 10px 4px',
+        padding: '14px 10px 4px',
         background: 'none',
         border: 'none',
         cursor: 'pointer',
         color: hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
         textAlign: 'left',
-        transition: 'color 0.1s',
+        transition: 'color 80ms ease-out',
       }}
     >
       <span style={{
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: '0.07em',
-        textTransform: 'uppercase',
+        fontSize: 11,
+        fontWeight: 500,
       }}>
         {label}
       </span>
       {open
-        ? <ChevronDown size={10} style={{ opacity: 0.6, flexShrink: 0 }} />
-        : <ChevronRight size={10} style={{ opacity: 0.6, flexShrink: 0 }} />
+        ? <ChevronDown size={11} style={{ opacity: 0.6, flexShrink: 0 }} />
+        : <ChevronRight size={11} style={{ opacity: 0.6, flexShrink: 0 }} />
       }
     </button>
   )
@@ -191,21 +198,21 @@ function CategoryIcon({ icon: Icon, label, active, onClick }: CategoryIconProps)
         justifyContent: 'center',
         width: '100%',
         padding: '7px 0',
-        borderRadius: 5,
+        borderRadius: 6,
         border: 'none',
         cursor: 'pointer',
         color: active ? 'var(--theme-accent)' : hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
         backgroundColor: active
-          ? 'var(--theme-sidebar-item-active)'
+          ? 'var(--theme-bg)'
           : hovered
-          ? 'var(--theme-sidebar-item-hover)'
+          ? 'var(--theme-surface)'
           : 'transparent',
-        borderLeft: active ? '2px solid var(--theme-accent)' : '2px solid transparent',
-        transition: 'background-color 0.1s, color 0.1s',
+        boxShadow: active ? 'inset 0 0 0 1px var(--theme-border)' : undefined,
+        transition: 'background-color 80ms ease-out, color 80ms ease-out',
         flexShrink: 0,
       }}
     >
-      <Icon size={16} style={{ opacity: active ? 1 : 0.7 }} />
+      <Icon size={16} />
     </button>
   )
 }
@@ -226,14 +233,15 @@ function CollapseBtn({ collapsed, onToggle }: { collapsed: boolean; onToggle: ()
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '4px 6px',
-        background: hovered ? 'var(--theme-sidebar-item-hover)' : 'none',
+        width: 28,
+        height: 28,
+        background: hovered ? 'var(--theme-bg)' : 'transparent',
         border: 'none',
-        borderRadius: 5,
+        borderRadius: 6,
         cursor: 'pointer',
         color: hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
         flexShrink: 0,
-        transition: 'background 0.1s, color 0.1s',
+        transition: 'background-color 80ms ease-out, color 80ms ease-out',
       }}
     >
       {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
@@ -339,6 +347,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   // On mobile the sidebar is always full expanded (no collapsed icon mode)
   const effectiveCollapsed = mobileOpen ? false : collapsed
   const desktopWidth = collapsed ? 48 : 220
+  // RF-1: `_chrome.css` `.sidebar` — the raised surface tone, not the
+  // near-black `--theme-sidebar`. Re-themes for midnight via `--theme-surface`.
   const sidebarStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -347,7 +357,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     width: mobileOpen ? 280 : desktopWidth,
     minWidth: mobileOpen ? 280 : desktopWidth,
     borderRight: '1px solid var(--theme-border)',
-    backgroundColor: 'var(--theme-sidebar)',
+    backgroundColor: 'var(--theme-surface)',
     transition: 'width 0.2s ease-in-out, min-width 0.2s ease-in-out, transform 0.2s ease-in-out',
     overflow: 'hidden',
   }
@@ -376,26 +386,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '5px 10px 6px',
+          padding: '8px 6px',
           overflow: 'hidden',
         }}>
-          <div style={{
-            width: 22,
-            height: 22,
-            borderRadius: '50%',
-            backgroundColor: 'var(--theme-accent)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontSize: 10,
-            fontWeight: 700,
-            flexShrink: 0,
-          }}>
-            {(user.name ?? user.email ?? '?')[0].toUpperCase()}
-          </div>
+          {/* RF-1: the shared Avatar primitive — `_chrome.css` `.sidebar-foot .av` */}
+          <Avatar name={user.name ?? user.email ?? '?'} size={22} />
           <span style={{
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--theme-text-muted)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
