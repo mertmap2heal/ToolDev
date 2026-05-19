@@ -1,0 +1,80 @@
+/* Shared chrome for design-system reference cards.
+   Each card is a fixed-width board with:
+   - a header strip (caption/label, title)
+   - a content area (the actual specimen)
+   - a footer footnote (token names / usage)
+*/
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.card {
+  width: 100%;
+  min-height: 100vh;
+  padding: 56px 64px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 32px;
+  border-bottom: 1px solid var(--line-1, #d0d7de);
+  padding-bottom: 20px;
+}
+
+.card__eyebrow {
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-2, #6B6660);
+}
+
+.card__title {
+  font-family: var(--font-display, "Fraunces", ui-serif, serif);
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--fg-1, #0F1419);
+  margin: 0;
+}
+
+.card__sub {
+  font-family: var(--font-body, "Geist", system-ui, sans-serif);
+  font-size: 14px;
+  color: var(--fg-2, #6B6660);
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.card__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  border-top: 1px solid var(--line-1, #d0d7de);
+  padding-top: 16px;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3, #A8A29A);
+}

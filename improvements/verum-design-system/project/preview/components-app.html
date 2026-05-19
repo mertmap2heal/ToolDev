@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Components — App</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="_card.css" />
+  <style>
+    .duo { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+    .pane { padding: 40px 40px 56px; display: flex; flex-direction: column; gap: 22px; }
+    .pane.app { background: var(--theme-bg); color: var(--theme-text); }
+    .head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--theme-border); }
+    .head .eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--theme-text-muted); font-weight: 500; }
+    .head .title { font-size: 18px; font-weight: 700; }
+    .grp { display: flex; flex-direction: column; gap: 10px; }
+    .grp__title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--theme-text-muted); font-weight: 500; padding-bottom: 6px; border-bottom: 1px solid var(--theme-border); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* Button */
+    .btn { font-family: var(--app-font); font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--theme-border); background: var(--theme-bg); color: var(--theme-text); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .btn:hover { background: var(--theme-surface); }
+    .btn.primary { background: var(--theme-accent); border-color: var(--theme-accent); color: #ffffff; }
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn.danger  { background: var(--theme-danger); border-color: var(--theme-danger); color: #ffffff; }
+    .btn.ghost { border-color: transparent; background: transparent; }
+    .btn.ghost:hover { background: var(--theme-sidebar-item-hover); }
+
+    /* Input */
+    .input { font-family: var(--app-font); font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--theme-border); background: var(--theme-bg); color: var(--theme-text); outline: none; min-width: 220px; }
+    .input:focus { border-color: var(--theme-accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--theme-accent) 25%, transparent); }
+    .input::placeholder { color: var(--theme-text-muted); }
+
+    /* Searchbar */
+    .search { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--theme-border); background: var(--theme-bg); }
+    .search svg { color: var(--theme-text-muted); }
+    .search input { all: unset; font-size: 13px; color: var(--theme-text); width: 200px; }
+
+    /* Pills */
+    .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+    .pill.ok { background: color-mix(in oklab, var(--theme-success) 18%, transparent); color: var(--theme-success); }
+    .pill.warn { background: color-mix(in oklab, var(--theme-warning) 18%, transparent); color: var(--theme-warning); }
+    .pill.danger { background: color-mix(in oklab, var(--theme-danger) 18%, transparent); color: var(--theme-danger); }
+    .pill.info { background: var(--theme-accent-subtle); color: var(--theme-accent); }
+    .pill.neutral { background: var(--theme-surface); color: var(--theme-text-muted); border: 1px solid var(--theme-border); }
+
+    /* Card */
+    .ucard { background: var(--theme-bg); border: 1px solid var(--theme-border); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+    .ucard__title { font-size: 13px; font-weight: 600; }
+    .ucard__meta { font-size: 11px; color: var(--theme-text-muted); }
+    .ucard__row { display: flex; gap: 6px; align-items: center; padding-top: 8px; border-top: 1px solid var(--theme-border); margin-top: 4px; }
+
+    /* Stat tile */
+    .stat { background: var(--theme-bg); border: 1px solid var(--theme-border); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+    .stat__num { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+    .stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--theme-text-muted); font-weight: 500; }
+    .stat__delta { font-size: 11px; color: var(--theme-success); }
+    .stat__delta.down { color: var(--theme-danger); }
+
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--theme-bg); border: 1px solid var(--theme-border); border-radius: 8px; }
+    .toolbar .spacer { flex: 1; }
+
+    /* Table */
+    .table { width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--theme-border); border-radius: 8px; overflow: hidden; }
+    .table th, .table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--theme-border); }
+    .table th { background: var(--theme-surface); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--theme-text-muted); font-weight: 500; }
+    .table tr:last-child td { border-bottom: 0; }
+    .table .mono { font-family: var(--app-font-mono); }
+
+    /* Tab strip */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--theme-border); }
+    .tab { padding: 8px 12px; font-size: 13px; font-weight: 500; color: var(--theme-text-muted); border-bottom: 2px solid transparent; cursor: pointer; }
+    .tab.is-active { color: var(--theme-text); border-bottom-color: var(--theme-accent); }
+  </style>
+</head>
+<body>
+  <div class="duo">
+    <!-- LIGHT -->
+    <div class="pane app" data-theme="light">
+      <div class="head">
+        <div class="eyebrow">08 · Components · App · Light</div>
+        <div class="title">Buttons, inputs, pills, cards, stats, table, toolbar.</div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Buttons</div>
+        <div class="row">
+          <button class="btn primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Create requirement</button>
+          <button class="btn">Cancel</button>
+          <button class="btn danger">Delete</button>
+          <button class="btn ghost">More</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Inputs &amp; search</div>
+        <div class="row">
+          <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input placeholder="Search requirements" />
+          </div>
+          <input class="input" placeholder="DAL level" />
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Pills</div>
+        <div class="row">
+          <span class="pill ok">Verified</span>
+          <span class="pill warn">3 open</span>
+          <span class="pill danger">Blocked</span>
+          <span class="pill info">Draft</span>
+          <span class="pill neutral">Archived</span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Stat tiles</div>
+        <div class="row">
+          <div class="stat"><span class="stat__num">1,247</span><span class="stat__label">Total reqs</span><span class="stat__delta">+24 this week</span></div>
+          <div class="stat"><span class="stat__num">86%</span><span class="stat__label">Verified</span><span class="stat__delta">+2pp</span></div>
+          <div class="stat"><span class="stat__num">12</span><span class="stat__label">Blocked</span><span class="stat__delta down">+3</span></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Toolbar</div>
+        <div class="toolbar">
+          <button class="btn ghost">Filter</button>
+          <button class="btn ghost">Sort</button>
+          <div class="spacer"></div>
+          <div class="search"><input placeholder="Search…" /></div>
+          <button class="btn primary">+ New</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Table</div>
+        <table class="table">
+          <thead><tr><th>ID</th><th>Title</th><th>DAL</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">REQ-1024</td><td>Engine-out climb gradient</td><td><span class="pill info">B</span></td><td><span class="pill ok">Verified</span></td></tr>
+            <tr><td class="mono">REQ-1025</td><td>Hydraulic isolation valve</td><td><span class="pill info">B</span></td><td><span class="pill warn">3 open</span></td></tr>
+            <tr><td class="mono">REQ-1026</td><td>Stick-shaker activation</td><td><span class="pill info">A</span></td><td><span class="pill danger">Blocked</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Tabs</div>
+        <div class="tabs">
+          <div class="tab is-active">Requirements</div>
+          <div class="tab">Verification</div>
+          <div class="tab">Tasks</div>
+          <div class="tab">Audit</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDNIGHT -->
+    <div class="pane app" data-theme="midnight">
+      <div class="head">
+        <div class="eyebrow">08 · Components · App · Midnight</div>
+        <div class="title">Same components, dark surfaces.</div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Buttons</div>
+        <div class="row">
+          <button class="btn primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Create requirement</button>
+          <button class="btn">Cancel</button>
+          <button class="btn danger">Delete</button>
+          <button class="btn ghost">More</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Inputs &amp; search</div>
+        <div class="row">
+          <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input placeholder="Search requirements" />
+          </div>
+          <input class="input" placeholder="DAL level" />
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Pills</div>
+        <div class="row">
+          <span class="pill ok">Verified</span>
+          <span class="pill warn">3 open</span>
+          <span class="pill danger">Blocked</span>
+          <span class="pill info">Draft</span>
+          <span class="pill neutral">Archived</span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Stat tiles</div>
+        <div class="row">
+          <div class="stat"><span class="stat__num">1,247</span><span class="stat__label">Total reqs</span><span class="stat__delta">+24 this week</span></div>
+          <div class="stat"><span class="stat__num">86%</span><span class="stat__label">Verified</span><span class="stat__delta">+2pp</span></div>
+          <div class="stat"><span class="stat__num">12</span><span class="stat__label">Blocked</span><span class="stat__delta down">+3</span></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Toolbar</div>
+        <div class="toolbar">
+          <button class="btn ghost">Filter</button>
+          <button class="btn ghost">Sort</button>
+          <div class="spacer"></div>
+          <div class="search"><input placeholder="Search…" /></div>
+          <button class="btn primary">+ New</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Table</div>
+        <table class="table">
+          <thead><tr><th>ID</th><th>Title</th><th>DAL</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">REQ-1024</td><td>Engine-out climb gradient</td><td><span class="pill info">B</span></td><td><span class="pill ok">Verified</span></td></tr>
+            <tr><td class="mono">REQ-1025</td><td>Hydraulic isolation valve</td><td><span class="pill info">B</span></td><td><span class="pill warn">3 open</span></td></tr>
+            <tr><td class="mono">REQ-1026</td><td>Stick-shaker activation</td><td><span class="pill info">A</span></td><td><span class="pill danger">Blocked</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grp">
+        <div class="grp__title">Tabs</div>
+        <div class="tabs">
+          <div class="tab is-active">Requirements</div>
+          <div class="tab">Verification</div>
+          <div class="tab">Tasks</div>
+          <div class="tab">Audit</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

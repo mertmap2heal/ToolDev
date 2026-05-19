@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Brand mark</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="_card.css" />
+  <style>
+    .verum.card { background: var(--surface-base); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .panel { border: 1px solid var(--border-default); padding: 36px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+    .panel--ink { background: var(--ink-primary); }
+    .panel--ink .lbl { color: rgba(250,248,243,0.55); }
+    .panel--accent { background: var(--accent-primary); }
+    .panel--accent .lbl { color: rgba(250,248,243,0.65); }
+    .panel--cream { background: var(--surface-base); }
+    .panel--raised { background: var(--surface-raised); }
+
+    .lbl { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-muted); }
+
+    .lockup { display: flex; align-items: center; gap: 14px; }
+    .lockup__logo { height: 44px; width: auto; }
+    .lockup__word {
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: 28px;
+      letter-spacing: 0.04em;
+      color: var(--ink-primary);
+      text-transform: uppercase;
+    }
+    .panel--ink .lockup__word, .panel--accent .lockup__word { color: var(--surface-base); }
+
+    .stacked-app { display: flex; align-items: center; gap: 10px; }
+    .stacked-app .img { height: 32px; }
+    .stacked-app .stack { display: flex; flex-direction: column; line-height: 1.1; }
+    .stacked-app .name { font-family: "Inter", system-ui, sans-serif; font-size: 13px; font-weight: 700; color: var(--ink-primary); letter-spacing: -0.005em; }
+    .stacked-app .sub { font-family: "Inter", system-ui, sans-serif; font-size: 11px; color: var(--ink-muted); }
+    .panel--ink .stacked-app .name { color: #e6edf3; }
+    .panel--ink .stacked-app .sub { color: #8b949e; }
+
+    .clear-space { position: relative; padding: 24px; }
+    .clear-space::before {
+      content: ""; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(to right, transparent calc(50% - 0.5px), rgba(27,67,50,0.25) calc(50% - 0.5px), rgba(27,67,50,0.25) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+        linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(27,67,50,0.25) calc(50% - 0.5px), rgba(27,67,50,0.25) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+      pointer-events: none;
+    }
+
+    .donts { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .dont { border: 1px solid var(--border-default); padding: 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+    .dont .x { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--status-danger); text-transform: uppercase; }
+    .dont .img { height: 32px; }
+  </style>
+</head>
+<body class="verum">
+  <article class="card">
+    <header class="card__head">
+      <div>
+        <div class="card__eyebrow">06 · Brand · Mark &amp; Lockups</div>
+        <h1 class="card__title">One mark. Two voices.</h1>
+        <p class="card__sub" style="margin-top:14px;">The blue arrow-A reads as both an upward vector and the letter form. Pair it with <strong>VERUM</strong> in Fraunces caps for marketing; pair it with <strong>Engineering Tool / Project Development</strong> stacked in Inter for the app.</p>
+      </div>
+    </header>
+
+    <section class="card__main" style="gap: 28px;">
+      <div class="grid">
+        <div class="panel panel--cream">
+          <span class="lbl">A · Verum lockup · cream</span>
+          <div class="lockup">
+            <img class="lockup__logo" src="../assets/logo.png" alt="Verum mark" />
+            <span class="lockup__word">Verum</span>
+          </div>
+        </div>
+        <div class="panel panel--ink">
+          <span class="lbl">B · Verum lockup · on ink</span>
+          <div class="lockup">
+            <img class="lockup__logo" src="../assets/logo.png" alt="Verum mark" />
+            <span class="lockup__word">Verum</span>
+          </div>
+        </div>
+        <div class="panel panel--raised">
+          <span class="lbl">C · App lockup · light</span>
+          <div class="stacked-app">
+            <img class="img" src="../assets/logo.png" alt="" />
+            <div class="stack">
+              <span class="name">Engineering Tool</span>
+              <span class="sub">Project Development</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="background:#0d1117;">
+          <span class="lbl" style="color:#8b949e;">D · App lockup · midnight</span>
+          <div class="stacked-app">
+            <img class="img" src="../assets/logo.png" alt="" />
+            <div class="stack">
+              <span class="name" style="color:#e6edf3;">Engineering Tool</span>
+              <span class="sub" style="color:#8b949e;">Project Development</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl" style="margin-bottom:8px;">Clear space — minimum padding equal to half the mark's height on every side</div>
+        <div class="panel panel--cream" style="padding: 0;">
+          <div class="clear-space" style="margin: 0;">
+            <img src="../assets/logo.png" style="height: 64px;" alt="" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl" style="margin-bottom:8px;">Don't</div>
+        <div class="donts">
+          <div class="dont">
+            <img class="img" src="../assets/logo.png" style="filter: hue-rotate(90deg) saturate(2);" />
+            <span class="x">× Recolor</span>
+          </div>
+          <div class="dont">
+            <img class="img" src="../assets/logo.png" style="transform: skewX(-12deg);" />
+            <span class="x">× Skew</span>
+          </div>
+          <div class="dont">
+            <img class="img" src="../assets/logo.png" style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.35));" />
+            <span class="x">× Drop shadow</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="card__foot">
+      <span>logo.png · 354×231</span>
+      <span>blue #1E83C8</span>
+      <span>verum word: Fraunces caps · 0.04em</span>
+      <span>app stack: Inter 13/700 + 11/400</span>
+    </footer>
+  </article>
+</body>
+</html>

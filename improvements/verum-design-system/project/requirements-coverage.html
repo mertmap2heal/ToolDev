@@ -1,0 +1,1703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Coverage — Engineering Tool</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  /* ============================================================
+     v2 — GitLab temperament, database-client density.
+     - Calm off-white surface, gray sidebars, real buttons (not links).
+     - Tight 32px rows, frozen Name column, inline-edit affordances.
+     - Inter for UI; JetBrains Mono for IDs / values / formulas / units.
+     - Sentence case throughout. No uppercase chrome labels.
+     - Blue (#0969da) for action; forest green for "released".
+     ============================================================ */
+  html, body { margin: 0; padding: 0; }
+  body { background: #ECEEF0; font-family: var(--app-font); }
+
+  .app {
+    /* Surfaces */
+    --bg:           #FBFBFA;       /* main canvas */
+    --surface:      #F4F5F2;       /* sidebar, toolbar, group rows */
+    --surface-2:    #ECEEEA;       /* hover, group emphasis */
+    --surface-soft: #F8F8F6;       /* table zebra */
+
+    /* Text */
+    --fg:           #1F2328;
+    --fg-2:         #424A53;
+    --fg-3:         #6E7781;
+    --fg-4:         #9DA4AB;
+
+    /* Lines */
+    --line:         #DEE0E2;       /* default */
+    --line-strong:  #C9CDD1;       /* heavier */
+    --line-soft:    #E8EAEC;       /* faintest */
+
+    /* Action */
+    --blue:         #0969DA;
+    --blue-hover:   #0860C7;
+    --blue-tint:    #DDF1FF;
+    --blue-ink:     #054EA3;
+
+    /* Status */
+    --green:        #1B4332;
+    --green-tint:   #E5EFE9;
+    --amber:        #B8860B;
+    --amber-tint:   #FBF0D8;
+    --red:          #B42318;
+    --red-tint:     #FBE9E7;
+    --gray-tint:    #ECEEF0;
+
+    width: 1440px;
+    margin: 0 auto;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-columns: 232px 1fr 0px;
+    border: 1px solid var(--line);
+    transition: grid-template-columns 180ms ease;
+  }
+  .app.has-drawer { grid-template-columns: 232px 1fr 520px; }
+  .app.has-drawer.drawer-expanded { grid-template-columns: 232px 0px 1fr; }
+  .app.is-collapsed { grid-template-columns: 0px 1fr 0px; }
+  .app.is-collapsed.has-drawer { grid-template-columns: 0px 1fr 520px; }
+  .app.is-collapsed.has-drawer.drawer-expanded { grid-template-columns: 0px 0px 1fr; }
+  .app.is-collapsed .sidebar { width: 0; padding: 0; border-right: 0; overflow: hidden; }
+  .app.is-collapsed .sidebar > * { display: none; }
+  .topbar-toggle { display: none !important; }
+  .app.is-collapsed .topbar-toggle { display: inline-flex !important; }
+  .inline-toggle {
+    width: 22px; height: 22px;
+    margin-right: 4px;
+    color: var(--fg-3);
+  }
+  .inline-toggle:hover { background: var(--surface-2); color: var(--fg); }
+
+  /* TOPBAR -------------------------------------------------- */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    height: 44px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark svg { display: block; }
+  .brand .name { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .brand .name .sub { display: block; font-size: 11px; color: var(--fg-3); font-weight: 400; line-height: 1.1; }
+  .topbar .search-global {
+    flex: 1; max-width: 420px;
+    display: flex; align-items: center; gap: 8px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 12px;
+  }
+  .topbar .search-global:hover { background: var(--bg); }
+  .topbar .search-global input { all: unset; flex: 1; color: var(--fg); }
+  .topbar .search-global input::placeholder { color: var(--fg-3); }
+  .topbar .search-global .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+    background: var(--bg);
+  }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); border-radius: 6px; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface); color: var(--fg); }
+  .topbar .avatar {
+    width: 26px; height: 26px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 4px;
+  }
+
+  /* SIDEBAR ------------------------------------------------- */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    padding: 8px 8px 0;
+    display: flex; flex-direction: column; gap: 1px;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .nav-item .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar { position: relative; }
+  .sidebar-toggle {
+    position: absolute;
+    top: 4px; right: 6px;
+    width: 24px; height: 24px;
+    color: var(--fg-3);
+    z-index: 2;
+  }
+  .sidebar-toggle:hover { background: var(--surface-2); color: var(--fg); }
+  .sidebar-foot {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 6px;
+    border-top: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .sidebar-foot:hover { color: var(--fg); }
+  .sidebar-foot .chev { display: inline-flex; transition: transform 180ms ease; }
+  .nav-cap {
+    font-size: 11px;
+    color: var(--fg-3);
+    font-weight: 500;
+    padding: 14px 10px 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 1.3;
+  }
+  .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+  .nav-item.is-active {
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .nav-item i { color: var(--fg-3); flex-shrink: 0; }
+  .nav-item.is-active i { color: var(--blue); }
+  .nav-item .pill-count {
+    margin-left: auto;
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3);
+    background: var(--surface-2);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .nav-item.is-active .pill-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* MAIN ---------------------------------------------------- */
+  .main {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  /* page header */
+  .page-head {
+    position: relative;
+    padding: 14px 20px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .page-head .crumb {
+    font-size: 12px; color: var(--fg-3);
+    margin-bottom: 0;
+    display: flex; align-items: center; gap: 0;
+    min-height: 22px;
+  }
+  .page-head .crumb + .stale { margin-top: 10px; }
+  .page-head .crumb b { color: var(--fg-2); font-weight: 500; }
+  .page-head .crumb a { color: var(--fg-3); text-decoration: none; }
+  .page-head .crumb a:hover { color: var(--blue); }
+
+  .title-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .title-row h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .title-row .meta {
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .title-row .meta b { color: var(--fg-2); font-weight: 500; }
+  .title-row .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface); border-color: var(--line-strong); }
+  .btn.primary {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+  }
+  .btn.primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+  .btn.ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+  .btn.ghost:hover { background: var(--surface); }
+  .btn .caret { color: var(--fg-3); margin-left: 2px; }
+  .btn-split { display: inline-flex; }
+  .btn-split .btn { border-radius: 6px 0 0 6px; }
+  .btn-split .btn + .btn { border-radius: 0 6px 6px 0; border-left: 0; padding: 0 8px; }
+
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    padding: 10px 14px 11px;
+    font-size: 13px;
+    color: var(--fg-3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tab .tab-count {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); background: var(--surface);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.is-active {
+    color: var(--fg);
+    border-bottom-color: var(--blue);
+    font-weight: 500;
+  }
+  .tab.is-active .tab-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* sub-toolbar (filters / search / view toggle) */
+  .subbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .subbar .search {
+    flex: 1; max-width: 360px;
+    display: flex; align-items: center; gap: 8px;
+    height: 30px;
+    padding: 0 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 13px;
+  }
+  .subbar .search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.15); }
+  .subbar .search input { all: unset; flex: 1; color: var(--fg); font-size: 13px; }
+  .subbar .search input::placeholder { color: var(--fg-3); }
+  .subbar .search .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+  }
+
+  .filter-pill {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 13px; color: var(--fg-2);
+    cursor: pointer;
+  }
+  .filter-pill.compact {
+    height: 26px;
+    padding: 0 4px 0 8px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .filter-pill.compact .key {
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  .filter-pill.compact .val {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    padding: 0;
+  }
+  .filter-pill.compact .x {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .filter-pill.compact.active {
+    background: var(--blue-tint);
+    border-color: #B6DCFE;
+    color: var(--blue-ink);
+  }
+  .filter-pill.compact.active .key { color: var(--blue-ink); opacity: 0.75; }
+  .filter-pill.compact .x:hover { background: rgba(9,105,218,0.15); }
+  .filter-pill.clear-all {
+    height: 26px; padding: 0 8px;
+    font-size: 11.5px;
+    color: var(--fg-3);
+    border: none;
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .filter-pill.clear-all:hover { color: var(--fg); background: transparent; }
+  .filter-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px;
+    margin-left: 2px;
+    padding: 0 5px;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: var(--app-font-mono);
+  }
+  .filter-pill:hover { background: var(--surface); }
+  .filter-pill.active {
+    background: var(--blue-tint); color: var(--blue-ink); border-color: #B6DCFE;
+  }
+  .filter-pill .x { color: var(--fg-3); }
+  .filter-pill.active .x { color: var(--blue-ink); }
+  .filter-pill .val { font-family: var(--app-font-mono); font-size: 12px; }
+  .filter-pill .key { color: var(--fg-3); }
+  .filter-pill.active .key { color: var(--blue-ink); }
+
+  .seg {
+    display: inline-flex; height: 30px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  .seg .seg-btn {
+    padding: 0 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--fg-2); cursor: pointer; background: var(--bg);
+  }
+  .seg .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+  .seg .seg-btn.is-active { background: var(--surface-2); color: var(--fg); font-weight: 500; }
+  .seg .seg-btn:hover:not(.is-active) { background: var(--surface); }
+
+  .subbar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* STALE BANNER ------------------------------------------- */
+  .page-head .stale {
+    margin: 8px -20px 12px;
+    border-top: 1px solid #EBD58A;
+  }
+  .stale {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 20px;
+    background: var(--amber-tint);
+    border-bottom: 1px solid #EBD58A;
+    font-size: 12px;
+    color: #5C4400;
+  }
+  .stale .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--amber); color: #fff;
+    padding: 2px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 500;
+  }
+  .stale b { font-weight: 600; }
+  .stale .mono { font-family: var(--app-font-mono); font-size: 11px; }
+  .stale .actions { margin-left: auto; display: flex; gap: 6px; }
+  .stale .link {
+    font-size: 12px; color: #5C4400; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  }
+  .stale .link:hover { color: var(--fg); }
+
+  /* WORKSPACE ---------------------------------------------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    overflow: hidden;
+  }
+
+  /* TREE ---------------------------------------------------- */
+  .tree {
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    font-size: 13px;
+  }
+  .tree-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-head .lbl { font-weight: 600; font-size: 13px; }
+  .tree-head .ct { color: var(--fg-3); font-size: 12px; }
+  .tree-head .new { margin-left: auto; }
+  .tree-head .new .icon-btn { width: 24px; height: 24px; }
+
+  .tree-search {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-search .input {
+    display: flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 8px;
+    border: 1px solid var(--line); border-radius: 5px;
+    color: var(--fg-3); font-size: 12px;
+  }
+  .tree-search .input input { all: unset; flex: 1; color: var(--fg); font-size: 12px; }
+
+  .tree-list { flex: 1; overflow: auto; padding: 4px 4px; }
+
+  .tnode {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 5px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 18px;
+    user-select: none;
+  }
+  .tnode:hover { background: var(--surface); color: var(--fg); }
+  .tnode.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .tnode .chev {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .chev { color: var(--blue-ink); }
+  .tnode .chev.closed i { transform: rotate(-90deg); }
+  .tnode .ico {
+    width: 14px; height: 14px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3);
+  }
+  .tnode.is-selected .ico { color: var(--blue); }
+  .tnode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .tnode .count {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .count { color: var(--blue-ink); }
+
+  .tnode.depth-1 { padding-left: 22px; }
+  .tnode.depth-2 { padding-left: 40px; }
+  .tnode.depth-1 .name { font-weight: 400; color: var(--fg-2); }
+
+  /* TABLE PANE --------------------------------------------- */
+  .table-pane {
+    overflow: hidden;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .scroll-area { flex: 1; overflow: auto; }
+
+  /* table */
+  table.params {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+  table.params thead {
+    position: sticky; top: 0; z-index: 6;
+  }
+  table.params thead th {
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 12px;
+    white-space: nowrap;
+    user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.params thead .sortable { cursor: pointer; }
+  table.params thead .sortable:hover { color: var(--fg); }
+  table.params thead .sortmark {
+    color: var(--blue); margin-left: 4px;
+    display: inline-block;
+  }
+  table.params thead .resize {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 4px; cursor: col-resize;
+  }
+  table.params thead tr.qfilter th {
+    border-bottom: 1px solid var(--line);
+    padding: 4px 12px 6px;
+    background: var(--surface);
+    font-weight: 400;
+  }
+  table.params thead tr.qfilter th.col-check { background: var(--surface); }
+  table.params thead tr.qfilter th.col-name { background: var(--surface); }
+  .qf {
+    height: 22px;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 0 7px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-3);
+    font-size: 11.5px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: var(--app-font);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .qf .val {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+  }
+  .qf:hover { background: var(--bg); border-color: var(--fg-3); border-style: solid; color: var(--fg-2); }
+  .qf.active {
+    background: var(--blue-tint);
+    border: 1px solid #B6DCFE;
+    color: var(--blue-ink);
+    font-weight: 500;
+  }
+  .qf.active:hover { background: #CFE7FE; }
+  .qf .x { color: inherit; opacity: 0.7; }
+  .qf .val { font-family: var(--app-font-mono); font-size: 11px; }
+  .qf-row { font-size: 11px; }
+
+  table.params td {
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line-soft);
+    height: 32px;
+    color: var(--fg);
+    background: var(--bg);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  table.params tbody tr:hover td { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td { background: var(--blue-tint); }
+  table.params tbody tr.is-selected:hover td { background: #C9E4FE; }
+  table.params tbody tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue, #2563EB); }
+  table.params tbody tr.is-active:hover td { background: #DEEBF7; }
+
+  /* group rows */
+  table.params tr.group-row td {
+    background: var(--surface);
+    height: 30px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 0 12px;
+    color: var(--fg-2);
+    font-size: 12px;
+  }
+  table.params tr.group-row .gr-name { font-weight: 600; color: var(--fg); }
+  table.params tr.group-row .gr-meta { color: var(--fg-3); margin-left: 10px; }
+  table.params tr.group-row .gr-meta .dot { display: inline-block; width: 4px; height: 4px; border-radius: 999px; background: var(--fg-4); margin: 0 6px; vertical-align: middle; }
+  table.params tr.group-row .gr-stale { color: var(--amber); font-weight: 500; }
+  table.params tr.group-row .gr-deprecated { color: var(--red); font-weight: 500; }
+
+  /* frozen first columns (checkbox + name) */
+  table.params td.col-check, table.params th.col-check {
+    width: 36px; padding-left: 16px; padding-right: 6px;
+    position: sticky; left: 0; z-index: 4;
+    background: var(--bg);
+  }
+  table.params thead th.col-check { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-check { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-check { background: var(--blue-tint); }
+  table.params tr.group-row td.col-check { background: var(--surface); }
+
+  table.params td.col-name, table.params th.col-name {
+    width: 240px;
+    position: sticky; left: 36px; z-index: 4;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+  table.params thead th.col-name { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-name { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-name { background: var(--blue-tint); }
+  table.params tr.group-row td.col-name { background: var(--surface); }
+
+  /* cell content */
+  .cell-name { display: flex; align-items: center; gap: 8px; }
+  .cell-name .nm {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-name .id {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-4);
+    flex-shrink: 0;
+  }
+  .cell-name .star { color: var(--fg-4); cursor: pointer; }
+  .cell-name .star:hover { color: var(--amber); }
+  .cell-name .star.is-on { color: var(--amber); }
+
+  .cell-type {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+  }
+  .type-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-2);
+    line-height: 16px;
+  }
+  .type-tag.float { color: #185A9D; border-color: #BBDAEF; background: #E8F2FB; }
+  .type-tag.int   { color: #2D5A3D; border-color: #C2DFC9; background: #E8F1EA; }
+  .type-tag.bool  { color: #6B3E14; border-color: #E0CDB1; background: #F8EFD8; }
+  .type-tag.str   { color: #6B2A66; border-color: #DEC1DA; background: #F4E5F2; }
+  .type-tag.array { color: var(--fg-2); border-color: var(--line); background: var(--surface); }
+
+  .cell-value {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    text-align: right;
+    color: var(--fg);
+    white-space: nowrap;
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    overflow: hidden;
+  }
+  .cell-value.computed { color: var(--fg-2); }
+  .cell-value .num { overflow: hidden; text-overflow: ellipsis; }
+  .cell-value .fx {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--blue-tint);
+    color: var(--blue-ink);
+    font-family: var(--app-font-mono);
+    font-style: italic;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: help;
+    letter-spacing: 0.02em;
+  }
+  .cell-value .fx:hover { background: #CFE7FE; }
+
+  .cell-unit {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+
+  .cell-desc {
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12.5px;
+    max-width: 280px;
+    display: block;
+  }
+
+  .cell-source {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-source a { color: var(--blue-ink); text-decoration: none; }
+  .cell-source a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .cell-source .none { color: var(--fg-4); font-style: italic; font-family: var(--app-font); font-size: 12px; }
+
+  /* status */
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .status::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px;
+    background: currentColor;
+  }
+  .status.released   { color: var(--green); background: var(--green-tint); }
+  .status.review     { color: var(--amber); background: var(--amber-tint); }
+  .status.draft      { color: var(--fg-3); background: var(--gray-tint); }
+  .status.deprecated { color: var(--red);   background: var(--red-tint); }
+
+  .cell-used {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .cell-used .num { color: var(--fg); font-weight: 500; }
+  .cell-used .bar {
+    display: inline-block;
+    width: 38px; height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    margin-left: 6px;
+    vertical-align: middle;
+    position: relative; overflow: hidden;
+  }
+  .cell-used .bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--blue);
+    border-radius: 2px;
+  }
+
+  .cell-updated {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-3);
+    white-space: nowrap;
+  }
+
+  .col-actions { width: 36px; text-align: center; }
+  .row-actions {
+    display: inline-flex; gap: 2px; opacity: 0; align-items: center;
+  }
+  tr:hover .row-actions { opacity: 1; }
+  .row-actions .icon-btn { width: 22px; height: 22px; color: var(--fg-3); }
+
+  /* checkbox */
+  .check {
+    appearance: none;
+    width: 14px; height: 14px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+  }
+  .check:hover { border-color: var(--blue); }
+  .check:checked { background: var(--blue); border-color: var(--blue); }
+  .check:checked::after {
+    content: ""; position: absolute; left: 3px; top: 0px;
+    width: 5px; height: 9px;
+    border: solid #fff; border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .check:indeterminate, .check.is-indeterm {
+    background: var(--blue); border-color: var(--blue);
+  }
+  .check.is-indeterm::after {
+    content: ""; position: absolute; left: 2px; right: 2px; top: 5px;
+    height: 2px; background: #fff;
+  }
+
+  /* Bulk action dock */
+  .bulk-dock {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: var(--fg);
+    color: #FBFBFA;
+    border-radius: 8px;
+    padding: 4px 6px 4px 14px;
+    display: flex; align-items: center; gap: 4px;
+    box-shadow: 0 6px 24px rgba(15,20,25,0.18), 0 2px 6px rgba(15,20,25,0.12);
+    font-size: 13px;
+    z-index: 20;
+    min-width: 480px;
+  }
+  .bulk-dock .ct { font-weight: 500; margin-right: 8px; }
+  .bulk-dock .ct .num { font-family: var(--app-font-mono); }
+  .bulk-dock .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.2); margin: 0 4px; }
+  .bulk-dock .b {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 5px; cursor: pointer;
+    color: rgba(255,255,255,0.85); font-size: 12.5px;
+  }
+  .bulk-dock .b:hover { background: rgba(255,255,255,0.10); color: #fff; }
+  .bulk-dock .b.danger { color: #ff8e84; }
+  .bulk-dock .b.danger:hover { background: rgba(255,142,132,0.12); }
+  .bulk-dock .clear {
+    margin-left: auto;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer; padding: 5px 8px;
+  }
+  .bulk-dock .clear:hover { color: #fff; }
+
+  /* STATUS BAR --------------------------------------------- */
+  .statusbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .statusbar .live { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .live::before {
+    content: ""; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--green);
+  }
+  .statusbar b { color: var(--fg-2); font-weight: 500; }
+  .statusbar .right { margin-left: auto; display: flex; gap: 16px; }
+  .statusbar .right span { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .mono { font-family: var(--app-font-mono); font-size: 11.5px; }
+
+
+  /* tab-link-reset */
+  a.tab { text-decoration: none; color: inherit; }
+  a.tab:hover { color: var(--fg); }
+</style>
+
+<style>
+  /* COVERAGE VIEW */
+  .workspace.cov-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    background: var(--surface-soft, #F5F5F2);
+    overflow: auto;
+  }
+  .cov-content { padding: 18px 22px 32px; max-width: 1480px; width: 100%; margin: 0 auto; }
+
+  .cov-kpis {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .kpi {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .kpi-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-3); font-weight: 500; }
+  .kpi-val { font-size: 28px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; color: var(--fg); }
+  .kpi-val span { font-size: 14px; color: var(--fg-3); margin-left: 2px; font-weight: 500; }
+  .kpi-bar { width: 100%; height: 4px; background: var(--surface-2); border-radius: 999px; margin-top: 6px; overflow: hidden; }
+  .kpi-bar-fill { height: 100%; background: var(--blue); border-radius: 999px; }
+  .kpi-sub { font-size: 11.5px; color: var(--fg-3); margin-top: 4px; }
+  .kpi-trend { font-size: 11.5px; }
+  .kpi-trend .trend-down { color: #1B4332; }
+  .kpi-trend .trend-up { color: #B42318; }
+
+  .cov-heatmap, .cov-gaps {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 18px;
+  }
+  .hm-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .hm-head .lbl { font-weight: 600; color: var(--fg); }
+  .hm-head .ct { background: var(--surface-2); color: var(--fg-2); padding: 1px 6px; border-radius: 999px; font-size: 11px; }
+  .hm-head .legend { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; font-size: 11px; color: var(--fg-3); }
+  .hm-head .lg-cell {
+    display: inline-block; width: 16px; height: 14px;
+    border-radius: 3px; margin: 0 4px 0 6px;
+    border: 1px solid var(--line);
+  }
+
+  .hm-scroll { overflow-x: auto; }
+  table.hm {
+    width: 100%; border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.hm thead th {
+    text-align: left; padding: 10px 12px;
+    background: var(--surface-soft);
+    border-bottom: 1px solid var(--line);
+    font-weight: 500; color: var(--fg-3);
+    font-size: 11px; letter-spacing: 0.04em;
+    position: sticky; top: 0;
+    vertical-align: middle;
+  }
+  table.hm thead .hm-method-h { text-align: center; width: 130px; }
+  table.hm thead .m-letter {
+    display: inline-block;
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    background: rgba(9,105,218,0.10); color: var(--blue-ink, #054EA3);
+    font-family: var(--app-font-mono); font-weight: 700; font-size: 12px;
+    text-align: center; line-height: 22px;
+    margin-right: 8px;
+    text-transform: none;
+  }
+  table.hm thead .m-letter + span { text-transform: none; letter-spacing: 0; color: var(--fg-2); font-size: 12px; vertical-align: middle; }
+  table.hm thead .hm-overall-h { width: 200px; text-align: left; }
+  table.hm thead .hm-id-h { width: 56px; }
+  table.hm thead .hm-total-h { width: 70px; text-align: right; }
+
+  table.hm tbody td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  table.hm tbody tr:hover td { background: var(--surface-soft); }
+  table.hm tbody tr.is-depth td { background: rgba(0,0,0,0.012); }
+  table.hm tbody tr.is-depth:hover td { background: var(--surface-soft); }
+  table.hm tbody tr.is-hot { box-shadow: inset 3px 0 0 #A88200; }
+  .hm-id { color: var(--fg-3); font-size: 11px; }
+  .hm-name { color: var(--fg); font-weight: 500; }
+  .hm-flag { color: #A88200; margin-left: 4px; font-weight: 700; }
+  .hm-total { text-align: right; color: var(--fg-2); font-size: 11.5px; }
+
+  .hm-cell {
+    position: relative;
+    width: 130px; height: 56px;
+    text-align: center;
+    background: var(--bg);
+    border-left: 1px solid var(--line-soft);
+    overflow: hidden;
+  }
+  .hm-cell .hm-fill {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: rgba(9,105,218,0.10);
+    transition: height 200ms ease;
+  }
+  .hm-cell .hm-pct {
+    position: relative;
+    font-family: var(--app-font);
+    font-weight: 600; font-size: 14px;
+    color: var(--fg);
+    line-height: 1.05;
+    padding-top: 8px;
+  }
+  .hm-cell .hm-pct span { font-size: 10px; color: var(--fg-3); margin-left: 1px; font-weight: 500; }
+  .hm-cell .hm-frac { position: relative; font-family: var(--app-font-mono); font-size: 10px; color: var(--fg-3); margin-top: 1px; }
+
+  .hm-cell.hm-x  { background: rgba(27,67,50,0.05); }
+  .hm-cell.hm-x  .hm-fill { background: rgba(27,67,50,0.18); }
+  .hm-cell.hm-h  { background: rgba(27,67,50,0.03); }
+  .hm-cell.hm-h  .hm-fill { background: rgba(27,67,50,0.12); }
+  .hm-cell.hm-m  .hm-fill { background: rgba(168,130,0,0.16); }
+  .hm-cell.hm-l  .hm-fill { background: rgba(168,130,0,0.28); }
+  .hm-cell.hm-l  { background: rgba(168,130,0,0.04); }
+  .hm-cell.hm-xl .hm-fill { background: rgba(180,35,24,0.22); }
+  .hm-cell.hm-xl { background: rgba(180,35,24,0.05); }
+
+  .hm-cell.hm-overall {
+    width: 200px; text-align: left;
+    padding: 0 14px;
+  }
+  .hm-cell.hm-overall .hm-fill { display: none; }
+  .hm-cell.hm-overall .hm-pct { padding-top: 0; display: inline-block; }
+  .hm-bar {
+    display: inline-block; width: 110px; height: 8px;
+    background: var(--surface-2); border-radius: 999px; overflow: hidden;
+    vertical-align: middle; margin-right: 10px;
+  }
+  .hm-bar-fill { height: 100%; background: var(--blue); }
+  .hm-cell.hm-overall.hm-x  .hm-bar-fill { background: #1B4332; }
+  .hm-cell.hm-overall.hm-h  .hm-bar-fill { background: #1B4332; opacity: 0.8; }
+  .hm-cell.hm-overall.hm-m  .hm-bar-fill { background: #A88200; }
+  .hm-cell.hm-overall.hm-l  .hm-bar-fill { background: #A88200; }
+  .hm-cell.hm-overall.hm-xl .hm-bar-fill { background: #B42318; }
+
+  /* gap table */
+  table.gap-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.gap-table thead th {
+    text-align: left; padding: 9px 14px;
+    background: var(--surface-soft);
+    border-bottom: 1px solid var(--line);
+    font-weight: 500; color: var(--fg-3);
+    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  table.gap-table tbody td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); color: var(--fg-2); }
+  table.gap-table tbody tr:hover { background: var(--surface-soft); }
+  table.gap-table .mono { font-family: var(--app-font-mono); font-size: 11.5px; color: var(--blue-ink, #054EA3); }
+  .gap-tag {
+    font-family: var(--app-font); font-size: 11.5px;
+    background: var(--amber-tint); padding: 2px 8px; border-radius: 4px;
+    border: 1px solid #EBD58A;
+  }
+
+  a.seg-btn { text-decoration: none; }
+</style>
+
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="Requirements — Coverage">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 18 18" width="18" height="18">
+          <path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <span class="icon-btn" title="Notifications"><i data-lucide="bell" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Help"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Theme"><i data-lucide="moon" style="width:15px;height:15px;"></i></span>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <span class="icon-btn sidebar-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Hide sidebar">
+      <i data-lucide="panel-left-close" style="width:14px;height:14px;"></i>
+    </span>
+    <div class="nav-cap">Overview</div>
+    <div class="nav-item" title="Dashboard"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></div>
+    <div class="nav-item" title="Projects"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></div>
+    <div class="nav-cap">Development</div>
+    <div class="nav-item" title="System definition"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></div>
+    <div class="nav-item is-active" title="Requirements"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></div>
+    <div class="nav-item" title="Parameters"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></div>
+    <div class="nav-item" title="Verification"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></div>
+    <div class="nav-item" title="Tasks"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></div>
+    <div class="nav-cap">Assurance</div>
+    <div class="nav-item" title="Safety analysis"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></div>
+    <div class="nav-item" title="Risk matrix"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></div>
+    <div class="nav-item" title="Audit package"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE HEAD -->
+    <div class="page-head">
+      <div class="crumb">
+        <span class="icon-btn topbar-toggle inline-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Show sidebar">
+          <i data-lucide="panel-left-open" style="width:14px;height:14px;"></i>
+        </span>
+        <a>Falcon-9R Avionics</a>
+        <span style="margin: 0 6px;">/</span>
+        <b>Requirements</b>
+      </div>
+      <!-- SUSPECT LINKS BANNER -->
+      <div class="stale">
+        <span class="badge"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i>Suspect links</span>
+        <span><b>12 requirements</b> have upstream changes since last review &middot; baseline <span class="mono">B-2026-04-12</span> &middot; oldest <span class="mono">2 d 04 h</span></span>
+        <div class="actions">
+          <span class="link">Open review queue</span>
+          <span class="link">Dismiss</span>
+          <button class="btn primary" style="height:26px; padding: 0 10px; font-size: 12px;">
+            <i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>Re-validate batch
+          </button>
+        </div>
+      </div>
+      <div class="title-row">
+        <h1>Requirements</h1>
+        <span class="meta"><b>1,247</b> records &middot; baseline <b>B-2026-04-12</b> &middot; <b>1,084</b> released &middot; <b>87</b> in review</span>
+        <div class="right">
+          <button class="btn" title="Open traceability matrix">
+            <i data-lucide="network" style="width:14px;height:14px;"></i>Traceability
+          </button>
+          <button class="btn" title="Manage baselines">
+            <i data-lucide="git-commit-vertical" style="width:14px;height:14px;"></i>Baseline
+          </button>
+          <button class="btn">
+            <i data-lucide="file-input" style="width:14px;height:14px;"></i>Import
+          </button>
+          <button class="btn">
+            <i data-lucide="download" style="width:14px;height:14px;"></i>Export<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span>
+          </button>
+          <button class="btn primary">
+            <i data-lucide="plus" style="width:14px;height:14px;"></i>New requirement
+          </button>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab" href="requirements-page-v2.html">Requirements <span style="opacity:.55;font-size:11px;margin-left:4px;">List</span><span class="tab-count">1,247</span></a>
+        <a class="tab" href="requirements-document.html">Document<span class="tab-count">FCS-2.2</span></a>
+        <a class="tab" href="requirements-traceability.html">Traceability<span class="tab-count">3.2k</span></a>
+        <a class="tab is-active" href="requirements-coverage.html">Coverage<span class="tab-count">87%</span></a>
+        <a class="tab" href="#">Baselines<span class="tab-count">14</span></a>
+        <a class="tab" href="#">Settings</a>
+      </div>
+    </div>
+
+    <!-- SUBBAR (Coverage view) -->
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Find module, REQ id, owner…" />
+        <span class="kbd">⌘F</span>
+      </div>
+
+      <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Group: PBS module</button>
+      <button class="filter-pill"><i data-lucide="git-commit-vertical" style="width:13px;height:13px;"></i>Baseline B-2026-04-12</button>
+      <button class="filter-pill"><i data-lucide="filter" style="width:13px;height:13px;"></i>Method: A · T · I · D</button>
+      <button class="filter-pill"><i data-lucide="alert-triangle" style="width:13px;height:13px;color:#A88200;"></i>Show gaps only</button>
+
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="download" style="width:13px;height:13px;"></i>Export coverage report</button>
+        <div class="seg" title="View">
+          <a class="seg-btn" href="requirements-page-v2.html"><i data-lucide="list" style="width:13px;height:13px;"></i>List</a>
+          <a class="seg-btn" href="requirements-document.html"><i data-lucide="file-text" style="width:13px;height:13px;"></i>Doc</a>
+          <a class="seg-btn" href="requirements-traceability.html"><i data-lucide="share-2" style="width:13px;height:13px;"></i>Trace</a>
+          <span class="seg-btn is-active"><i data-lucide="grid-3x3" style="width:13px;height:13px;"></i>Coverage</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKSPACE: KPIs + Heat map + Gap list -->
+    <div class="workspace cov-workspace">
+
+      <div class="cov-content">
+
+        <!-- KPI strip -->
+        <div class="cov-kpis">
+          <div class="kpi">
+            <div class="kpi-lbl">Overall coverage</div>
+            <div class="kpi-val">87<span>%</span></div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:87%;"></div></div>
+            <div class="kpi-sub">1,084 of 1,247 reqs verified</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">Coverage gaps</div>
+            <div class="kpi-val" style="color:#7A5E00;">38</div>
+            <div class="kpi-trend"><span class="trend-down">↓ 6 since 14 Apr</span></div>
+            <div class="kpi-sub">38 reqs missing a verification link</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">Suspect links</div>
+            <div class="kpi-val" style="color:#A88200;">12</div>
+            <div class="kpi-trend"><span class="trend-up" style="color:#B42318;">↑ 12 since 14 Apr</span></div>
+            <div class="kpi-sub">Re-verify before next baseline</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">DAL-A coverage</div>
+            <div class="kpi-val">94<span>%</span></div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:94%;background:#1B4332;"></div></div>
+            <div class="kpi-sub">312 of 332 critical reqs</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">Time to PDR</div>
+            <div class="kpi-val">14<span>d</span></div>
+            <div class="kpi-trend"><span style="color:var(--fg-3);">on schedule</span></div>
+            <div class="kpi-sub">Baseline lock 12 May</div>
+          </div>
+        </div>
+
+        <!-- HEAT MAP -->
+        <div class="cov-heatmap">
+          <div class="hm-head">
+            <span class="lbl">Verification coverage by PBS &amp; method</span>
+            <span class="legend">
+              <span class="lg-cell hm-x"></span>≥95
+              <span class="lg-cell hm-h"></span>85
+              <span class="lg-cell hm-m"></span>75
+              <span class="lg-cell hm-l"></span>60
+              <span class="lg-cell hm-xl"></span>&lt;60
+            </span>
+          </div>
+          <div class="hm-scroll">
+            <table class="hm">
+              <thead>
+                <tr>
+                  <th class="hm-id-h">PBS</th>
+                  <th class="hm-name-h">Module</th>
+                  <th class="hm-total-h">Reqs</th>
+                  <th class="hm-method-h"><span class="m-letter">A</span><span>Analysis</span></th>
+                  <th class="hm-method-h"><span class="m-letter">T</span><span>Test</span></th>
+                  <th class="hm-method-h"><span class="m-letter">I</span><span>Inspect</span></th>
+                  <th class="hm-method-h"><span class="m-letter">D</span><span>Demo</span></th>
+                  <th class="hm-overall-h">Overall</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class=" ">
+    <td class="hm-id mono">1.0</td>
+    <td class="hm-name" style="">Vehicle integration</td>
+    <td class="hm-total mono">38</td>
+    <td class="hm-cell hm-h" title="34 of 38 verified — 89%">
+    <div class="hm-fill" style="height:89%;"></div>
+    <div class="hm-pct">89<span>%</span></div>
+    <div class="hm-frac">34/38</div>
+  </td><td class="hm-cell hm-m" title="30 of 38 verified — 79%">
+    <div class="hm-fill" style="height:79%;"></div>
+    <div class="hm-pct">79<span>%</span></div>
+    <div class="hm-frac">30/38</div>
+  </td><td class="hm-cell hm-x" title="38 of 38 verified — 100%">
+    <div class="hm-fill" style="height:100%;"></div>
+    <div class="hm-pct">100<span>%</span></div>
+    <div class="hm-frac">38/38</div>
+  </td><td class="hm-cell hm-h" title="34 of 38 verified — 89%">
+    <div class="hm-fill" style="height:89%;"></div>
+    <div class="hm-pct">89<span>%</span></div>
+    <div class="hm-frac">34/38</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:89%;"></div></div>
+      <div class="hm-pct">89<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">2.1</td>
+    <td class="hm-name" style="">Power & wiring</td>
+    <td class="hm-total mono">92</td>
+    <td class="hm-cell hm-x" title="92 of 92 verified — 100%">
+    <div class="hm-fill" style="height:100%;"></div>
+    <div class="hm-pct">100<span>%</span></div>
+    <div class="hm-frac">92/92</div>
+  </td><td class="hm-cell hm-x" title="88 of 92 verified — 96%">
+    <div class="hm-fill" style="height:96%;"></div>
+    <div class="hm-pct">96<span>%</span></div>
+    <div class="hm-frac">88/92</div>
+  </td><td class="hm-cell hm-x" title="90 of 92 verified — 98%">
+    <div class="hm-fill" style="height:98%;"></div>
+    <div class="hm-pct">98<span>%</span></div>
+    <div class="hm-frac">90/92</div>
+  </td><td class="hm-cell hm-x" title="92 of 92 verified — 100%">
+    <div class="hm-fill" style="height:100%;"></div>
+    <div class="hm-pct">100<span>%</span></div>
+    <div class="hm-frac">92/92</div>
+  </td>
+    <td class="hm-cell hm-overall hm-x">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:98%;"></div></div>
+      <div class="hm-pct">98<span>%</span></div>
+    </td>
+  </tr>
+<tr class="is-hot ">
+    <td class="hm-id mono">2.2</td>
+    <td class="hm-name" style="">Flight control <span class="hm-flag" title="Suspect links">!</span></td>
+    <td class="hm-total mono">312</td>
+    <td class="hm-cell hm-h" title="268 of 312 verified — 86%">
+    <div class="hm-fill" style="height:86%;"></div>
+    <div class="hm-pct">86<span>%</span></div>
+    <div class="hm-frac">268/312</div>
+  </td><td class="hm-cell hm-m" title="241 of 312 verified — 77%">
+    <div class="hm-fill" style="height:77%;"></div>
+    <div class="hm-pct">77<span>%</span></div>
+    <div class="hm-frac">241/312</div>
+  </td><td class="hm-cell hm-x" title="300 of 312 verified — 96%">
+    <div class="hm-fill" style="height:96%;"></div>
+    <div class="hm-pct">96<span>%</span></div>
+    <div class="hm-frac">300/312</div>
+  </td><td class="hm-cell hm-h" title="280 of 312 verified — 90%">
+    <div class="hm-fill" style="height:90%;"></div>
+    <div class="hm-pct">90<span>%</span></div>
+    <div class="hm-frac">280/312</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:87%;"></div></div>
+      <div class="hm-pct">87<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" is-depth">
+    <td class="hm-id mono">2.2.1</td>
+    <td class="hm-name" style="padding-left: 28px;">  Pitch axis</td>
+    <td class="hm-total mono">84</td>
+    <td class="hm-cell hm-x" title="80 of 84 verified — 95%">
+    <div class="hm-fill" style="height:95%;"></div>
+    <div class="hm-pct">95<span>%</span></div>
+    <div class="hm-frac">80/84</div>
+  </td><td class="hm-cell hm-h" title="78 of 84 verified — 93%">
+    <div class="hm-fill" style="height:93%;"></div>
+    <div class="hm-pct">93<span>%</span></div>
+    <div class="hm-frac">78/84</div>
+  </td><td class="hm-cell hm-x" title="84 of 84 verified — 100%">
+    <div class="hm-fill" style="height:100%;"></div>
+    <div class="hm-pct">100<span>%</span></div>
+    <div class="hm-frac">84/84</div>
+  </td><td class="hm-cell hm-x" title="82 of 84 verified — 98%">
+    <div class="hm-fill" style="height:98%;"></div>
+    <div class="hm-pct">98<span>%</span></div>
+    <div class="hm-frac">82/84</div>
+  </td>
+    <td class="hm-cell hm-overall hm-x">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:96%;"></div></div>
+      <div class="hm-pct">96<span>%</span></div>
+    </td>
+  </tr>
+<tr class="is-hot is-depth">
+    <td class="hm-id mono">2.2.2</td>
+    <td class="hm-name" style="padding-left: 28px;">  Roll & yaw <span class="hm-flag" title="Suspect links">!</span></td>
+    <td class="hm-total mono">78</td>
+    <td class="hm-cell hm-m" title="64 of 78 verified — 82%">
+    <div class="hm-fill" style="height:82%;"></div>
+    <div class="hm-pct">82<span>%</span></div>
+    <div class="hm-frac">64/78</div>
+  </td><td class="hm-cell hm-l" title="58 of 78 verified — 74%">
+    <div class="hm-fill" style="height:74%;"></div>
+    <div class="hm-pct">74<span>%</span></div>
+    <div class="hm-frac">58/78</div>
+  </td><td class="hm-cell hm-x" title="76 of 78 verified — 97%">
+    <div class="hm-fill" style="height:97%;"></div>
+    <div class="hm-pct">97<span>%</span></div>
+    <div class="hm-frac">76/78</div>
+  </td><td class="hm-cell hm-h" title="70 of 78 verified — 90%">
+    <div class="hm-fill" style="height:90%;"></div>
+    <div class="hm-pct">90<span>%</span></div>
+    <div class="hm-frac">70/78</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:86%;"></div></div>
+      <div class="hm-pct">86<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" is-depth">
+    <td class="hm-id mono">2.2.3</td>
+    <td class="hm-name" style="padding-left: 28px;">  Envelope</td>
+    <td class="hm-total mono">76</td>
+    <td class="hm-cell hm-m" title="58 of 76 verified — 76%">
+    <div class="hm-fill" style="height:76%;"></div>
+    <div class="hm-pct">76<span>%</span></div>
+    <div class="hm-frac">58/76</div>
+  </td><td class="hm-cell hm-l" title="51 of 76 verified — 67%">
+    <div class="hm-fill" style="height:67%;"></div>
+    <div class="hm-pct">67<span>%</span></div>
+    <div class="hm-frac">51/76</div>
+  </td><td class="hm-cell hm-x" title="72 of 76 verified — 95%">
+    <div class="hm-fill" style="height:95%;"></div>
+    <div class="hm-pct">95<span>%</span></div>
+    <div class="hm-frac">72/76</div>
+  </td><td class="hm-cell hm-m" title="64 of 76 verified — 84%">
+    <div class="hm-fill" style="height:84%;"></div>
+    <div class="hm-pct">84<span>%</span></div>
+    <div class="hm-frac">64/76</div>
+  </td>
+    <td class="hm-cell hm-overall hm-m">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:81%;"></div></div>
+      <div class="hm-pct">81<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" is-depth">
+    <td class="hm-id mono">2.2.4</td>
+    <td class="hm-name" style="padding-left: 28px;">  Mode transitions</td>
+    <td class="hm-total mono">74</td>
+    <td class="hm-cell hm-h" title="66 of 74 verified — 89%">
+    <div class="hm-fill" style="height:89%;"></div>
+    <div class="hm-pct">89<span>%</span></div>
+    <div class="hm-frac">66/74</div>
+  </td><td class="hm-cell hm-l" title="54 of 74 verified — 73%">
+    <div class="hm-fill" style="height:73%;"></div>
+    <div class="hm-pct">73<span>%</span></div>
+    <div class="hm-frac">54/74</div>
+  </td><td class="hm-cell hm-h" title="68 of 74 verified — 92%">
+    <div class="hm-fill" style="height:92%;"></div>
+    <div class="hm-pct">92<span>%</span></div>
+    <div class="hm-frac">68/74</div>
+  </td><td class="hm-cell hm-h" title="64 of 74 verified — 86%">
+    <div class="hm-fill" style="height:86%;"></div>
+    <div class="hm-pct">86<span>%</span></div>
+    <div class="hm-frac">64/74</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:85%;"></div></div>
+      <div class="hm-pct">85<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">2.3</td>
+    <td class="hm-name" style="">Navigation</td>
+    <td class="hm-total mono">144</td>
+    <td class="hm-cell hm-h" title="136 of 144 verified — 94%">
+    <div class="hm-fill" style="height:94%;"></div>
+    <div class="hm-pct">94<span>%</span></div>
+    <div class="hm-frac">136/144</div>
+  </td><td class="hm-cell hm-h" title="128 of 144 verified — 89%">
+    <div class="hm-fill" style="height:89%;"></div>
+    <div class="hm-pct">89<span>%</span></div>
+    <div class="hm-frac">128/144</div>
+  </td><td class="hm-cell hm-x" title="140 of 144 verified — 97%">
+    <div class="hm-fill" style="height:97%;"></div>
+    <div class="hm-pct">97<span>%</span></div>
+    <div class="hm-frac">140/144</div>
+  </td><td class="hm-cell hm-h" title="132 of 144 verified — 92%">
+    <div class="hm-fill" style="height:92%;"></div>
+    <div class="hm-pct">92<span>%</span></div>
+    <div class="hm-frac">132/144</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:93%;"></div></div>
+      <div class="hm-pct">93<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">2.4</td>
+    <td class="hm-name" style="">Communications</td>
+    <td class="hm-total mono">88</td>
+    <td class="hm-cell hm-h" title="80 of 88 verified — 91%">
+    <div class="hm-fill" style="height:91%;"></div>
+    <div class="hm-pct">91<span>%</span></div>
+    <div class="hm-frac">80/88</div>
+  </td><td class="hm-cell hm-h" title="76 of 88 verified — 86%">
+    <div class="hm-fill" style="height:86%;"></div>
+    <div class="hm-pct">86<span>%</span></div>
+    <div class="hm-frac">76/88</div>
+  </td><td class="hm-cell hm-x" title="84 of 88 verified — 95%">
+    <div class="hm-fill" style="height:95%;"></div>
+    <div class="hm-pct">95<span>%</span></div>
+    <div class="hm-frac">84/88</div>
+  </td><td class="hm-cell hm-h" title="80 of 88 verified — 91%">
+    <div class="hm-fill" style="height:91%;"></div>
+    <div class="hm-pct">91<span>%</span></div>
+    <div class="hm-frac">80/88</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:91%;"></div></div>
+      <div class="hm-pct">91<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">3.0</td>
+    <td class="hm-name" style="">Propulsion</td>
+    <td class="hm-total mono">196</td>
+    <td class="hm-cell hm-h" title="180 of 196 verified — 92%">
+    <div class="hm-fill" style="height:92%;"></div>
+    <div class="hm-pct">92<span>%</span></div>
+    <div class="hm-frac">180/196</div>
+  </td><td class="hm-cell hm-m" title="154 of 196 verified — 79%">
+    <div class="hm-fill" style="height:79%;"></div>
+    <div class="hm-pct">79<span>%</span></div>
+    <div class="hm-frac">154/196</div>
+  </td><td class="hm-cell hm-x" title="188 of 196 verified — 96%">
+    <div class="hm-fill" style="height:96%;"></div>
+    <div class="hm-pct">96<span>%</span></div>
+    <div class="hm-frac">188/196</div>
+  </td><td class="hm-cell hm-h" title="170 of 196 verified — 87%">
+    <div class="hm-fill" style="height:87%;"></div>
+    <div class="hm-pct">87<span>%</span></div>
+    <div class="hm-frac">170/196</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:88%;"></div></div>
+      <div class="hm-pct">88<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">4.0</td>
+    <td class="hm-name" style="">Structures</td>
+    <td class="hm-total mono">112</td>
+    <td class="hm-cell hm-x" title="110 of 112 verified — 98%">
+    <div class="hm-fill" style="height:98%;"></div>
+    <div class="hm-pct">98<span>%</span></div>
+    <div class="hm-frac">110/112</div>
+  </td><td class="hm-cell hm-m" title="88 of 112 verified — 79%">
+    <div class="hm-fill" style="height:79%;"></div>
+    <div class="hm-pct">79<span>%</span></div>
+    <div class="hm-frac">88/112</div>
+  </td><td class="hm-cell hm-x" title="108 of 112 verified — 96%">
+    <div class="hm-fill" style="height:96%;"></div>
+    <div class="hm-pct">96<span>%</span></div>
+    <div class="hm-frac">108/112</div>
+  </td><td class="hm-cell hm-h" title="100 of 112 verified — 89%">
+    <div class="hm-fill" style="height:89%;"></div>
+    <div class="hm-pct">89<span>%</span></div>
+    <div class="hm-frac">100/112</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:91%;"></div></div>
+      <div class="hm-pct">91<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">5.0</td>
+    <td class="hm-name" style="">Hydraulics</td>
+    <td class="hm-total mono">64</td>
+    <td class="hm-cell hm-h" title="58 of 64 verified — 91%">
+    <div class="hm-fill" style="height:91%;"></div>
+    <div class="hm-pct">91<span>%</span></div>
+    <div class="hm-frac">58/64</div>
+  </td><td class="hm-cell hm-m" title="50 of 64 verified — 78%">
+    <div class="hm-fill" style="height:78%;"></div>
+    <div class="hm-pct">78<span>%</span></div>
+    <div class="hm-frac">50/64</div>
+  </td><td class="hm-cell hm-x" title="62 of 64 verified — 97%">
+    <div class="hm-fill" style="height:97%;"></div>
+    <div class="hm-pct">97<span>%</span></div>
+    <div class="hm-frac">62/64</div>
+  </td><td class="hm-cell hm-h" title="56 of 64 verified — 88%">
+    <div class="hm-fill" style="height:88%;"></div>
+    <div class="hm-pct">88<span>%</span></div>
+    <div class="hm-frac">56/64</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:88%;"></div></div>
+      <div class="hm-pct">88<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">6.0</td>
+    <td class="hm-name" style="">Environmental</td>
+    <td class="hm-total mono">42</td>
+    <td class="hm-cell hm-h" title="38 of 42 verified — 90%">
+    <div class="hm-fill" style="height:90%;"></div>
+    <div class="hm-pct">90<span>%</span></div>
+    <div class="hm-frac">38/42</div>
+  </td><td class="hm-cell hm-m" title="32 of 42 verified — 76%">
+    <div class="hm-fill" style="height:76%;"></div>
+    <div class="hm-pct">76<span>%</span></div>
+    <div class="hm-frac">32/42</div>
+  </td><td class="hm-cell hm-x" title="40 of 42 verified — 95%">
+    <div class="hm-fill" style="height:95%;"></div>
+    <div class="hm-pct">95<span>%</span></div>
+    <div class="hm-frac">40/42</div>
+  </td><td class="hm-cell hm-h" title="36 of 42 verified — 86%">
+    <div class="hm-fill" style="height:86%;"></div>
+    <div class="hm-pct">86<span>%</span></div>
+    <div class="hm-frac">36/42</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:87%;"></div></div>
+      <div class="hm-pct">87<span>%</span></div>
+    </td>
+  </tr>
+<tr class=" ">
+    <td class="hm-id mono">9.0</td>
+    <td class="hm-name" style="">Safety & cert</td>
+    <td class="hm-total mono">159</td>
+    <td class="hm-cell hm-h" title="140 of 159 verified — 88%">
+    <div class="hm-fill" style="height:88%;"></div>
+    <div class="hm-pct">88<span>%</span></div>
+    <div class="hm-frac">140/159</div>
+  </td><td class="hm-cell hm-m" title="126 of 159 verified — 79%">
+    <div class="hm-fill" style="height:79%;"></div>
+    <div class="hm-pct">79<span>%</span></div>
+    <div class="hm-frac">126/159</div>
+  </td><td class="hm-cell hm-x" title="152 of 159 verified — 96%">
+    <div class="hm-fill" style="height:96%;"></div>
+    <div class="hm-pct">96<span>%</span></div>
+    <div class="hm-frac">152/159</div>
+  </td><td class="hm-cell hm-h" title="140 of 159 verified — 88%">
+    <div class="hm-fill" style="height:88%;"></div>
+    <div class="hm-pct">88<span>%</span></div>
+    <div class="hm-frac">140/159</div>
+  </td>
+    <td class="hm-cell hm-overall hm-h">
+      <div class="hm-bar"><div class="hm-bar-fill" style="width:88%;"></div></div>
+      <div class="hm-pct">88<span>%</span></div>
+    </td>
+  </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- GAP LIST -->
+        <div class="cov-gaps">
+          <div class="hm-head">
+            <span class="lbl">Top coverage gaps</span>
+            <span class="ct">38</span>
+            <span style="margin-left:auto;font-size:11px;color:var(--fg-3);">sorted by criticality × age</span>
+          </div>
+          <table class="gap-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Title</th><th>Module</th><th>Type</th><th>Missing</th><th>Age</th><th>Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">REQ-FCS-2218</td>
+                <td>Sideslip envelope hard limit</td>
+                <td class="mono" style="color:var(--fg-3);">2.2.2</td>
+                <td><span class="dr-pill float">Safety</span></td>
+                <td><span class="gap-tag" style="color:#7A5E00;">Test (T): 4 corners open</span></td>
+                <td class="mono">3 d</td>
+                <td>R. Okafor</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-FCS-2216</td>
+                <td>Yaw damper minimum gain margin</td>
+                <td class="mono" style="color:var(--fg-3);">2.2.2</td>
+                <td><span class="dr-pill float">Performance</span></td>
+                <td><span class="gap-tag" style="color:#7A5E00;">Analysis (A): 2 approach corners</span></td>
+                <td class="mono">2 d</td>
+                <td>K. Sato</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-PROP-1144</td>
+                <td>Engine relight envelope</td>
+                <td class="mono" style="color:var(--fg-3);">3.0</td>
+                <td><span class="dr-pill float">Safety</span></td>
+                <td><span class="gap-tag" style="color:#B42318;">Demonstration (D) — none linked</span></td>
+                <td class="mono">8 d</td>
+                <td>L. Vance</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-FCS-2249</td>
+                <td>Notch filter at 4.2 Hz</td>
+                <td class="mono" style="color:var(--fg-3);">2.2.2</td>
+                <td><span class="dr-pill int">Performance</span></td>
+                <td><span class="gap-tag" style="color:#7A5E00;">Test (T): 1 corner open</span></td>
+                <td class="mono">5 d</td>
+                <td>K. Sato</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-NAV-3014</td>
+                <td>GNSS dropout reversion</td>
+                <td class="mono" style="color:var(--fg-3);">2.3</td>
+                <td><span class="dr-pill float">Functional</span></td>
+                <td><span class="gap-tag" style="color:#7A5E00;">Test (T): pending sim build 24.3</span></td>
+                <td class="mono">11 d</td>
+                <td>P. Nair</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-STR-4022</td>
+                <td>Wing root fatigue spectrum</td>
+                <td class="mono" style="color:var(--fg-3);">4.0</td>
+                <td><span class="dr-pill float">Performance</span></td>
+                <td><span class="gap-tag" style="color:#B42318;">Analysis (A) — fatigue model not run</span></td>
+                <td class="mono">14 d</td>
+                <td>S. Brennan</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-HYD-5008</td>
+                <td>Standby pump runtime ≥ 30 min</td>
+                <td class="mono" style="color:var(--fg-3);">5.0</td>
+                <td><span class="dr-pill int">Performance</span></td>
+                <td><span class="gap-tag" style="color:#7A5E00;">Demo (D): rig schedule slip</span></td>
+                <td class="mono">9 d</td>
+                <td>D. Wallace</td>
+              </tr>
+              <tr>
+                <td class="mono">REQ-CMS-6044</td>
+                <td>Datalink encryption rotation</td>
+                <td class="mono" style="color:var(--fg-3);">2.4</td>
+                <td><span class="dr-pill float">Functional</span></td>
+                <td><span class="gap-tag" style="color:#7A5E00;">Inspection (I): pending audit</span></td>
+                <td class="mono">6 d</td>
+                <td>T. Hamada</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- STATUS BAR -->
+  <footer class="statusbar">
+    <span class="live">Coverage report · synced</span>
+    <span>Branch <b>main</b></span>
+    <span>Coverage 87% · 38 gaps · 12 suspect · DAL-A 94%</span>
+    <span class="right">
+      <span>Baseline <b class="mono">B-2026-04-12</b></span>
+      <span>Build <b class="mono">v1.42.0</b></span>
+    </span>
+  </footer>
+
+
+</div>
+
+<script>lucide.createIcons();</script>
+
+</body>
+</html>

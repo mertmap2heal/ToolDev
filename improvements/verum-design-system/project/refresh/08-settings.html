@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Settings — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .st-body { display: grid; grid-template-columns: 224px 1fr; overflow: auto; }
+
+  /* left rail */
+  .strail { border-right: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; overflow: hidden; min-height: 100%; }
+  .strail-list { flex: 1; padding: 8px 4px; overflow: auto; }
+  .sti {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 5px;
+    font-size: 13px; color: var(--fg-2); cursor: pointer;
+    text-decoration: none;
+  }
+  .sti:hover { background: var(--surface); color: var(--fg); }
+  .sti.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .sti .ico { color: var(--fg-3); width: 14px; height: 14px; display: inline-flex; }
+  .sti.is-selected .ico { color: var(--blue); }
+  .sti .nm { flex: 1; }
+  .sti-section { font-size: 11px; color: var(--fg-3); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; padding: 12px 10px 4px; }
+
+  /* content */
+  .stcontent {
+    padding: 20px 28px 40px;
+    max-width: 920px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .stcontent h2 {
+    margin: 0 0 4px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .stcontent .lede { color: var(--fg-3); font-size: 13px; margin: 0 0 24px; line-height: 1.5; max-width: 720px; }
+
+  .section {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .section h3 {
+    margin: 0;
+    padding: 14px 18px;
+    font-size: 13px; font-weight: 600;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section h3 .desc { font-weight: 400; color: var(--fg-3); font-size: 12px; margin-left: auto; }
+
+  .field {
+    display: grid; grid-template-columns: 200px 1fr;
+    gap: 24px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .field:last-child { border-bottom: 0; }
+  .field .lbl-col label { display: block; font-size: 12.5px; font-weight: 500; color: var(--fg); }
+  .field .lbl-col .help { display: block; font-size: 11.5px; color: var(--fg-3); margin-top: 2px; line-height: 1.45; }
+  .field .ctrl-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+  .input, .select {
+    height: 32px; padding: 0 10px;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--app-font);
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .input:focus, .select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.15); }
+  .input.mono { font-family: var(--app-font-mono); }
+  .select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236E7781' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 28px; }
+
+  textarea.input { height: auto; min-height: 60px; padding: 8px 10px; resize: vertical; line-height: 1.5; }
+
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* toggle */
+  .toggle {
+    appearance: none;
+    width: 32px; height: 18px;
+    background: var(--line-strong);
+    border-radius: 999px;
+    position: relative; cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .toggle::after {
+    content: "";
+    position: absolute; left: 2px; top: 2px;
+    width: 14px; height: 14px; border-radius: 999px;
+    background: #fff;
+    transition: left 120ms ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .toggle:checked { background: var(--blue); }
+  .toggle:checked::after { left: 16px; }
+
+  /* radio cards */
+  .radios { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .radio-card {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: 6px;
+    background: var(--bg);
+  }
+  .radio-card:hover { background: var(--surface-soft); }
+  .radio-card.is-selected { border-color: var(--blue); background: var(--blue-tint); }
+  .radio-card .head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 500; color: var(--fg);
+  }
+  .radio-card .head .swatch {
+    width: 16px; height: 16px; border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .radio-card .head .swatch.light { background: #FBFBFA; }
+  .radio-card .head .swatch.midnight { background: #0d1117; }
+  .radio-card .head .swatch.system { background: linear-gradient(135deg, #FBFBFA 50%, #0d1117 50%); }
+  .radio-card .desc { font-size: 11px; color: var(--fg-3); }
+  .radio-card.is-selected .desc { color: var(--blue-ink); opacity: 0.8; }
+  .radio-card input { position: absolute; opacity: 0; }
+
+  /* avatar block */
+  .avatar-block {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .avatar-block .lg {
+    width: 56px; height: 56px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 18px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .avatar-block .acts { display: flex; gap: 6px; }
+
+  /* token row */
+  .token-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12.5px;
+  }
+  .token-row:last-child { border-bottom: 0; }
+  .token-row .nm { font-weight: 500; color: var(--fg); width: 160px; }
+  .token-row .hash { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); flex: 1; }
+  .token-row .scope { font-family: var(--app-font-mono); font-size: 10.5px; color: var(--fg-2); }
+  .token-row .when { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+
+  /* notifications grid */
+  .notif-table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-size: 12.5px;
+  }
+  .notif-table th {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    text-align: center;
+    font-size: 11px; color: var(--fg-3);
+    font-weight: 500;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .notif-table th:first-child { text-align: left; }
+  .notif-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--fg-2);
+    text-align: center;
+  }
+  .notif-table td:first-child {
+    color: var(--fg); text-align: left;
+  }
+  .notif-table tr:last-child td { border-bottom: 0; }
+  .notif-table td input[type="checkbox"] { vertical-align: middle; }
+
+  /* footer save bar */
+  .save-bar {
+    position: sticky; bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    padding: 10px 18px;
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 -18px -16px;
+  }
+  .save-bar .stamp { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="08 Settings">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn is-active" style="margin-left:auto;width:22px;height:22px;color:var(--blue);" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><a>Engineering Tool</a><span class="sep">/</span><b>Settings</b></div>
+      <div class="title-row">
+        <h1>Settings</h1>
+        <span class="meta">Account · preferences · integrations · 9 sections</span>
+      </div>
+    </div>
+
+    <div class="st-body">
+
+      <!-- LEFT NAV -->
+      <aside class="strail">
+        <div class="strail-list">
+          <div class="sti-section">Account</div>
+          <a class="sti is-selected" href="#profile"><span class="ico"><i data-lucide="user" style="width:14px;height:14px;"></i></span><span class="nm">Profile</span></a>
+          <a class="sti" href="#security"><span class="ico"><i data-lucide="lock" style="width:14px;height:14px;"></i></span><span class="nm">Security</span></a>
+          <a class="sti" href="#api"><span class="ico"><i data-lucide="key" style="width:14px;height:14px;"></i></span><span class="nm">API tokens</span></a>
+          <a class="sti" href="#sessions"><span class="ico"><i data-lucide="monitor" style="width:14px;height:14px;"></i></span><span class="nm">Sessions</span></a>
+
+          <div class="sti-section">Preferences</div>
+          <a class="sti" href="#appearance"><span class="ico"><i data-lucide="palette" style="width:14px;height:14px;"></i></span><span class="nm">Appearance</span></a>
+          <a class="sti" href="#notifications"><span class="ico"><i data-lucide="bell" style="width:14px;height:14px;"></i></span><span class="nm">Notifications</span></a>
+          <a class="sti" href="#editor"><span class="ico"><i data-lucide="keyboard" style="width:14px;height:14px;"></i></span><span class="nm">Editor &amp; shortcuts</span></a>
+
+          <div class="sti-section">Workspace</div>
+          <a class="sti" href="#integrations"><span class="ico"><i data-lucide="plug" style="width:14px;height:14px;"></i></span><span class="nm">Integrations</span></a>
+          <a class="sti" href="#teams"><span class="ico"><i data-lucide="users" style="width:14px;height:14px;"></i></span><span class="nm">Teams</span></a>
+          <a class="sti" href="#feature-packs"><span class="ico"><i data-lucide="package" style="width:14px;height:14px;"></i></span><span class="nm">Feature packages</span></a>
+          <a class="sti" href="#audit"><span class="ico"><i data-lucide="history" style="width:14px;height:14px;"></i></span><span class="nm">Audit log</span></a>
+
+          <div class="sti-section">Danger</div>
+          <a class="sti" href="#sign-out" style="color: var(--red);"><span class="ico" style="color: var(--red);"><i data-lucide="log-out" style="width:14px;height:14px;"></i></span><span class="nm">Sign out</span></a>
+        </div>
+      </aside>
+
+      <!-- CONTENT -->
+      <div class="stcontent">
+
+        <h2>Profile</h2>
+        <p class="lede">How you appear inside the engineering tool, and the contact details we use for sign-off notifications, comment mentions, and audit-trail attribution.</p>
+
+        <!-- Identity -->
+        <div class="section" id="profile">
+          <h3>Identity</h3>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Avatar</label>
+              <span class="help">PNG or JPEG · square · max 2 MB. Used in comments, sign-offs, and the audit log.</span>
+            </div>
+            <div class="ctrl-col">
+              <div class="avatar-block">
+                <span class="lg">CL</span>
+                <div class="acts">
+                  <button class="btn"><i data-lucide="upload" style="width:13px;height:13px;"></i>Upload</button>
+                  <button class="btn ghost">Remove</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Display name</label>
+              <span class="help">Sentence case. Shown on cards, comments, and signatures.</span>
+            </div>
+            <div class="ctrl-col">
+              <input class="input" type="text" value="Christian Luciano" />
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Email</label>
+              <span class="help">Used for sign-in and notifications. Changing this requires re-verification.</span>
+            </div>
+            <div class="ctrl-col">
+              <input class="input mono" type="email" value="christian.luciano@aerodyne.systems" />
+              <span style="font-size: 11.5px; color: var(--green); display:inline-flex; align-items:center; gap:5px;">
+                <i data-lucide="badge-check" style="width:13px;height:13px;"></i>verified · 14 Jan 2026
+              </span>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Role</label>
+              <span class="help">Determines which actions you can take. Change via your organization admin.</span>
+            </div>
+            <div class="ctrl-col">
+              <div class="row">
+                <span class="mc blue">Project owner</span>
+                <span class="mc">QA approver</span>
+                <span class="mc">CR reviewer</span>
+                <span style="font-size: 11px; color: var(--fg-3); margin-left: 4px;">· request additional roles ↗</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Title</label>
+              <span class="help">Free-text. Shown next to your name on sign-offs.</span>
+            </div>
+            <div class="ctrl-col">
+              <input class="input" type="text" value="Principal Systems Engineer" />
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Bio</label>
+              <span class="help">Optional. Plain text. ≤ 200 characters.</span>
+            </div>
+            <div class="ctrl-col">
+              <textarea class="input">15 years across DO-178C and DO-254 avionics. Currently leading Falcon-9R and acting on Hyperion-X PDR.</textarea>
+              <span style="font-size: 11px; color: var(--fg-3);">132 / 200</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="section" id="appearance">
+          <h3>Appearance <span class="desc">Light, midnight, or follow OS</span></h3>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Theme</label>
+              <span class="help">The marketing surface is always Verum brand; this only affects the in-product UI.</span>
+            </div>
+            <div class="ctrl-col">
+              <div class="radios">
+                <label class="radio-card is-selected">
+                  <input type="radio" name="theme" checked />
+                  <span class="head"><span class="swatch light"></span>Light</span>
+                  <span class="desc">GitHub-inspired, default</span>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="theme" />
+                  <span class="head"><span class="swatch midnight"></span>Midnight</span>
+                  <span class="desc">GitHub Dark · #0d1117</span>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="theme" />
+                  <span class="head"><span class="swatch system"></span>Match system</span>
+                  <span class="desc">Follow OS preference</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Density</label>
+              <span class="help">Affects row height and spacing in tables. The app default is dense (32 px rows).</span>
+            </div>
+            <div class="ctrl-col">
+              <select class="select">
+                <option>Dense — 32 px rows (recommended)</option>
+                <option>Standard — 40 px rows</option>
+                <option>Comfortable — 48 px rows</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl-col">
+              <label>Reduce motion</label>
+              <span class="help">Clamps animation durations. Respects <span class="mono" style="font-size: 11px;">prefers-reduced-motion</span> by default.</span>
+            </div>
+            <div class="ctrl-col">
+              <div class="row">
+                <input type="checkbox" class="toggle" />
+                <span style="font-size: 12.5px; color: var(--fg-3);">Off · follows OS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="section" id="notifications">
+          <h3>Notifications <span class="desc">What and how</span></h3>
+          <div style="padding: 4px 0;">
+            <table class="notif-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>In-app</th>
+                  <th>Email</th>
+                  <th>Slack</th>
+                  <th>Webhook</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Requirement I authored is reviewed</td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                </tr>
+                <tr>
+                  <td>I am mentioned in a comment</td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                </tr>
+                <tr>
+                  <td>A sign-off is requested from me</td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                </tr>
+                <tr>
+                  <td>A verification I own fails</td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                </tr>
+                <tr>
+                  <td>A baseline I follow changes</td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                </tr>
+                <tr>
+                  <td>An issue is opened against my project</td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                </tr>
+                <tr>
+                  <td>Daily digest</td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" checked /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                  <td><input type="checkbox" class="check" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- API tokens -->
+        <div class="section" id="api">
+          <h3>API tokens <span class="desc">2 active</span></h3>
+          <div>
+            <div class="token-row">
+              <span class="nm">CI · GitHub Actions</span>
+              <span class="hash">sha256:9f2e8c… 64ab</span>
+              <span class="scope">read · write · publish</span>
+              <span class="when">14 Apr</span>
+              <button class="btn sm ghost"><i data-lucide="copy" style="width:13px;height:13px;"></i></button>
+              <button class="btn sm ghost" style="color: var(--red);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>
+            </div>
+            <div class="token-row">
+              <span class="nm">LDRA CLI</span>
+              <span class="hash">sha256:7b21f0… 5d11</span>
+              <span class="scope">read · publish verification</span>
+              <span class="when">11 Mar</span>
+              <button class="btn sm ghost"><i data-lucide="copy" style="width:13px;height:13px;"></i></button>
+              <button class="btn sm ghost" style="color: var(--red);"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>
+            </div>
+          </div>
+          <div style="padding: 12px 18px; border-top: 1px solid var(--line-soft); display: flex; gap: 8px;">
+            <button class="btn primary"><i data-lucide="plus" style="width:13px;height:13px;"></i>Create token</button>
+            <button class="btn"><i data-lucide="book" style="width:13px;height:13px;"></i>API docs</button>
+          </div>
+        </div>
+
+        <!-- Footer save bar -->
+        <div class="save-bar">
+          <button class="btn primary"><i data-lucide="check" style="width:13px;height:13px;"></i>Save changes</button>
+          <button class="btn ghost">Discard</button>
+          <span class="stamp">Last saved 2 m ago · 13:40 UTC</span>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>User <b>Christian Luciano</b></span>
+    <span>org · Aerodyne Systems</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

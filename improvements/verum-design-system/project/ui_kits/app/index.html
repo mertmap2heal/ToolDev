@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>App — UI kit</title>
+  <link rel="stylesheet" href="../../colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { margin: 0; }
+    .app { min-height: 100vh; display: grid; grid-template-rows: 44px 1fr 24px; grid-template-columns: 220px 1fr; }
+
+    /* HEADER */
+    .header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--theme-bg); border-bottom: 1px solid var(--theme-border); height: 44px; }
+    .header__brand { display: flex; align-items: center; gap: 10px; }
+    .header__brand img { height: 26px; }
+    .header__brand .stack { display: flex; flex-direction: column; line-height: 1.1; }
+    .header__brand .name { font-size: 13px; font-weight: 700; letter-spacing: -0.005em; }
+    .header__brand .sub { font-size: 11px; color: var(--theme-text-muted); }
+    .header__center { font-size: 13px; color: var(--theme-text-muted); }
+    .header__center b { color: var(--theme-text); font-weight: 600; }
+    .header__right { display: flex; align-items: center; gap: 8px; }
+
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; color: var(--theme-text-muted); }
+    .icon-btn:hover { background: var(--theme-sidebar-item-hover); color: var(--theme-text); }
+
+    /* SIDEBAR */
+    .sidebar { background: var(--theme-sidebar); border-right: 1px solid var(--theme-border); padding: 8px 6px; display: flex; flex-direction: column; gap: 2px; }
+    .nav-group { display: flex; flex-direction: column; gap: 1px; }
+    .nav-cap { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--theme-text-muted); padding: 12px 10px 4px; font-weight: 500; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--theme-text); cursor: pointer; border-left: 2px solid transparent; }
+    .nav-item:hover { background: var(--theme-sidebar-item-hover); }
+    .nav-item.is-active { background: var(--theme-sidebar-item-active); border-left-color: var(--theme-accent); padding-left: 8px; font-weight: 500; }
+    .nav-item i { color: var(--theme-text-muted); }
+    .nav-item.is-active i { color: var(--theme-accent); }
+
+    /* MAIN */
+    .main { background: var(--theme-bg); padding: 16px 20px 32px; overflow: auto; }
+    .page-toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--theme-border); margin-bottom: 16px; }
+    .page-toolbar .title { font-size: 16px; font-weight: 600; flex: 1; }
+    .crumb { font-size: 11px; color: var(--theme-text-muted); margin-bottom: 4px; }
+    .crumb b { color: var(--theme-text); font-weight: 500; }
+
+    .btn { font-size: 13px; font-weight: 500; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--theme-border); background: var(--theme-bg); color: var(--theme-text); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .btn:hover { background: var(--theme-surface); }
+    .btn.primary { background: var(--theme-accent); border-color: var(--theme-accent); color: #fff; }
+    .btn.ghost { border-color: transparent; background: transparent; }
+    .btn.ghost:hover { background: var(--theme-sidebar-item-hover); }
+
+    .search { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--theme-border); background: var(--theme-bg); }
+    .search input { all: unset; font-size: 13px; color: var(--theme-text); width: 240px; }
+    .search input::placeholder { color: var(--theme-text-muted); }
+
+    /* Stat row */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .stat { background: var(--theme-bg); border: 1px solid var(--theme-border); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+    .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--theme-text-muted); font-weight: 500; }
+    .stat .num { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+    .stat .delta { font-size: 11px; color: var(--theme-success); }
+    .stat .delta.down { color: var(--theme-danger); }
+
+    /* Layout split */
+    .split { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+
+    /* Card */
+    .card-block { background: var(--theme-bg); border: 1px solid var(--theme-border); border-radius: 8px; overflow: hidden; }
+    .card-block__head { display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--theme-border); }
+    .card-block__head h4 { margin: 0; font-size: 13px; font-weight: 600; flex: 1; }
+
+    /* Table */
+    .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .tbl th, .tbl td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--theme-border); }
+    .tbl th { background: var(--theme-surface); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--theme-text-muted); font-weight: 500; position: sticky; top: 0; }
+    .tbl tr:last-child td { border-bottom: 0; }
+    .tbl tr:hover td { background: var(--theme-sidebar-item-hover); }
+    .mono { font-family: var(--app-font-mono); }
+
+    .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+    .pill.ok { background: color-mix(in oklab, var(--theme-success) 18%, transparent); color: var(--theme-success); }
+    .pill.warn { background: color-mix(in oklab, var(--theme-warning) 18%, transparent); color: var(--theme-warning); }
+    .pill.danger { background: color-mix(in oklab, var(--theme-danger) 18%, transparent); color: var(--theme-danger); }
+    .pill.info { background: var(--theme-accent-subtle); color: var(--theme-accent); }
+
+    /* Activity */
+    .activity { display: flex; flex-direction: column; }
+    .act { display: grid; grid-template-columns: 6px 1fr; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--theme-border); }
+    .act:last-child { border-bottom: 0; }
+    .act .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--theme-accent); margin-top: 6px; }
+    .act .who { font-size: 12px; font-weight: 500; }
+    .act .what { font-size: 12px; color: var(--theme-text-muted); }
+    .act .when { font-size: 10px; color: var(--theme-text-muted); margin-top: 2px; }
+
+    /* Status bar */
+    .statusbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--theme-sidebar); border-top: 1px solid var(--theme-border); font-size: 11px; color: var(--theme-text-muted); }
+    .statusbar .left, .statusbar .right { display: flex; align-items: center; gap: 14px; }
+    .statusbar .live { display: inline-flex; align-items: center; gap: 6px; }
+    .statusbar .live::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--theme-success); }
+  </style>
+</head>
+<body>
+  <div class="app" data-theme="light">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header__brand">
+        <img src="../../assets/logo.png" alt="" />
+        <div class="stack">
+          <span class="name">Engineering Tool</span>
+          <span class="sub">Project Development</span>
+        </div>
+      </div>
+      <div class="header__center">Project: <b>Falcon-9R Avionics</b> &middot; Baseline <span class="mono">B-2026-04-12</span></div>
+      <div class="header__right">
+        <div class="search"><i data-lucide="search" style="width:14px;height:14px;color:var(--theme-text-muted);"></i><input placeholder="Search requirements, tests, tasks…" /></div>
+        <span class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></span>
+        <span class="icon-btn"><i data-lucide="moon" style="width:14px;height:14px;"></i></span>
+        <span class="icon-btn"><i data-lucide="user" style="width:16px;height:16px;"></i></span>
+      </div>
+    </header>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="nav-group">
+        <span class="nav-cap">Overview</span>
+        <span class="nav-item is-active"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i>Dashboard</span>
+        <span class="nav-item"><i data-lucide="home" style="width:15px;height:15px;"></i>Projects</span>
+      </div>
+      <div class="nav-group">
+        <span class="nav-cap">Development</span>
+        <span class="nav-item"><i data-lucide="boxes" style="width:15px;height:15px;"></i>System Definition</span>
+        <span class="nav-item"><i data-lucide="list-checks" style="width:15px;height:15px;"></i>Requirements</span>
+        <span class="nav-item"><i data-lucide="code-2" style="width:15px;height:15px;"></i>Verification</span>
+        <span class="nav-item"><i data-lucide="check-square" style="width:15px;height:15px;"></i>Tasks</span>
+      </div>
+      <div class="nav-group">
+        <span class="nav-cap">Assurance</span>
+        <span class="nav-item"><i data-lucide="shield-check" style="width:15px;height:15px;"></i>Safety Analysis</span>
+        <span class="nav-item"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i>Risk Matrix</span>
+        <span class="nav-item"><i data-lucide="file-down" style="width:15px;height:15px;"></i>Audit Package</span>
+      </div>
+      <div class="nav-group" style="margin-top: auto;">
+        <span class="nav-item"><i data-lucide="users" style="width:15px;height:15px;"></i>Team</span>
+        <span class="nav-item"><i data-lucide="settings" style="width:15px;height:15px;"></i>Settings</span>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <div class="crumb">Falcon-9R Avionics &middot; <b>Dashboard</b></div>
+      <div class="page-toolbar">
+        <h1 class="title">Risk Matrix Dashboard</h1>
+        <button class="btn ghost"><i data-lucide="filter" style="width:14px;height:14px;"></i>Filter</button>
+        <button class="btn ghost"><i data-lucide="download" style="width:14px;height:14px;"></i>Export</button>
+        <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New requirement</button>
+      </div>
+
+      <!-- Stat tiles -->
+      <div class="stats">
+        <div class="stat"><span class="label">Total requirements</span><span class="num">1,247</span><span class="delta">+24 this week</span></div>
+        <div class="stat"><span class="label">Verified</span><span class="num">86%</span><span class="delta">+2pp</span></div>
+        <div class="stat"><span class="label">Open verifications</span><span class="num">142</span><span class="delta down">+18</span></div>
+        <div class="stat"><span class="label">Blocked</span><span class="num">12</span><span class="delta down">+3</span></div>
+      </div>
+
+      <!-- Split: table + activity -->
+      <div class="split">
+        <div class="card-block">
+          <div class="card-block__head">
+            <h4>Recent requirements</h4>
+            <button class="btn ghost"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></button>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>ID</th><th>Title</th><th>DAL</th><th>Owner</th><th>Status</th><th>Updated</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">REQ-1024</td><td>Engine-out climb gradient</td><td><span class="pill info">B</span></td><td>C. Luciano</td><td><span class="pill ok">Verified</span></td><td>4 min ago</td></tr>
+              <tr><td class="mono">REQ-1025</td><td>Hydraulic isolation valve</td><td><span class="pill info">B</span></td><td>M. Aragón</td><td><span class="pill warn">3 open</span></td><td>22 min ago</td></tr>
+              <tr><td class="mono">REQ-1026</td><td>Stick-shaker activation envelope</td><td><span class="pill info">A</span></td><td>D. Park</td><td><span class="pill danger">Blocked</span></td><td>1 hr ago</td></tr>
+              <tr><td class="mono">REQ-1027</td><td>Cabin-pressure decay rate</td><td><span class="pill info">C</span></td><td>S. Ortiz</td><td><span class="pill ok">Verified</span></td><td>2 hr ago</td></tr>
+              <tr><td class="mono">REQ-1028</td><td>FMS waypoint resequencing</td><td><span class="pill info">B</span></td><td>C. Luciano</td><td><span class="pill info">Draft</span></td><td>3 hr ago</td></tr>
+              <tr><td class="mono">REQ-1029</td><td>EICAS message priority schema</td><td><span class="pill info">C</span></td><td>—</td><td><span class="pill warn">2 open</span></td><td>5 hr ago</td></tr>
+              <tr><td class="mono">REQ-1030</td><td>Autobrake decel target curves</td><td><span class="pill info">B</span></td><td>D. Park</td><td><span class="pill ok">Verified</span></td><td>yesterday</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card-block">
+          <div class="card-block__head">
+            <h4>Activity</h4>
+            <button class="btn ghost"><i data-lucide="more-horizontal" style="width:14px;height:14px;"></i></button>
+          </div>
+          <div class="activity">
+            <div class="act">
+              <div class="dot"></div>
+              <div>
+                <div class="who">C. Luciano <span style="color:var(--theme-text-muted);font-weight:400;">signed off <span class="mono">REQ-1024</span></span></div>
+                <div class="what">Provenance hash <span class="mono">sha256:9f2e8c…64ab</span> recorded.</div>
+                <div class="when">4 min ago &middot; baseline B-2026-04-12</div>
+              </div>
+            </div>
+            <div class="act">
+              <div class="dot" style="background: var(--theme-warning);"></div>
+              <div>
+                <div class="who">claude-opus-4-7 <span style="color:var(--theme-text-muted);font-weight:400;">proposed <span class="mono">REQ-1025</span></span></div>
+                <div class="what">3 verification objectives flagged; awaiting human disposition.</div>
+                <div class="when">22 min ago &middot; prompt_v7_req_draft</div>
+              </div>
+            </div>
+            <div class="act">
+              <div class="dot" style="background: var(--theme-danger);"></div>
+              <div>
+                <div class="who">D. Park <span style="color:var(--theme-text-muted);font-weight:400;">blocked <span class="mono">REQ-1026</span></span></div>
+                <div class="what">Trace to ARP4754A §3.2.1 missing; awaiting system architect.</div>
+                <div class="when">1 hr ago</div>
+              </div>
+            </div>
+            <div class="act">
+              <div class="dot" style="background: var(--theme-success);"></div>
+              <div>
+                <div class="who">M. Aragón <span style="color:var(--theme-text-muted);font-weight:400;">closed test case <span class="mono">TC-0987</span></span></div>
+                <div class="what">5 / 5 cases passed against simulation harness sim-v3.</div>
+                <div class="when">2 hr ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- STATUS BAR -->
+    <footer class="statusbar">
+      <div class="left">
+        <span class="live">Connected to Azure DevOps · Jira · Git</span>
+        <span>Branch <span class="mono">main</span></span>
+      </div>
+      <div class="right">
+        <span>Baseline <span class="mono">B-2026-04-12</span></span>
+        <span>Build <span class="mono">v1.42.0</span></span>
+      </div>
+    </footer>
+  </div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

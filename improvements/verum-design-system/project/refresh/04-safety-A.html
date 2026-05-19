@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Safety · Hazards — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .s-body { display: grid; grid-template-columns: 224px 1fr; overflow: hidden; }
+
+  /* left rail for safety phases */
+  .srail {
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .srail-head { padding: 10px 12px 8px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 6px; align-items: center; }
+  .srail-head .lbl { font-weight: 600; font-size: 13px; }
+  .srail-head .ct { color: var(--fg-3); font-size: 12px; }
+  .srail-list { flex: 1; padding: 4px; overflow: auto; }
+  .sn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 5px; cursor: pointer;
+    font-size: 13px; color: var(--fg-2);
+    line-height: 18px;
+  }
+  .sn:hover { background: var(--surface); color: var(--fg); }
+  .sn.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .sn .ico { width: 13px; color: var(--fg-3); display: inline-flex; }
+  .sn.is-selected .ico { color: var(--blue); }
+  .sn .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sn .ct { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .sn .ct.danger { color: var(--red); }
+  .sn .ct.warn   { color: var(--amber); }
+
+  /* main list pane */
+  .lpane { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* hero severity strip */
+  .sev-strip {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--line);
+  }
+  .sev-cell {
+    padding: 14px 18px;
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .sev-cell:last-child { border-right: 0; }
+  .sev-cell .lbl {
+    font-size: 11px; color: var(--fg-3);
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sev-cell .lbl .dot { width: 8px; height: 8px; border-radius: 999px; }
+  .sev-cell .num {
+    font-family: var(--app-font-mono);
+    font-size: 22px; font-weight: 600; line-height: 1;
+  }
+  .sev-cell .sub { font-size: 11px; color: var(--fg-3); font-family: var(--app-font-mono); }
+  .sev-cell.cat .num { color: var(--red); }
+  .sev-cell.cat .lbl .dot { background: var(--red); }
+  .sev-cell.haz .num { color: #B45309; }
+  .sev-cell.haz .lbl .dot { background: #B45309; }
+  .sev-cell.maj .num { color: var(--amber-ink); }
+  .sev-cell.maj .lbl .dot { background: var(--amber); }
+  .sev-cell.min .num { color: var(--fg); }
+  .sev-cell.min .lbl .dot { background: var(--fg-3); }
+  .sev-cell.nse .num { color: var(--fg-3); }
+  .sev-cell.nse .lbl .dot { background: var(--fg-4); }
+
+  /* Hazard table */
+  .scroll { flex: 1; overflow: auto; }
+  table.hz { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
+  table.hz thead th {
+    text-align: left; background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3); font-size: 12px; font-weight: 500;
+    padding: 7px 12px; white-space: nowrap;
+    position: sticky; top: 0; z-index: 2;
+  }
+  table.hz td {
+    padding: 0 12px; height: 50px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--bg); vertical-align: top;
+    padding-top: 9px;
+  }
+  table.hz tr:hover td { background: var(--surface-soft); }
+  table.hz tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue); }
+
+  .h-title { display: flex; flex-direction: column; gap: 3px; }
+  .h-title .t { color: var(--fg); font-size: 13px; }
+  .h-title .meta { font-family: var(--app-font-mono); font-size: 10.5px; color: var(--fg-3); display: flex; gap: 5px; align-items: center; }
+  .h-title .meta .sep { color: var(--fg-4); }
+  .h-id { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-2); }
+
+  /* link micro-bars: req / ver / iface */
+  .links { display: flex; gap: 6px; }
+  .link-mc {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 6px; border-radius: 3px;
+    background: var(--surface); border: 1px solid var(--line);
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-2);
+    line-height: 16px;
+  }
+  .link-mc .lt { color: var(--fg-3); }
+  .link-mc.zero { color: var(--red); border-color: rgba(180,35,24,0.30); background: rgba(180,35,24,0.05); }
+  .link-mc.zero .lt { color: var(--red); opacity: 0.7; }
+
+  /* method coverage cells (FHA/FTA/Markov) */
+  .meth-line {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3);
+  }
+  .mb {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 16px;
+    border-radius: 3px;
+    font-size: 9px; font-weight: 600;
+    background: var(--surface-2); color: var(--fg-4);
+    font-family: var(--app-font-mono);
+  }
+  .mb.done { background: var(--green-tint); color: var(--green); }
+  .mb.done::after { content: "✓"; }
+  .mb.progress { background: var(--amber-tint); color: var(--amber-ink); }
+  .mb.progress::after { content: "◐"; }
+  .mb.none { color: transparent; }
+  .mb.none::after { content: "—"; color: var(--fg-4); }
+
+  .ow { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-2); }
+  .ow .av { width: 20px; height: 20px; font-size: 9px; }
+  .when { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="04 Safety (A · hazards)">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item is-active" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><a>Falcon-9R Avionics</a><span class="sep">/</span><a>Safety analysis</a><span class="sep">/</span><b>Hazards</b></div>
+
+      <div class="banner danger">
+        <span class="badge"><i data-lucide="link-2" style="width:12px;height:12px;"></i>Missing links</span>
+        <span><b>11 hazards</b> lack a requirement / verification / interface link &middot; cannot ship to audit pack &middot; baseline <span class="mono">B-2026-04-12</span></span>
+        <div class="actions">
+          <span class="link">Filter to missing-links</span>
+          <button class="btn sm primary"><i data-lucide="link" style="width:12px;height:12px;"></i>Bulk link</button>
+        </div>
+      </div>
+
+      <div class="title-row">
+        <h1>Hazards</h1>
+        <span class="meta"><b>80</b> hazards &middot; <b>43</b> mitigated · <b>26</b> verified · <b>11</b> missing links &middot; baseline <b>B-2026-04-12</b></span>
+        <div class="right">
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import</button>
+          <button class="btn"><i data-lucide="download" style="width:14px;height:14px;"></i>Export<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span></button>
+          <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New hazard</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <a class="tab" href="04-safety-B.html">Overview</a>
+        <a class="tab is-active" href="#">Hazards<span class="tab-count">80</span></a>
+        <a class="tab" href="#">Analyses<span class="tab-count">22</span></a>
+        <a class="tab" href="#">FTA</a>
+        <a class="tab" href="#">Markov</a>
+        <a class="tab" href="#">Risk matrix</a>
+        <a class="tab" href="#">Traceability</a>
+        <a class="tab" href="#">Reviews</a>
+        <span style="flex:1;"></span>
+        <a class="tab" href="04-safety-B.html" style="color:var(--fg-3);">Switch to overview ↗</a>
+      </div>
+    </div>
+
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Filter by ID, title, source function, hazard text…" />
+        <span class="kbd">⌘F</span>
+      </div>
+      <span class="filter-pill compact active"><span class="key">Severity</span><span class="val">Cat, Haz</span><span class="x">×</span></span>
+      <span class="filter-pill compact"><span class="key">Status</span><span class="val">Open</span></span>
+      <span class="filter-pill compact active"><span class="key">Links</span><span class="val">Missing any</span><span class="x">×</span></span>
+      <button class="filter-pill ghost"><i data-lucide="plus" style="width:13px;height:13px;"></i>Add filter</button>
+      <button class="filter-pill clear-all">Clear all</button>
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>Sort: Severity, then ID</button>
+        <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Group: Function</button>
+        <div class="seg">
+          <span class="seg-btn is-active"><i data-lucide="list" style="width:13px;height:13px;"></i>List</span>
+          <span class="seg-btn"><i data-lucide="grid-3x3" style="width:13px;height:13px;"></i>Matrix</span>
+          <span class="seg-btn"><i data-lucide="share-2" style="width:13px;height:13px;"></i>Trace</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="s-body">
+
+      <!-- left rail -->
+      <aside class="srail">
+        <div class="srail-head">
+          <span class="lbl">Functions</span>
+          <span class="ct">9</span>
+        </div>
+        <div style="padding: 6px 12px; border-bottom: 1px solid var(--line-soft);">
+          <div class="search" style="height:26px; font-size: 12px;">
+            <i data-lucide="search" style="width:12px;height:12px;color:var(--fg-3);"></i>
+            <input placeholder="Filter" />
+          </div>
+        </div>
+        <div class="srail-list">
+          <div class="sn is-selected">
+            <span class="ico"><i data-lucide="layers" style="width:13px;height:13px;"></i></span>
+            <span class="nm">All hazards</span>
+            <span class="ct">80</span>
+          </div>
+          <div class="sn">
+            <span class="ico"><i data-lucide="link-2" style="width:13px;height:13px;color:var(--red);"></i></span>
+            <span class="nm">Missing links</span>
+            <span class="ct danger">11</span>
+          </div>
+          <div class="sn">
+            <span class="ico"><i data-lucide="alert-octagon" style="width:13px;height:13px;color:var(--red);"></i></span>
+            <span class="nm">Catastrophic</span>
+            <span class="ct danger">4</span>
+          </div>
+          <div class="sn">
+            <span class="ico"><i data-lucide="alert-triangle" style="width:13px;height:13px;color:var(--amber);"></i></span>
+            <span class="nm">Hazardous</span>
+            <span class="ct warn">18</span>
+          </div>
+          <div class="sn">
+            <span class="ico"><i data-lucide="clock" style="width:13px;height:13px;"></i></span>
+            <span class="nm">Review due</span>
+            <span class="ct warn">6</span>
+          </div>
+          <div style="height: 6px; border-top: 1px solid var(--line-soft); margin: 6px 4px;"></div>
+          <div class="sn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">F-01 Flight control</span><span class="ct">24</span></div>
+          <div class="sn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">F-02 Navigation</span><span class="ct">18</span></div>
+          <div class="sn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">F-03 Power supply</span><span class="ct">14</span></div>
+          <div class="sn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">F-04 Comms</span><span class="ct">9</span></div>
+          <div class="sn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">F-05 Engine</span><span class="ct">11</span></div>
+          <div class="sn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">F-06 Environmental</span><span class="ct">4</span></div>
+        </div>
+      </aside>
+
+      <div class="lpane">
+
+        <div class="sev-strip">
+          <div class="sev-cell cat">
+            <span class="lbl"><span class="dot"></span>Catastrophic</span>
+            <span class="num">4</span>
+            <span class="sub">2 verified · 2 open</span>
+          </div>
+          <div class="sev-cell haz">
+            <span class="lbl"><span class="dot"></span>Hazardous</span>
+            <span class="num">18</span>
+            <span class="sub">11 mitigated · 7 open</span>
+          </div>
+          <div class="sev-cell maj">
+            <span class="lbl"><span class="dot"></span>Major</span>
+            <span class="num">27</span>
+            <span class="sub">18 mitigated</span>
+          </div>
+          <div class="sev-cell min">
+            <span class="lbl"><span class="dot"></span>Minor</span>
+            <span class="num">23</span>
+            <span class="sub">12 mitigated</span>
+          </div>
+          <div class="sev-cell nse">
+            <span class="lbl"><span class="dot"></span>No safety effect</span>
+            <span class="num">8</span>
+            <span class="sub">closed</span>
+          </div>
+        </div>
+
+        <div class="scroll">
+          <table class="hz">
+            <colgroup>
+              <col style="width: 36px;" />
+              <col style="width: 88px;" />
+              <col />
+              <col style="width: 112px;" />
+              <col style="width: 110px;" />
+              <col style="width: 188px;" />
+              <col style="width: 124px;" />
+              <col style="width: 100px;" />
+              <col style="width: 100px;" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="col-check" style="padding-left:16px;"><input type="checkbox" class="check" /></th>
+                <th>ID</th>
+                <th>Hazard</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>Links</th>
+                <th>Methods</th>
+                <th>Owner</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <tr class="is-active">
+                <td style="padding-left:16px;"><input type="checkbox" class="check" checked /></td>
+                <td><span class="h-id">HAZ-018</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Loss of GPS lock causes loss of attitude reference during banking</div>
+                    <div class="meta"><span>F-02 Navigation</span><span class="sep">·</span><span>SF: GPS solution</span><span class="sep">·</span><span>cause: re-acquisition delay</span></div>
+                  </div>
+                </td>
+                <td><span class="sev catastrophic">Catastrophic</span></td>
+                <td><span class="status review">Open</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>3</span>
+                    <span class="link-mc zero"><span class="lt">VER</span>0</span>
+                    <span class="link-mc"><span class="lt">IFC</span>1</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span title="FHA"><span class="mb done"></span> FHA</span>
+                    <span title="FTA"><span class="mb progress"></span> FTA</span>
+                    <span title="Markov"><span class="mb none"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="when">2 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-022</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Engine flame-out during climb leads to uncontrolled descent</div>
+                    <div class="meta"><span>F-05 Engine</span><span class="sep">·</span><span>SF: thrust control</span><span class="sep">·</span><span>cause: fuel cutoff</span></div>
+                  </div>
+                </td>
+                <td><span class="sev catastrophic">Catastrophic</span></td>
+                <td><span class="status released">Verified</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>7</span>
+                    <span class="link-mc"><span class="lt">VER</span>4</span>
+                    <span class="link-mc"><span class="lt">IFC</span>2</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb done"></span> FHA</span>
+                    <span><span class="mb done"></span> FTA</span>
+                    <span><span class="mb done"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="when">3 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-031</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Battery thermal runaway in cabin compartment</div>
+                    <div class="meta"><span>F-03 Power</span><span class="sep">·</span><span>SF: cell management</span><span class="sep">·</span><span>cause: cell short</span></div>
+                  </div>
+                </td>
+                <td><span class="sev catastrophic">Catastrophic</span></td>
+                <td><span class="status review">Mitigated</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>5</span>
+                    <span class="link-mc"><span class="lt">VER</span>2</span>
+                    <span class="link-mc zero"><span class="lt">IFC</span>0</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb done"></span> FHA</span>
+                    <span><span class="mb done"></span> FTA</span>
+                    <span><span class="mb none"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-s">SF</span>Fuentes</div></td>
+                <td class="when">5 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-044</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Spurious autopilot disengagement in turbulence</div>
+                    <div class="meta"><span>F-01 Flight ctl</span><span class="sep">·</span><span>SF: autopilot mode</span><span class="sep">·</span><span>cause: sensor noise</span></div>
+                  </div>
+                </td>
+                <td><span class="sev hazardous">Hazardous</span></td>
+                <td><span class="status review">Open</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>4</span>
+                    <span class="link-mc"><span class="lt">VER</span>1</span>
+                    <span class="link-mc"><span class="lt">IFC</span>2</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb done"></span> FHA</span>
+                    <span><span class="mb progress"></span> FTA</span>
+                    <span><span class="mb none"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-m">MT</span>Tan</div></td>
+                <td class="when">6 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-052</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Inertial nav drift compounds during 6+ min RF-denied flight</div>
+                    <div class="meta"><span>F-02 Nav</span><span class="sep">·</span><span>SF: INS fallback</span><span class="sep">·</span><span>cause: bias growth</span></div>
+                  </div>
+                </td>
+                <td><span class="sev hazardous">Hazardous</span></td>
+                <td><span class="status review">Mitigated</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>6</span>
+                    <span class="link-mc"><span class="lt">VER</span>3</span>
+                    <span class="link-mc"><span class="lt">IFC</span>1</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb done"></span> FHA</span>
+                    <span><span class="mb done"></span> FTA</span>
+                    <span><span class="mb done"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="when">8 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-061</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">CAN bus saturation under sensor fault flood causes message loss</div>
+                    <div class="meta"><span>F-04 Comms</span><span class="sep">·</span><span>SF: bus arbitration</span><span class="sep">·</span><span>cause: sensor burst</span></div>
+                  </div>
+                </td>
+                <td><span class="sev hazardous">Hazardous</span></td>
+                <td><span class="status review">Open</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>2</span>
+                    <span class="link-mc zero"><span class="lt">VER</span>0</span>
+                    <span class="link-mc zero"><span class="lt">IFC</span>0</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb progress"></span> FHA</span>
+                    <span><span class="mb none"></span> FTA</span>
+                    <span><span class="mb none"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-s">SF</span>Fuentes</div></td>
+                <td class="when">11 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-072</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Cabin depressurization at altitude impairs crew performance</div>
+                    <div class="meta"><span>F-06 Env</span><span class="sep">·</span><span>SF: pressure ctl</span><span class="sep">·</span><span>cause: seal failure</span></div>
+                  </div>
+                </td>
+                <td><span class="sev major">Major</span></td>
+                <td><span class="status released">Verified</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>3</span>
+                    <span class="link-mc"><span class="lt">VER</span>2</span>
+                    <span class="link-mc"><span class="lt">IFC</span>1</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb done"></span> FHA</span>
+                    <span><span class="mb done"></span> FTA</span>
+                    <span><span class="mb none"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-c">CN</span>Nguyen</div></td>
+                <td class="when">14 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check" /></td>
+                <td><span class="h-id">HAZ-080</span></td>
+                <td>
+                  <div class="h-title">
+                    <div class="t">Display freeze during landing increases crew workload</div>
+                    <div class="meta"><span>F-01 Display</span><span class="sep">·</span><span>SF: render loop</span><span class="sep">·</span><span>cause: GPU stall</span></div>
+                  </div>
+                </td>
+                <td><span class="sev major">Major</span></td>
+                <td><span class="status review">Mitigated</span></td>
+                <td>
+                  <div class="links">
+                    <span class="link-mc"><span class="lt">REQ</span>2</span>
+                    <span class="link-mc"><span class="lt">VER</span>1</span>
+                    <span class="link-mc zero"><span class="lt">IFC</span>0</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="meth-line">
+                    <span><span class="mb done"></span> FHA</span>
+                    <span><span class="mb none"></span> FTA</span>
+                    <span><span class="mb none"></span> Mkv</span>
+                  </div>
+                </td>
+                <td><div class="ow"><span class="av a-l">LR</span>Rivera</div></td>
+                <td class="when">3 w ago</td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Project <b>Falcon-9R Avionics</b></span>
+    <span>80 hazards · 11 missing links</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

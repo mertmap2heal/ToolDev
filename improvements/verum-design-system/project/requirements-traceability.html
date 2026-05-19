@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Traceability — Engineering Tool</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  /* ============================================================
+     v2 — GitLab temperament, database-client density.
+     - Calm off-white surface, gray sidebars, real buttons (not links).
+     - Tight 32px rows, frozen Name column, inline-edit affordances.
+     - Inter for UI; JetBrains Mono for IDs / values / formulas / units.
+     - Sentence case throughout. No uppercase chrome labels.
+     - Blue (#0969da) for action; forest green for "released".
+     ============================================================ */
+  html, body { margin: 0; padding: 0; }
+  body { background: #ECEEF0; font-family: var(--app-font); }
+
+  .app {
+    /* Surfaces */
+    --bg:           #FBFBFA;       /* main canvas */
+    --surface:      #F4F5F2;       /* sidebar, toolbar, group rows */
+    --surface-2:    #ECEEEA;       /* hover, group emphasis */
+    --surface-soft: #F8F8F6;       /* table zebra */
+
+    /* Text */
+    --fg:           #1F2328;
+    --fg-2:         #424A53;
+    --fg-3:         #6E7781;
+    --fg-4:         #9DA4AB;
+
+    /* Lines */
+    --line:         #DEE0E2;       /* default */
+    --line-strong:  #C9CDD1;       /* heavier */
+    --line-soft:    #E8EAEC;       /* faintest */
+
+    /* Action */
+    --blue:         #0969DA;
+    --blue-hover:   #0860C7;
+    --blue-tint:    #DDF1FF;
+    --blue-ink:     #054EA3;
+
+    /* Status */
+    --green:        #1B4332;
+    --green-tint:   #E5EFE9;
+    --amber:        #B8860B;
+    --amber-tint:   #FBF0D8;
+    --red:          #B42318;
+    --red-tint:     #FBE9E7;
+    --gray-tint:    #ECEEF0;
+
+    width: 1440px;
+    margin: 0 auto;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-columns: 232px 1fr 0px;
+    border: 1px solid var(--line);
+    transition: grid-template-columns 180ms ease;
+  }
+  .app.has-drawer { grid-template-columns: 232px 1fr 520px; }
+  .app.has-drawer.drawer-expanded { grid-template-columns: 232px 0px 1fr; }
+  .app.is-collapsed { grid-template-columns: 0px 1fr 0px; }
+  .app.is-collapsed.has-drawer { grid-template-columns: 0px 1fr 520px; }
+  .app.is-collapsed.has-drawer.drawer-expanded { grid-template-columns: 0px 0px 1fr; }
+  .app.is-collapsed .sidebar { width: 0; padding: 0; border-right: 0; overflow: hidden; }
+  .app.is-collapsed .sidebar > * { display: none; }
+  .topbar-toggle { display: none !important; }
+  .app.is-collapsed .topbar-toggle { display: inline-flex !important; }
+  .inline-toggle {
+    width: 22px; height: 22px;
+    margin-right: 4px;
+    color: var(--fg-3);
+  }
+  .inline-toggle:hover { background: var(--surface-2); color: var(--fg); }
+
+  /* TOPBAR -------------------------------------------------- */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    height: 44px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark svg { display: block; }
+  .brand .name { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .brand .name .sub { display: block; font-size: 11px; color: var(--fg-3); font-weight: 400; line-height: 1.1; }
+  .topbar .search-global {
+    flex: 1; max-width: 420px;
+    display: flex; align-items: center; gap: 8px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 12px;
+  }
+  .topbar .search-global:hover { background: var(--bg); }
+  .topbar .search-global input { all: unset; flex: 1; color: var(--fg); }
+  .topbar .search-global input::placeholder { color: var(--fg-3); }
+  .topbar .search-global .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+    background: var(--bg);
+  }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); border-radius: 6px; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface); color: var(--fg); }
+  .topbar .avatar {
+    width: 26px; height: 26px; border-radius: 999px;
+    background: linear-gradient(135deg, #d6e2ec, #bccddb);
+    color: var(--fg-2); font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 4px;
+  }
+
+  /* SIDEBAR ------------------------------------------------- */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    padding: 8px 8px 0;
+    display: flex; flex-direction: column; gap: 1px;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .nav-item .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar { position: relative; }
+  .sidebar-toggle {
+    position: absolute;
+    top: 4px; right: 6px;
+    width: 24px; height: 24px;
+    color: var(--fg-3);
+    z-index: 2;
+  }
+  .sidebar-toggle:hover { background: var(--surface-2); color: var(--fg); }
+  .sidebar-foot {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 6px;
+    border-top: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .sidebar-foot:hover { color: var(--fg); }
+  .sidebar-foot .chev { display: inline-flex; transition: transform 180ms ease; }
+  .nav-cap {
+    font-size: 11px;
+    color: var(--fg-3);
+    font-weight: 500;
+    padding: 14px 10px 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 1.3;
+  }
+  .nav-item:hover { background: var(--surface-2); color: var(--fg); }
+  .nav-item.is-active {
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .nav-item i { color: var(--fg-3); flex-shrink: 0; }
+  .nav-item.is-active i { color: var(--blue); }
+  .nav-item .pill-count {
+    margin-left: auto;
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3);
+    background: var(--surface-2);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .nav-item.is-active .pill-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* MAIN ---------------------------------------------------- */
+  .main {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  /* page header */
+  .page-head {
+    position: relative;
+    padding: 14px 20px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .page-head .crumb {
+    font-size: 12px; color: var(--fg-3);
+    margin-bottom: 0;
+    display: flex; align-items: center; gap: 0;
+    min-height: 22px;
+  }
+  .page-head .crumb + .stale { margin-top: 10px; }
+  .page-head .crumb b { color: var(--fg-2); font-weight: 500; }
+  .page-head .crumb a { color: var(--fg-3); text-decoration: none; }
+  .page-head .crumb a:hover { color: var(--blue); }
+
+  .title-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .title-row h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .title-row .meta {
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .title-row .meta b { color: var(--fg-2); font-weight: 500; }
+  .title-row .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface); border-color: var(--line-strong); }
+  .btn.primary {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+  }
+  .btn.primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+  .btn.ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+  .btn.ghost:hover { background: var(--surface); }
+  .btn .caret { color: var(--fg-3); margin-left: 2px; }
+  .btn-split { display: inline-flex; }
+  .btn-split .btn { border-radius: 6px 0 0 6px; }
+  .btn-split .btn + .btn { border-radius: 0 6px 6px 0; border-left: 0; padding: 0 8px; }
+
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    padding: 10px 14px 11px;
+    font-size: 13px;
+    color: var(--fg-3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tab .tab-count {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); background: var(--surface);
+    padding: 1px 6px; border-radius: 999px;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.is-active {
+    color: var(--fg);
+    border-bottom-color: var(--blue);
+    font-weight: 500;
+  }
+  .tab.is-active .tab-count { background: var(--blue-tint); color: var(--blue-ink); }
+
+  /* sub-toolbar (filters / search / view toggle) */
+  .subbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .subbar .search {
+    flex: 1; max-width: 360px;
+    display: flex; align-items: center; gap: 8px;
+    height: 30px;
+    padding: 0 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 13px;
+  }
+  .subbar .search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.15); }
+  .subbar .search input { all: unset; flex: 1; color: var(--fg); font-size: 13px; }
+  .subbar .search input::placeholder { color: var(--fg-3); }
+  .subbar .search .kbd {
+    font-family: var(--app-font-mono); font-size: 10px;
+    color: var(--fg-3); border: 1px solid var(--line);
+    padding: 0 5px; line-height: 14px; border-radius: 3px;
+  }
+
+  .filter-pill {
+    height: 30px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 13px; color: var(--fg-2);
+    cursor: pointer;
+  }
+  .filter-pill.compact {
+    height: 26px;
+    padding: 0 4px 0 8px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .filter-pill.compact .key {
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  .filter-pill.compact .val {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    padding: 0;
+  }
+  .filter-pill.compact .x {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .filter-pill.compact.active {
+    background: var(--blue-tint);
+    border-color: #B6DCFE;
+    color: var(--blue-ink);
+  }
+  .filter-pill.compact.active .key { color: var(--blue-ink); opacity: 0.75; }
+  .filter-pill.compact .x:hover { background: rgba(9,105,218,0.15); }
+  .filter-pill.clear-all {
+    height: 26px; padding: 0 8px;
+    font-size: 11.5px;
+    color: var(--fg-3);
+    border: none;
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .filter-pill.clear-all:hover { color: var(--fg); background: transparent; }
+  .filter-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px;
+    margin-left: 2px;
+    padding: 0 5px;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: var(--app-font-mono);
+  }
+  .filter-pill:hover { background: var(--surface); }
+  .filter-pill.active {
+    background: var(--blue-tint); color: var(--blue-ink); border-color: #B6DCFE;
+  }
+  .filter-pill .x { color: var(--fg-3); }
+  .filter-pill.active .x { color: var(--blue-ink); }
+  .filter-pill .val { font-family: var(--app-font-mono); font-size: 12px; }
+  .filter-pill .key { color: var(--fg-3); }
+  .filter-pill.active .key { color: var(--blue-ink); }
+
+  .seg {
+    display: inline-flex; height: 30px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  .seg .seg-btn {
+    padding: 0 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--fg-2); cursor: pointer; background: var(--bg);
+  }
+  .seg .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+  .seg .seg-btn.is-active { background: var(--surface-2); color: var(--fg); font-weight: 500; }
+  .seg .seg-btn:hover:not(.is-active) { background: var(--surface); }
+
+  .subbar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* STALE BANNER ------------------------------------------- */
+  .page-head .stale {
+    margin: 8px -20px 12px;
+    border-top: 1px solid #EBD58A;
+  }
+  .stale {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 20px;
+    background: var(--amber-tint);
+    border-bottom: 1px solid #EBD58A;
+    font-size: 12px;
+    color: #5C4400;
+  }
+  .stale .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--amber); color: #fff;
+    padding: 2px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 500;
+  }
+  .stale b { font-weight: 600; }
+  .stale .mono { font-family: var(--app-font-mono); font-size: 11px; }
+  .stale .actions { margin-left: auto; display: flex; gap: 6px; }
+  .stale .link {
+    font-size: 12px; color: #5C4400; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  }
+  .stale .link:hover { color: var(--fg); }
+
+  /* WORKSPACE ---------------------------------------------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    overflow: hidden;
+  }
+
+  /* TREE ---------------------------------------------------- */
+  .tree {
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    font-size: 13px;
+  }
+  .tree-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-head .lbl { font-weight: 600; font-size: 13px; }
+  .tree-head .ct { color: var(--fg-3); font-size: 12px; }
+  .tree-head .new { margin-left: auto; }
+  .tree-head .new .icon-btn { width: 24px; height: 24px; }
+
+  .tree-search {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tree-search .input {
+    display: flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 8px;
+    border: 1px solid var(--line); border-radius: 5px;
+    color: var(--fg-3); font-size: 12px;
+  }
+  .tree-search .input input { all: unset; flex: 1; color: var(--fg); font-size: 12px; }
+
+  .tree-list { flex: 1; overflow: auto; padding: 4px 4px; }
+
+  .tnode {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 5px;
+    color: var(--fg-2);
+    cursor: pointer;
+    line-height: 18px;
+    user-select: none;
+  }
+  .tnode:hover { background: var(--surface); color: var(--fg); }
+  .tnode.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .tnode .chev {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .chev { color: var(--blue-ink); }
+  .tnode .chev.closed i { transform: rotate(-90deg); }
+  .tnode .ico {
+    width: 14px; height: 14px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3);
+  }
+  .tnode.is-selected .ico { color: var(--blue); }
+  .tnode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .tnode .count {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-3); flex-shrink: 0;
+  }
+  .tnode.is-selected .count { color: var(--blue-ink); }
+
+  .tnode.depth-1 { padding-left: 22px; }
+  .tnode.depth-2 { padding-left: 40px; }
+  .tnode.depth-1 .name { font-weight: 400; color: var(--fg-2); }
+
+  /* TABLE PANE --------------------------------------------- */
+  .table-pane {
+    overflow: hidden;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .scroll-area { flex: 1; overflow: auto; }
+
+  /* table */
+  table.params {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+  table.params thead {
+    position: sticky; top: 0; z-index: 6;
+  }
+  table.params thead th {
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 12px;
+    white-space: nowrap;
+    user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.params thead .sortable { cursor: pointer; }
+  table.params thead .sortable:hover { color: var(--fg); }
+  table.params thead .sortmark {
+    color: var(--blue); margin-left: 4px;
+    display: inline-block;
+  }
+  table.params thead .resize {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 4px; cursor: col-resize;
+  }
+  table.params thead tr.qfilter th {
+    border-bottom: 1px solid var(--line);
+    padding: 4px 12px 6px;
+    background: var(--surface);
+    font-weight: 400;
+  }
+  table.params thead tr.qfilter th.col-check { background: var(--surface); }
+  table.params thead tr.qfilter th.col-name { background: var(--surface); }
+  .qf {
+    height: 22px;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 0 7px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-3);
+    font-size: 11.5px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: var(--app-font);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .qf .val {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+  }
+  .qf:hover { background: var(--bg); border-color: var(--fg-3); border-style: solid; color: var(--fg-2); }
+  .qf.active {
+    background: var(--blue-tint);
+    border: 1px solid #B6DCFE;
+    color: var(--blue-ink);
+    font-weight: 500;
+  }
+  .qf.active:hover { background: #CFE7FE; }
+  .qf .x { color: inherit; opacity: 0.7; }
+  .qf .val { font-family: var(--app-font-mono); font-size: 11px; }
+  .qf-row { font-size: 11px; }
+
+  table.params td {
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line-soft);
+    height: 32px;
+    color: var(--fg);
+    background: var(--bg);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  table.params tbody tr:hover td { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td { background: var(--blue-tint); }
+  table.params tbody tr.is-selected:hover td { background: #C9E4FE; }
+  table.params tbody tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue, #2563EB); }
+  table.params tbody tr.is-active:hover td { background: #DEEBF7; }
+
+  /* group rows */
+  table.params tr.group-row td {
+    background: var(--surface);
+    height: 30px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 0 12px;
+    color: var(--fg-2);
+    font-size: 12px;
+  }
+  table.params tr.group-row .gr-name { font-weight: 600; color: var(--fg); }
+  table.params tr.group-row .gr-meta { color: var(--fg-3); margin-left: 10px; }
+  table.params tr.group-row .gr-meta .dot { display: inline-block; width: 4px; height: 4px; border-radius: 999px; background: var(--fg-4); margin: 0 6px; vertical-align: middle; }
+  table.params tr.group-row .gr-stale { color: var(--amber); font-weight: 500; }
+  table.params tr.group-row .gr-deprecated { color: var(--red); font-weight: 500; }
+
+  /* frozen first columns (checkbox + name) */
+  table.params td.col-check, table.params th.col-check {
+    width: 36px; padding-left: 16px; padding-right: 6px;
+    position: sticky; left: 0; z-index: 4;
+    background: var(--bg);
+  }
+  table.params thead th.col-check { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-check { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-check { background: var(--blue-tint); }
+  table.params tr.group-row td.col-check { background: var(--surface); }
+
+  table.params td.col-name, table.params th.col-name {
+    width: 240px;
+    position: sticky; left: 36px; z-index: 4;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+  table.params thead th.col-name { background: var(--surface); z-index: 7; }
+  table.params tbody tr:hover td.col-name { background: var(--surface-soft); }
+  table.params tbody tr.is-selected td.col-name { background: var(--blue-tint); }
+  table.params tr.group-row td.col-name { background: var(--surface); }
+
+  /* cell content */
+  .cell-name { display: flex; align-items: center; gap: 8px; }
+  .cell-name .nm {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-name .id {
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-4);
+    flex-shrink: 0;
+  }
+  .cell-name .star { color: var(--fg-4); cursor: pointer; }
+  .cell-name .star:hover { color: var(--amber); }
+  .cell-name .star.is-on { color: var(--amber); }
+
+  .cell-type {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+  }
+  .type-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-family: var(--app-font-mono);
+    font-size: 11px; color: var(--fg-2);
+    line-height: 16px;
+  }
+  .type-tag.float { color: #185A9D; border-color: #BBDAEF; background: #E8F2FB; }
+  .type-tag.int   { color: #2D5A3D; border-color: #C2DFC9; background: #E8F1EA; }
+  .type-tag.bool  { color: #6B3E14; border-color: #E0CDB1; background: #F8EFD8; }
+  .type-tag.str   { color: #6B2A66; border-color: #DEC1DA; background: #F4E5F2; }
+  .type-tag.array { color: var(--fg-2); border-color: var(--line); background: var(--surface); }
+
+  .cell-value {
+    font-family: var(--app-font-mono);
+    font-size: 12.5px;
+    text-align: right;
+    color: var(--fg);
+    white-space: nowrap;
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    overflow: hidden;
+  }
+  .cell-value.computed { color: var(--fg-2); }
+  .cell-value .num { overflow: hidden; text-overflow: ellipsis; }
+  .cell-value .fx {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--blue-tint);
+    color: var(--blue-ink);
+    font-family: var(--app-font-mono);
+    font-style: italic;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: help;
+    letter-spacing: 0.02em;
+  }
+  .cell-value .fx:hover { background: #CFE7FE; }
+
+  .cell-unit {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+
+  .cell-desc {
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12.5px;
+    max-width: 280px;
+    display: block;
+  }
+
+  .cell-source {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cell-source a { color: var(--blue-ink); text-decoration: none; }
+  .cell-source a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .cell-source .none { color: var(--fg-4); font-style: italic; font-family: var(--app-font); font-size: 12px; }
+
+  /* status */
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .status::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px;
+    background: currentColor;
+  }
+  .status.released   { color: var(--green); background: var(--green-tint); }
+  .status.review     { color: var(--amber); background: var(--amber-tint); }
+  .status.draft      { color: var(--fg-3); background: var(--gray-tint); }
+  .status.deprecated { color: var(--red);   background: var(--red-tint); }
+
+  .cell-used {
+    font-family: var(--app-font-mono);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .cell-used .num { color: var(--fg); font-weight: 500; }
+  .cell-used .bar {
+    display: inline-block;
+    width: 38px; height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    margin-left: 6px;
+    vertical-align: middle;
+    position: relative; overflow: hidden;
+  }
+  .cell-used .bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--blue);
+    border-radius: 2px;
+  }
+
+  .cell-updated {
+    font-family: var(--app-font-mono);
+    font-size: 11.5px;
+    color: var(--fg-3);
+    white-space: nowrap;
+  }
+
+  .col-actions { width: 36px; text-align: center; }
+  .row-actions {
+    display: inline-flex; gap: 2px; opacity: 0; align-items: center;
+  }
+  tr:hover .row-actions { opacity: 1; }
+  .row-actions .icon-btn { width: 22px; height: 22px; color: var(--fg-3); }
+
+  /* checkbox */
+  .check {
+    appearance: none;
+    width: 14px; height: 14px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+  }
+  .check:hover { border-color: var(--blue); }
+  .check:checked { background: var(--blue); border-color: var(--blue); }
+  .check:checked::after {
+    content: ""; position: absolute; left: 3px; top: 0px;
+    width: 5px; height: 9px;
+    border: solid #fff; border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .check:indeterminate, .check.is-indeterm {
+    background: var(--blue); border-color: var(--blue);
+  }
+  .check.is-indeterm::after {
+    content: ""; position: absolute; left: 2px; right: 2px; top: 5px;
+    height: 2px; background: #fff;
+  }
+
+  /* Bulk action dock */
+  .bulk-dock {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: var(--fg);
+    color: #FBFBFA;
+    border-radius: 8px;
+    padding: 4px 6px 4px 14px;
+    display: flex; align-items: center; gap: 4px;
+    box-shadow: 0 6px 24px rgba(15,20,25,0.18), 0 2px 6px rgba(15,20,25,0.12);
+    font-size: 13px;
+    z-index: 20;
+    min-width: 480px;
+  }
+  .bulk-dock .ct { font-weight: 500; margin-right: 8px; }
+  .bulk-dock .ct .num { font-family: var(--app-font-mono); }
+  .bulk-dock .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.2); margin: 0 4px; }
+  .bulk-dock .b {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 5px; cursor: pointer;
+    color: rgba(255,255,255,0.85); font-size: 12.5px;
+  }
+  .bulk-dock .b:hover { background: rgba(255,255,255,0.10); color: #fff; }
+  .bulk-dock .b.danger { color: #ff8e84; }
+  .bulk-dock .b.danger:hover { background: rgba(255,142,132,0.12); }
+  .bulk-dock .clear {
+    margin-left: auto;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer; padding: 5px 8px;
+  }
+  .bulk-dock .clear:hover { color: #fff; }
+
+  /* STATUS BAR --------------------------------------------- */
+  .statusbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--fg-3);
+  }
+  .statusbar .live { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .live::before {
+    content: ""; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--green);
+  }
+  .statusbar b { color: var(--fg-2); font-weight: 500; }
+  .statusbar .right { margin-left: auto; display: flex; gap: 16px; }
+  .statusbar .right span { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .mono { font-family: var(--app-font-mono); font-size: 11.5px; }
+
+
+  /* tab-link-reset */
+  a.tab { text-decoration: none; color: inherit; }
+  a.tab:hover { color: var(--fg); }
+</style>
+
+<style>
+  /* TRACEABILITY VIEW */
+  .workspace.tr-workspace { grid-template-columns: 240px minmax(0, 1fr); background: var(--surface-soft, #F5F5F2); }
+  .trace-pane { display: flex; flex-direction: column; min-width: 0; overflow: auto; }
+
+  .trace-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .trace-focus { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .trace-focus-id {
+    font-family: var(--app-font-mono); font-size: 12px;
+    color: var(--blue-ink, #054EA3);
+    background: rgba(9, 105, 218, 0.08);
+    padding: 3px 8px; border-radius: 4px;
+  }
+  .trace-focus-title { font-size: 15px; font-weight: 600; color: var(--fg); }
+  .trace-stats { font-size: 12px; color: var(--fg-3); display: inline-flex; gap: 10px; align-items: center; }
+  .trace-stats b { color: var(--fg); font-weight: 600; }
+  .trace-stats .dot { width: 3px; height: 3px; border-radius: 999px; background: var(--fg-3); opacity: 0.6; }
+
+  .trace-graph {
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: 6px 12px 8px;
+  }
+  .graph-svg { width: 100%; height: 360px; display: block; font-family: var(--app-font); }
+  .col-head text { font-family: var(--app-font); font-size: 10.5px; fill: var(--fg-3); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .gnode { cursor: pointer; }
+  .gnode .n-bg { fill: var(--bg); stroke: var(--line-strong); stroke-width: 1; }
+  .gnode .n-bg.n-suspect { fill: #FCF7E8; stroke: #EBD58A; }
+  .gnode .n-bg.n-focus { fill: rgba(9,105,218,0.04); stroke: var(--blue); stroke-width: 1.5; }
+  .gnode .n-bg.n-test  { fill: rgba(9,105,218,0.04); stroke: rgba(9,105,218,0.30); stroke-dasharray: 3 2; }
+  .gnode .n-id { font-family: var(--app-font-mono); font-size: 10px; fill: var(--blue-ink, #054EA3); font-weight: 600; }
+  .gnode .n-id-test { fill: var(--blue, #0969DA); }
+  .gnode .n-id-param { fill: #5B6770; }
+  .gnode .n-title { font-family: var(--app-font); font-size: 10.5px; fill: var(--fg-2); }
+  .gnode .n-meta  { font-family: var(--app-font); font-size: 10px; fill: var(--fg-3); }
+  .gnode .n-focus-id { font-size: 12px; }
+  .gnode .n-focus-title { font-size: 12.5px; fill: var(--fg); font-weight: 600; }
+  .gnode .n-flag { fill: #A88200; }
+  .gnode .n-status { font-size: 13px; }
+  .gnode .n-status.pass { fill: #1B4332; }
+  .gnode .n-status.partial { fill: #7A5E00; }
+  .gnode:hover .n-bg { stroke: var(--blue); }
+
+  .edge { fill: none; stroke: #C2C0BD; stroke-width: 1.2; }
+  .edge-suspect { stroke: #A88200; stroke-width: 1.6; stroke-dasharray: 4 3; }
+  .edge-pass { stroke: #1B4332; stroke-width: 1.4; }
+  .edge-partial { stroke: #7A5E00; stroke-width: 1.4; stroke-dasharray: 3 2; }
+
+  .graph-legend {
+    display: flex; align-items: center; gap: 14px;
+    padding: 6px 4px 0; font-size: 11.5px; color: var(--fg-2);
+  }
+  .lg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 5px; vertical-align: middle; }
+
+  /* tables */
+  .trace-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
+  .trace-table { background: var(--bg); }
+  .tt-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .tt-head .lbl { color: var(--fg-2); font-weight: 600; }
+  .tt-head .ct { background: var(--surface-2); color: var(--fg-3); padding: 1px 6px; border-radius: 999px; font-size: 11px; }
+  .tt { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .tt thead th {
+    text-align: left; padding: 8px 12px;
+    background: var(--surface-soft);
+    border-bottom: 1px solid var(--line);
+    font-weight: 500; color: var(--fg-3);
+    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .tt tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); color: var(--fg-2); }
+  .tt tbody tr:hover { background: var(--surface-soft); }
+  .tt tbody tr.is-suspect { background: linear-gradient(90deg, var(--amber-tint) 0 4px, var(--bg) 4px); }
+  .tt tbody tr.is-suspect:hover { background: linear-gradient(90deg, var(--amber-tint) 0 4px, var(--surface-soft) 4px); }
+  .tt tbody tr.is-gap td:first-child { box-shadow: inset 3px 0 0 #7A5E00; }
+  .tt .mono { font-family: var(--app-font-mono); font-size: 11.5px; color: var(--blue-ink, #054EA3); }
+
+  a.seg-btn { text-decoration: none; }
+</style>
+
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="Requirements — Traceability">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 18 18" width="18" height="18">
+          <path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <span class="icon-btn" title="Notifications"><i data-lucide="bell" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Help"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></span>
+      <span class="icon-btn" title="Theme"><i data-lucide="moon" style="width:15px;height:15px;"></i></span>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <span class="icon-btn sidebar-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Hide sidebar">
+      <i data-lucide="panel-left-close" style="width:14px;height:14px;"></i>
+    </span>
+    <div class="nav-cap">Overview</div>
+    <div class="nav-item" title="Dashboard"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></div>
+    <div class="nav-item" title="Projects"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></div>
+    <div class="nav-cap">Development</div>
+    <div class="nav-item" title="System definition"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></div>
+    <div class="nav-item is-active" title="Requirements"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></div>
+    <div class="nav-item" title="Parameters"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></div>
+    <div class="nav-item" title="Verification"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></div>
+    <div class="nav-item" title="Tasks"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></div>
+    <div class="nav-cap">Assurance</div>
+    <div class="nav-item" title="Safety analysis"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></div>
+    <div class="nav-item" title="Risk matrix"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></div>
+    <div class="nav-item" title="Audit package"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE HEAD -->
+    <div class="page-head">
+      <div class="crumb">
+        <span class="icon-btn topbar-toggle inline-toggle" onclick="document.querySelector('.app').classList.toggle('is-collapsed')" title="Show sidebar">
+          <i data-lucide="panel-left-open" style="width:14px;height:14px;"></i>
+        </span>
+        <a>Falcon-9R Avionics</a>
+        <span style="margin: 0 6px;">/</span>
+        <b>Requirements</b>
+      </div>
+      <!-- SUSPECT LINKS BANNER -->
+      <div class="stale">
+        <span class="badge"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i>Suspect links</span>
+        <span><b>12 requirements</b> have upstream changes since last review &middot; baseline <span class="mono">B-2026-04-12</span> &middot; oldest <span class="mono">2 d 04 h</span></span>
+        <div class="actions">
+          <span class="link">Open review queue</span>
+          <span class="link">Dismiss</span>
+          <button class="btn primary" style="height:26px; padding: 0 10px; font-size: 12px;">
+            <i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>Re-validate batch
+          </button>
+        </div>
+      </div>
+      <div class="title-row">
+        <h1>Requirements</h1>
+        <span class="meta"><b>1,247</b> records &middot; baseline <b>B-2026-04-12</b> &middot; <b>1,084</b> released &middot; <b>87</b> in review</span>
+        <div class="right">
+          <button class="btn" title="Open traceability matrix">
+            <i data-lucide="network" style="width:14px;height:14px;"></i>Traceability
+          </button>
+          <button class="btn" title="Manage baselines">
+            <i data-lucide="git-commit-vertical" style="width:14px;height:14px;"></i>Baseline
+          </button>
+          <button class="btn">
+            <i data-lucide="file-input" style="width:14px;height:14px;"></i>Import
+          </button>
+          <button class="btn">
+            <i data-lucide="download" style="width:14px;height:14px;"></i>Export<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span>
+          </button>
+          <button class="btn primary">
+            <i data-lucide="plus" style="width:14px;height:14px;"></i>New requirement
+          </button>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab" href="requirements-page-v2.html">Requirements <span style="opacity:.55;font-size:11px;margin-left:4px;">List</span><span class="tab-count">1,247</span></a>
+        <a class="tab" href="requirements-document.html">Document<span class="tab-count">FCS-2.2</span></a>
+        <a class="tab is-active" href="requirements-traceability.html">Traceability<span class="tab-count">3.2k</span></a>
+        <a class="tab" href="requirements-coverage.html">Coverage<span class="tab-count">87%</span></a>
+        <a class="tab" href="#">Baselines<span class="tab-count">14</span></a>
+        <a class="tab" href="#">Settings</a>
+      </div>
+    </div>
+
+    <!-- SUBBAR (Traceability view) -->
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Find by REQ id, parameter, test case…" />
+        <span class="kbd">⌘F</span>
+      </div>
+
+      <button class="filter-pill"><i data-lucide="filter" style="width:13px;height:13px;"></i>Direction: Both</button>
+      <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Show: REQ · TEST · PARAM · DOC</button>
+      <button class="filter-pill"><i data-lucide="alert-triangle" style="width:13px;height:13px;color:#A88200;"></i>Suspect only <span class="filter-badge" style="background: var(--amber, #A88200);">12</span></button>
+      <button class="filter-pill"><i data-lucide="check-circle-2" style="width:13px;height:13px;"></i>Coverage gaps <span class="filter-badge">38</span></button>
+
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="download" style="width:13px;height:13px;"></i>Export trace matrix</button>
+        <div class="seg" title="View">
+          <a class="seg-btn" href="requirements-page-v2.html"><i data-lucide="list" style="width:13px;height:13px;"></i>List</a>
+          <a class="seg-btn" href="requirements-document.html"><i data-lucide="file-text" style="width:13px;height:13px;"></i>Doc</a>
+          <span class="seg-btn is-active"><i data-lucide="share-2" style="width:13px;height:13px;"></i>Trace</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKSPACE: tree | graph + table -->
+    <div class="workspace tr-workspace">
+
+      <!-- LEFT: REQ TREE (compact) -->
+      <aside class="tree">
+        <div class="tree-head">
+          <span class="lbl">PBS</span>
+          <span class="ct">1.2k</span>
+        </div>
+        <div class="tree-search">
+          <div class="input">
+            <i data-lucide="search" style="width:12px;height:12px;color:var(--fg-3);"></i>
+            <input placeholder="Filter requirements" />
+          </div>
+        </div>
+        <div class="tree-list">
+          <div class="tnode"><span class="chev expanded"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.0</span><span class="name">Avionics</span></div>
+          <div class="tnode depth-1"><span class="chev expanded"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.2</span><span class="name">Flight control</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">2.2.1 Pitch</span></div>
+          <div class="tnode depth-2 is-selected"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">2.2.2 Roll &amp; yaw</span><span class="count" style="background:var(--amber-tint);color:#5C4400;">!</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">2.2.3 Envelope</span></div>
+          <div class="tnode depth-2"><span class="chev"></span><span class="ico"></span><span class="name mono" style="font-size:11px;">2.2.4 Modes</span></div>
+          <div class="tnode depth-1"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">2.3</span><span class="name">Navigation</span></div>
+          <div class="tnode"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">3.0</span><span class="name">Propulsion</span></div>
+          <div class="tnode"><span class="chev"></span><span class="ico mono" style="color:var(--fg-3);font-size:10px;">9.0</span><span class="name">Safety &amp; cert</span></div>
+        </div>
+      </aside>
+
+      <!-- CENTER + RIGHT: trace pane -->
+      <div class="trace-pane">
+
+        <div class="trace-head">
+          <div class="trace-focus">
+            <span class="trace-focus-id mono">REQ-FCS-2216</span>
+            <span class="trace-focus-title">Yaw damper minimum gain margin</span>
+            <span class="dr-pill float">Performance</span>
+            <span class="dr-pill" style="background:rgba(180,35,24,0.08);color:#B42318;border-color:rgba(180,35,24,0.20);">Critical</span>
+            <span class="dr-pill" style="background:var(--amber-tint);color:#5C4400;border-color:#EBD58A;"><i data-lucide="alert-triangle" style="width:11px;height:11px;"></i>Suspect</span>
+          </div>
+          <div class="trace-stats">
+            <span><b>2</b> upstream</span>
+            <span class="dot"></span>
+            <span><b>5</b> downstream</span>
+            <span class="dot"></span>
+            <span><b>3</b> tests</span>
+            <span class="dot"></span>
+            <span><b>1</b> parameter</span>
+            <span class="dot"></span>
+            <span style="color:#7A5E00;"><b>2 of 6</b> approach corners open</span>
+          </div>
+        </div>
+
+        <!-- GRAPH -->
+        <div class="trace-graph">
+          <svg viewBox="0 0 1180 360" preserveAspectRatio="xMidYMid meet" class="graph-svg">
+            <!-- column headers -->
+            <g class="col-head">
+              <text x="120" y="22">UPSTREAM (2)</text>
+              <text x="430" y="22">FOCUS</text>
+              <text x="740" y="22">DOWNSTREAM (5)</text>
+              <text x="1050" y="22">VERIFICATION (3)</text>
+            </g>
+
+            <!-- column rules -->
+            <line x1="240" y1="40" x2="240" y2="350" stroke="#E6E2DC" stroke-dasharray="2 4" />
+            <line x1="540" y1="40" x2="540" y2="350" stroke="#E6E2DC" stroke-dasharray="2 4" />
+            <line x1="860" y1="40" x2="860" y2="350" stroke="#E6E2DC" stroke-dasharray="2 4" />
+
+            <!-- edges (drawn first so nodes overlay) -->
+            <!-- upstream -> focus -->
+            <path d="M 220,90 C 320,90 360,160 420,180" class="edge edge-suspect" />
+            <path d="M 220,180 C 320,180 360,180 420,180" class="edge" />
+            <!-- focus -> downstream -->
+            <path d="M 540,180 C 600,180 640,80 720,80" class="edge" />
+            <path d="M 540,180 C 600,180 640,140 720,140" class="edge" />
+            <path d="M 540,180 C 600,180 640,200 720,200" class="edge" />
+            <path d="M 540,180 C 600,180 640,260 720,260" class="edge" />
+            <path d="M 540,180 C 600,180 640,320 720,320" class="edge" />
+            <!-- downstream -> verification -->
+            <path d="M 860,80  C 920,80  960,90 1020,100" class="edge edge-pass" />
+            <path d="M 860,140 C 920,140 960,160 1020,170" class="edge edge-partial" />
+            <path d="M 860,260 C 920,260 960,250 1020,240" class="edge edge-partial" />
+
+            <!-- nodes -->
+            <!-- UPSTREAM -->
+            <g class="gnode" transform="translate(120,72)">
+              <rect class="n-bg n-suspect" width="200" height="36" rx="6" />
+              <text class="n-id" x="10" y="15">REQ-FCS-2200</text>
+              <text class="n-title" x="10" y="28">Lateral stability targets</text>
+              <circle cx="186" cy="18" r="5" class="n-flag" />
+            </g>
+            <g class="gnode" transform="translate(120,162)">
+              <rect class="n-bg" width="200" height="36" rx="6" />
+              <text class="n-id" x="10" y="15">REQ-SYS-0042</text>
+              <text class="n-title" x="10" y="28">Stab &amp; control allocation</text>
+            </g>
+
+            <!-- FOCUS -->
+            <g class="gnode" transform="translate(420,150)">
+              <rect class="n-bg n-focus" width="240" height="60" rx="8" />
+              <text class="n-id n-focus-id" x="14" y="20">REQ-FCS-2216</text>
+              <text class="n-title n-focus-title" x="14" y="38">Yaw damper minimum gain margin</text>
+              <text class="n-meta" x="14" y="52">Performance · Critical · In review</text>
+              <circle cx="224" cy="14" r="5" class="n-flag" />
+            </g>
+
+            <!-- DOWNSTREAM -->
+            <g class="gnode" transform="translate(720,62)">
+              <rect class="n-bg" width="200" height="36" rx="6" />
+              <text class="n-id" x="10" y="15">REQ-FCS-2241</text>
+              <text class="n-title" x="10" y="28">Rudder PCU servo bandwidth</text>
+            </g>
+            <g class="gnode" transform="translate(720,122)">
+              <rect class="n-bg" width="200" height="36" rx="6" />
+              <text class="n-id" x="10" y="15">REQ-FCS-2244</text>
+              <text class="n-title" x="10" y="28">YD authority limit</text>
+            </g>
+            <g class="gnode" transform="translate(720,182)">
+              <rect class="n-bg" width="200" height="36" rx="6" />
+              <text class="n-id n-id-param" x="10" y="15">PARAM YD_K_HI</text>
+              <text class="n-title" x="10" y="28">High-gain coefficient</text>
+            </g>
+            <g class="gnode" transform="translate(720,242)">
+              <rect class="n-bg" width="200" height="36" rx="6" />
+              <text class="n-id" x="10" y="15">REQ-FCS-2249</text>
+              <text class="n-title" x="10" y="28">Notch filter at 4.2 Hz</text>
+            </g>
+            <g class="gnode" transform="translate(720,302)">
+              <rect class="n-bg" width="200" height="36" rx="6" />
+              <text class="n-id" x="10" y="15">REQ-FCS-2252</text>
+              <text class="n-title" x="10" y="28">Sensor latency budget</text>
+            </g>
+
+            <!-- VERIFICATION -->
+            <g class="gnode" transform="translate(1020,82)">
+              <rect class="n-bg n-test" width="140" height="36" rx="6" />
+              <text class="n-id n-id-test" x="10" y="15">VER-FCS-0418-c</text>
+              <text class="n-title" x="10" y="28">Bode FL410 cruise</text>
+              <text class="n-status pass" x="125" y="22">✓</text>
+            </g>
+            <g class="gnode" transform="translate(1020,152)">
+              <rect class="n-bg n-test" width="140" height="36" rx="6" />
+              <text class="n-id n-id-test" x="10" y="15">VER-FCS-0418-d</text>
+              <text class="n-title" x="10" y="28">Bode approach</text>
+              <text class="n-status partial" x="125" y="22">⏱</text>
+            </g>
+            <g class="gnode" transform="translate(1020,222)">
+              <rect class="n-bg n-test" width="140" height="36" rx="6" />
+              <text class="n-id n-id-test" x="10" y="15">VER-FCS-0418-e</text>
+              <text class="n-title" x="10" y="28">Hardover sim</text>
+              <text class="n-status partial" x="125" y="22">⏱</text>
+            </g>
+          </svg>
+
+          <div class="graph-legend">
+            <span><span class="lg-dot" style="background:#0969DA;"></span>Hierarchy</span>
+            <span><span class="lg-dot" style="background:#A88200;"></span>Suspect</span>
+            <span><span class="lg-dot" style="background:#1B4332;"></span>Pass</span>
+            <span><span class="lg-dot" style="background:#7A5E00;"></span>Partial</span>
+            <span><span class="lg-dot" style="background:#5B6770;"></span>Allocation</span>
+            <span style="margin-left:auto;color:var(--fg-3);font-size:11px;">Click any node to re-focus · Drag to pan · Scroll to zoom</span>
+          </div>
+        </div>
+
+        <!-- SPLIT: PARENTS / CHILDREN tables -->
+        <div class="trace-tables">
+          <div class="trace-table">
+            <div class="tt-head">
+              <span class="lbl">↑ Upstream (parents &amp; allocations)</span>
+              <span class="ct">2</span>
+            </div>
+            <table class="tt">
+              <thead><tr>
+                <th>ID</th><th>Title</th><th>Type</th><th>Status</th><th>Last edit</th>
+              </tr></thead>
+              <tbody>
+                <tr class="is-suspect">
+                  <td class="mono">REQ-FCS-2200</td>
+                  <td>Lateral stability targets</td>
+                  <td><span class="dr-pill float">Functional</span></td>
+                  <td><span style="color:#5C4400;">⚠ Edited 2 d ago</span></td>
+                  <td>R. Okafor</td>
+                </tr>
+                <tr>
+                  <td class="mono">REQ-SYS-0042</td>
+                  <td>Stab &amp; control allocation</td>
+                  <td><span class="dr-pill float">Functional</span></td>
+                  <td><span style="color:#1B4332;">✓ Released</span></td>
+                  <td>K. Singh</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="trace-table">
+            <div class="tt-head">
+              <span class="lbl">↓ Downstream (children, derived &amp; verification)</span>
+              <span class="ct">8</span>
+            </div>
+            <table class="tt">
+              <thead><tr>
+                <th>ID</th><th>Title</th><th>Type</th><th>Verification</th><th>Owner</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td class="mono">REQ-FCS-2241</td>
+                  <td>Rudder PCU servo bandwidth</td>
+                  <td><span class="dr-pill int">Performance</span></td>
+                  <td><span style="color:#1B4332;">✓ Verified</span></td>
+                  <td>K. Sato</td>
+                </tr>
+                <tr>
+                  <td class="mono">REQ-FCS-2244</td>
+                  <td>YD authority limit</td>
+                  <td><span class="dr-pill int">Performance</span></td>
+                  <td><span style="color:#1B4332;">✓ Verified</span></td>
+                  <td>K. Sato</td>
+                </tr>
+                <tr>
+                  <td class="mono" style="color:#5B6770;">PARAM YD_K_HI</td>
+                  <td>High-gain coefficient</td>
+                  <td><span class="dr-pill" style="background:rgba(91,103,112,0.10);color:#5B6770;border-color:rgba(91,103,112,0.25);">Parameter</span></td>
+                  <td><span style="color:var(--fg-3);">— allocates —</span></td>
+                  <td>J. Park</td>
+                </tr>
+                <tr>
+                  <td class="mono">REQ-FCS-2249</td>
+                  <td>Notch filter at 4.2 Hz</td>
+                  <td><span class="dr-pill int">Performance</span></td>
+                  <td><span style="color:#7A5E00;">⏱ Partial</span></td>
+                  <td>K. Sato</td>
+                </tr>
+                <tr>
+                  <td class="mono">REQ-FCS-2252</td>
+                  <td>Sensor latency budget</td>
+                  <td><span class="dr-pill float">Functional</span></td>
+                  <td><span style="color:#1B4332;">✓ Verified</span></td>
+                  <td>R. Okafor</td>
+                </tr>
+                <tr>
+                  <td class="mono" style="color:#054EA3;">VER-FCS-0418-c</td>
+                  <td>Bode analysis · cruise FL410</td>
+                  <td><span class="dr-pill" style="background:rgba(9,105,218,0.07);color:#054EA3;border-color:rgba(9,105,218,0.20);">Test</span></td>
+                  <td><span style="color:#1B4332;">✓ Pass</span></td>
+                  <td>M. Aldridge</td>
+                </tr>
+                <tr class="is-gap">
+                  <td class="mono" style="color:#054EA3;">VER-FCS-0418-d</td>
+                  <td>Bode analysis · approach 5k AGL</td>
+                  <td><span class="dr-pill" style="background:rgba(9,105,218,0.07);color:#054EA3;border-color:rgba(9,105,218,0.20);">Test</span></td>
+                  <td><span style="color:#7A5E00;">⏱ 2 of 6 corners open</span></td>
+                  <td>M. Aldridge</td>
+                </tr>
+                <tr>
+                  <td class="mono" style="color:#054EA3;">VER-FCS-0418-e</td>
+                  <td>Hardover sim sweep</td>
+                  <td><span class="dr-pill" style="background:rgba(9,105,218,0.07);color:#054EA3;border-color:rgba(9,105,218,0.20);">Test</span></td>
+                  <td><span style="color:#7A5E00;">⏱ Partial</span></td>
+                  <td>M. Aldridge</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- STATUS BAR -->
+  <footer class="statusbar">
+    <span class="live">Trace graph · live</span>
+    <span>Branch <b>main</b></span>
+    <span>Focus REQ-FCS-2216 · 2↑ · 5↓ · 3 tests · 1 suspect parent</span>
+    <span class="right">
+      <span>Baseline <b class="mono">B-2026-04-12</b></span>
+      <span>Build <b class="mono">v1.42.0</b></span>
+    </span>
+  </footer>
+
+
+</div>
+
+<script>lucide.createIcons();</script>
+
+</body>
+</html>

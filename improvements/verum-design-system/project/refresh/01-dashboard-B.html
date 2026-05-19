@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dashboard · Portfolio table — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .dash-body { padding: 16px 20px 24px; display: grid; grid-template-columns: 1fr 320px; gap: 16px; overflow: auto; }
+  .dash-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .dash-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  /* KPI strip — 6 cells, taller */
+  .kpis {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+    overflow: hidden;
+  }
+  .kpis .stat { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 12px 14px; }
+  .kpis .stat:nth-child(3n) { border-right: 0; }
+  .kpis .stat:nth-child(n+4) { border-bottom: 0; }
+  .kpis .stat .num { font-size: 22px; }
+
+  /* Projects table */
+  .ptbl thead th { font-weight: 500; }
+  .ptbl tbody td { height: 56px; padding: 10px 12px; }
+  .ptbl tbody tr { cursor: pointer; }
+  .ptbl .col-check { width: 36px; padding-left: 16px; padding-right: 4px; }
+  .ptbl .col-proj { width: 280px; }
+  .ptbl .col-progress { width: 130px; }
+  .ptbl .col-act { width: 80px; }
+
+  .pn { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .pn .dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+  .pn .dot.active { background: var(--green); }
+  .pn .dot.planning { background: var(--amber); }
+  .pn .dot.archived { background: var(--fg-4); }
+  .pn .body { min-width: 0; flex: 1; }
+  .pn .nm { font-size: 13px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pn .sub { font-family: var(--app-font-mono); font-size: 10.5px; color: var(--fg-3); margin-top: 1px; }
+
+  .pbar { display: flex; align-items: center; gap: 8px; font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-2); }
+  .pbar .bar { flex: 1; height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; position: relative; }
+  .pbar .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); border-radius: 2px; }
+  .pbar .bar > i.warn { background: var(--amber); }
+  .pbar .bar > i.danger { background: var(--red); }
+
+  .ptbl .mvers {
+    display: inline-flex; gap: 3px;
+    font-family: var(--app-font-mono); font-size: 11px;
+    color: var(--fg-2);
+  }
+  .ptbl .mvers .seg-mc {
+    padding: 1px 6px; border-radius: 3px;
+    background: var(--surface); border: 1px solid var(--line);
+    line-height: 16px;
+  }
+  .ptbl .mvers .seg-mc.warn { color: var(--amber-ink); background: var(--amber-tint); border-color: #EBD58A; }
+  .ptbl .mvers .seg-mc.danger { color: var(--red); background: var(--red-tint); border-color: #F2C2B9; }
+  .ptbl .mvers .seg-mc.ok { color: var(--green); background: var(--green-tint); border-color: #BFD9C9; }
+
+  .ptbl .when { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .ptbl .team { display: flex; }
+  .ptbl .team .av { width: 22px; height: 22px; margin-left: -5px; border: 1.5px solid var(--bg); font-size: 9px; }
+  .ptbl .team .av:first-child { margin-left: 0; }
+  .ptbl .team .more {
+    width: 22px; height: 22px; border-radius: 999px;
+    background: var(--surface-2); color: var(--fg-3);
+    font-size: 9px; font-weight: 600; font-family: var(--app-font-mono);
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: -5px; border: 1.5px solid var(--bg);
+  }
+
+  /* Right rail */
+  .feed { padding: 4px 0; max-height: 480px; overflow: auto; }
+  .feed-item {
+    display: flex; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12.5px;
+    color: var(--fg-2);
+  }
+  .feed-item:last-child { border-bottom: 0; }
+  .feed-item .ico {
+    width: 24px; height: 24px; border-radius: 4px;
+    background: var(--surface-2);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); flex-shrink: 0;
+  }
+  .feed-item.success .ico { background: var(--green-tint); color: var(--green); }
+  .feed-item.warn .ico { background: var(--amber-tint); color: var(--amber-ink); }
+  .feed-item.danger .ico { background: var(--red-tint); color: var(--red); }
+  .feed-item.info .ico { background: var(--blue-tint); color: var(--blue-ink); }
+  .feed-item .body { flex: 1; min-width: 0; }
+  .feed-item .head { display: flex; align-items: baseline; gap: 6px; }
+  .feed-item .who { font-weight: 500; color: var(--fg); }
+  .feed-item .when { margin-left: auto; font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-4); }
+  .feed-item .what { color: var(--fg-2); font-size: 12px; line-height: 1.4; }
+  .feed-item .what .ref { font-family: var(--app-font-mono); font-size: 11.5px; color: var(--blue-ink); }
+
+  /* My queue */
+  .qrow {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12.5px;
+  }
+  .qrow:last-child { border-bottom: 0; }
+  .qrow .ref { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); min-width: 64px; }
+  .qrow .what { flex: 1; min-width: 0; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qrow .when { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .qrow .pr { width: 6px; height: 6px; border-radius: 999px; }
+  .qrow .pr.crit { background: var(--red); }
+  .qrow .pr.high { background: var(--amber); }
+  .qrow .pr.med  { background: var(--blue); }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="01 Dashboard (B)">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item is-active" href="01-dashboard-B.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><b>Dashboard</b></div>
+      <div class="title-row">
+        <h1>Portfolio</h1>
+        <span class="meta">Tenant <b>Aerodyne Systems</b> &middot; <b>6</b> projects &middot; <b>27</b> open sign-offs &middot; updated <b>13:42 UTC</b></span>
+        <div class="right">
+          <button class="btn"><i data-lucide="calendar" style="width:14px;height:14px;"></i>Last 30 days<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span></button>
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import</button>
+          <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New project</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <a class="tab is-active" href="#">Portfolio</a>
+        <a class="tab" href="#">Velocity</a>
+        <a class="tab" href="#">Compliance</a>
+        <a class="tab" href="#">Resourcing</a>
+        <span style="flex:1;"></span>
+        <a class="tab" href="01-dashboard-A.html" style="color:var(--fg-3);">Switch to card view ↗</a>
+      </div>
+    </div>
+
+    <div class="dash-body">
+
+      <div class="dash-left">
+        <!-- KPI grid 3x2 -->
+        <div class="kpis">
+          <div class="stat">
+            <span class="lbl">Active projects</span>
+            <span class="num">4</span>
+            <span class="sub"><span class="delta up">+1</span> this quarter</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Sign-offs pending</span>
+            <span class="num">27</span>
+            <span class="sub"><b>3</b> overdue · <b>8</b> mine</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Verification coverage</span>
+            <span class="num">72%</span>
+            <span class="sub"><span class="delta up">+4 pp</span> vs last week</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Open requirements</span>
+            <span class="num">3,128</span>
+            <span class="sub"><b>87%</b> released · 41 in review</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Open hazards</span>
+            <span class="num">80</span>
+            <span class="sub"><b>4</b> Catastrophic · <b>18</b> Hazardous</span>
+          </div>
+          <div class="stat">
+            <span class="lbl">Open issues</span>
+            <span class="num">38</span>
+            <span class="sub"><span class="delta down" style="color:var(--red);">+7</span> · 6 critical</span>
+          </div>
+        </div>
+
+        <!-- Subbar filters -->
+        <div class="subbar" style="margin: 0 -20px; padding: 8px 20px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg);">
+          <div class="search">
+            <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+            <input placeholder="Filter projects…" />
+          </div>
+          <span class="filter-pill compact active"><span class="key">Status</span><span class="val">Active</span><span class="x">×</span></span>
+          <span class="filter-pill compact"><span class="key">DAL</span><span class="val">Any</span></span>
+          <span class="filter-pill compact"><span class="key">Owner</span><span class="val">Anyone</span></span>
+          <button class="filter-pill ghost"><i data-lucide="plus" style="width:13px;height:13px;"></i>Add filter</button>
+          <div class="right">
+            <button class="filter-pill"><i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>Sort: Risk, then progress</button>
+            <button class="filter-pill"><i data-lucide="columns-3" style="width:13px;height:13px;"></i>Columns</button>
+          </div>
+        </div>
+
+        <!-- Projects table -->
+        <div class="card" style="overflow: visible;">
+          <table class="tbl ptbl">
+            <colgroup>
+              <col style="width: 36px;" />
+              <col style="width: 280px;" />
+              <col style="width: 60px;" />
+              <col style="width: 130px;" />
+              <col style="width: 200px;" />
+              <col style="width: 130px;" />
+              <col style="width: 110px;" />
+              <col style="width: 80px;" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="col-check"><input type="checkbox" class="check" /></th>
+                <th>Project</th>
+                <th>DAL</th>
+                <th>Progress</th>
+                <th>Module health</th>
+                <th>Owner</th>
+                <th>Updated</th>
+                <th>Gate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="is-selected">
+                <td><input type="checkbox" class="check" checked /></td>
+                <td>
+                  <div class="pn">
+                    <span class="dot active"></span>
+                    <div class="body">
+                      <div class="nm">Falcon-9R Avionics</div>
+                      <div class="sub">aerospace · DO-178C · SRR cleared</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="dal dal-B">B</span></td>
+                <td>
+                  <div class="pbar">
+                    <span class="bar"><i style="width:68%;"></i></span>
+                    <span>68%</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="mvers">
+                    <span class="seg-mc">REQ 1247</span>
+                    <span class="seg-mc">VER 72%</span>
+                    <span class="seg-mc warn">SUS 12</span>
+                    <span class="seg-mc danger">ISS 6</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="team">
+                    <span class="av a-m">MT</span>
+                    <span class="av a-k">KP</span>
+                    <span class="av a-r">RS</span>
+                    <span class="more">+4</span>
+                  </div>
+                </td>
+                <td class="when">2 m ago</td>
+                <td><span class="mc amber">SRR↻</span></td>
+              </tr>
+
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td>
+                  <div class="pn">
+                    <span class="dot active"></span>
+                    <div class="body">
+                      <div class="nm">Hyperion-X Flight Computer</div>
+                      <div class="sub">aerospace · DO-178C + DO-254 · PDR</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="dal dal-A">A</span></td>
+                <td>
+                  <div class="pbar">
+                    <span class="bar"><i class="danger" style="width:41%;"></i></span>
+                    <span>41%</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="mvers">
+                    <span class="seg-mc">REQ 2816</span>
+                    <span class="seg-mc danger">VER 38%</span>
+                    <span class="seg-mc warn">HAZ 42</span>
+                    <span class="seg-mc danger">ISS 14</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="team">
+                    <span class="av a-l">LR</span>
+                    <span class="av a-s">SF</span>
+                    <span class="more">+9</span>
+                  </div>
+                </td>
+                <td class="when">14 m ago</td>
+                <td><span class="mc red">PDR✕</span></td>
+              </tr>
+
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td>
+                  <div class="pn">
+                    <span class="dot active"></span>
+                    <div class="body">
+                      <div class="nm">Aurora-2 Lunar Lander</div>
+                      <div class="sub">space · ARP4754A · CDR cleared</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="dal dal-B">B</span></td>
+                <td>
+                  <div class="pbar">
+                    <span class="bar"><i style="width:82%;"></i></span>
+                    <span>82%</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="mvers">
+                    <span class="seg-mc">REQ 964</span>
+                    <span class="seg-mc ok">VER 91%</span>
+                    <span class="seg-mc">HAZ 23</span>
+                    <span class="seg-mc">ISS 2</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="team">
+                    <span class="av a-c">CN</span>
+                    <span class="av a-r">RS</span>
+                    <span class="more">+5</span>
+                  </div>
+                </td>
+                <td class="when">1 h ago</td>
+                <td><span class="mc green">CDR✓</span></td>
+              </tr>
+
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td>
+                  <div class="pn">
+                    <span class="dot active"></span>
+                    <div class="body">
+                      <div class="nm">Helios-T Tactical UAV</div>
+                      <div class="sub">unmanned · MIL-STD-882E · SRR</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="dal dal-C">C</span></td>
+                <td>
+                  <div class="pbar">
+                    <span class="bar"><i style="width:56%;"></i></span>
+                    <span>56%</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="mvers">
+                    <span class="seg-mc">REQ 512</span>
+                    <span class="seg-mc">VER 64%</span>
+                    <span class="seg-mc">HAZ 11</span>
+                    <span class="seg-mc">ISS 1</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="team">
+                    <span class="av a-n">NV</span>
+                    <span class="av a-m">MT</span>
+                    <span class="more">+3</span>
+                  </div>
+                </td>
+                <td class="when">3 h ago</td>
+                <td><span class="mc green">SRR✓</span></td>
+              </tr>
+
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td>
+                  <div class="pn">
+                    <span class="dot planning"></span>
+                    <div class="body">
+                      <div class="nm">Triton-R Underwater Vehicle</div>
+                      <div class="sub">marine · ISO 26262-style · pre-SRR</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="dal dal-C">C</span></td>
+                <td>
+                  <div class="pbar">
+                    <span class="bar"><i style="width:12%;"></i></span>
+                    <span>12%</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="mvers">
+                    <span class="seg-mc">REQ 88</span>
+                    <span class="seg-mc" style="color:var(--fg-4);">VER —</span>
+                    <span class="seg-mc">HAZ 4</span>
+                    <span class="seg-mc">ISS 0</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="team">
+                    <span class="av a-r">RS</span>
+                    <span class="av a-l">LR</span>
+                  </div>
+                </td>
+                <td class="when">yesterday</td>
+                <td><span class="mc">pre-SRR</span></td>
+              </tr>
+
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td>
+                  <div class="pn">
+                    <span class="dot archived"></span>
+                    <div class="body">
+                      <div class="nm" style="color:var(--fg-3);">Sirius-1 Telemetry Bridge</div>
+                      <div class="sub">archived · DO-178C · v3.2 released</div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="dal dal-D">D</span></td>
+                <td>
+                  <div class="pbar">
+                    <span class="bar"><i style="width:100%; background:var(--fg-4);"></i></span>
+                    <span style="color:var(--fg-3);">100%</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="mvers" style="opacity: 0.55;">
+                    <span class="seg-mc">REQ 421</span>
+                    <span class="seg-mc">VER 100%</span>
+                    <span class="seg-mc">HAZ 8</span>
+                    <span class="seg-mc">ISS 0</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="team">
+                    <span class="av a-m" style="opacity: 0.6;">MT</span>
+                    <span class="av a-k" style="opacity: 0.6;">KP</span>
+                  </div>
+                </td>
+                <td class="when">14 Mar</td>
+                <td><span class="mc" style="opacity:0.6;">released</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RIGHT RAIL -->
+      <div class="dash-right">
+
+        <!-- My queue -->
+        <div class="card">
+          <div class="card-head">
+            <h3>My queue</h3>
+            <span class="meta">8 items</span>
+          </div>
+          <div>
+            <div class="qrow">
+              <span class="pr crit"></span>
+              <span class="ref mono">REQ-1024</span>
+              <span class="what">Approve revision of <b>nav.gps_drift_max</b></span>
+              <span class="when">2 d</span>
+            </div>
+            <div class="qrow">
+              <span class="pr high"></span>
+              <span class="ref mono">VER-0301</span>
+              <span class="what">Sign off DO-178C test report</span>
+              <span class="when">1 d</span>
+            </div>
+            <div class="qrow">
+              <span class="pr high"></span>
+              <span class="ref mono">CR-0142</span>
+              <span class="what">Review change to flight control law</span>
+              <span class="when">6 h</span>
+            </div>
+            <div class="qrow">
+              <span class="pr med"></span>
+              <span class="ref mono">HAZ-018</span>
+              <span class="what">Mitigation review · loss of GPS lock</span>
+              <span class="when">4 h</span>
+            </div>
+            <div class="qrow">
+              <span class="pr med"></span>
+              <span class="ref mono">DOC-027</span>
+              <span class="what">Read &amp; ack: Software Plan v3.2</span>
+              <span class="when">2 h</span>
+            </div>
+            <div class="qrow">
+              <span class="pr med"></span>
+              <span class="ref mono">TSK-0488</span>
+              <span class="what">Estimate test setup time</span>
+              <span class="when">12 m</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity feed -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Activity</h3>
+            <span class="meta">all projects</span>
+          </div>
+          <div class="feed">
+            <div class="feed-item success">
+              <span class="ico"><i data-lucide="check" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">M. Tan</span><span class="when">2 m</span></div>
+                <div class="what">Released <span class="ref">REQ-1024</span> in <b>Falcon-9R</b></div>
+              </div>
+            </div>
+            <div class="feed-item warn">
+              <span class="ico"><i data-lucide="alert-triangle" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">K. Park</span><span class="when">14 m</span></div>
+                <div class="what">Flagged <span class="ref">HAZ-042</span> as Catastrophic in <b>Hyperion-X</b></div>
+              </div>
+            </div>
+            <div class="feed-item info">
+              <span class="ico"><i data-lucide="git-pull-request" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">R. Solano</span><span class="when">38 m</span></div>
+                <div class="what">Opened <span class="ref">CR-0142</span> in <b>Falcon-9R</b></div>
+              </div>
+            </div>
+            <div class="feed-item danger">
+              <span class="ico"><i data-lucide="x" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">L. Rivera</span><span class="when">1 h</span></div>
+                <div class="what">Failed run <span class="ref">VER-0301-R7</span> in <b>Hyperion-X</b></div>
+              </div>
+            </div>
+            <div class="feed-item success">
+              <span class="ico"><i data-lucide="check" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">C. Nguyen</span><span class="when">1 h</span></div>
+                <div class="what">Cleared CDR for <b>Aurora-2</b></div>
+              </div>
+            </div>
+            <div class="feed-item info">
+              <span class="ico"><i data-lucide="git-branch" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">CI</span><span class="when">2 h</span></div>
+                <div class="what">Synced <span class="ref">a3f9e2c</span> from <span class="ref">origin/main</span></div>
+              </div>
+            </div>
+            <div class="feed-item">
+              <span class="ico"><i data-lucide="file-text" style="width:13px;height:13px;"></i></span>
+              <div class="body">
+                <div class="head"><span class="who">N. Voss</span><span class="when">3 h</span></div>
+                <div class="what">Generated audit pack <span class="ref">PKG-2026-04-12</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Tenant <b>Aerodyne Systems</b></span>
+    <span>6 projects · 4 active</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

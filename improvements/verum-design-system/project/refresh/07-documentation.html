@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Documentation — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .d-body { display: grid; grid-template-columns: 224px 1fr 320px; overflow: hidden; }
+
+  /* Left rail — document types */
+  .drail { border-right: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+  .drail-head { padding: 10px 12px 8px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 6px; }
+  .drail-head .lbl { font-weight: 600; font-size: 13px; }
+  .drail-list { flex: 1; padding: 4px; overflow: auto; }
+  .dn { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; color: var(--fg-2); }
+  .dn:hover { background: var(--surface); color: var(--fg); }
+  .dn.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .dn .ico { width: 13px; height: 13px; color: var(--fg-3); display: inline-flex; }
+  .dn.is-selected .ico { color: var(--blue); }
+  .dn .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dn .ct { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .dn-section { font-size: 11px; color: var(--fg-3); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; padding: 10px 10px 4px; }
+
+  /* Main list */
+  .dlist { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .scroll { flex: 1; overflow: auto; }
+
+  table.docs { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
+  table.docs thead th {
+    text-align: left; background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3); font-size: 12px; font-weight: 500;
+    padding: 7px 12px; white-space: nowrap;
+    position: sticky; top: 0; z-index: 2;
+  }
+  table.docs td {
+    padding: 0 12px; height: 48px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--bg); vertical-align: middle;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  table.docs tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue); }
+  table.docs tr:hover td { background: var(--surface-soft); cursor: pointer; }
+
+  .doc-cell { display: flex; align-items: center; gap: 10px; }
+  .doc-icon {
+    width: 26px; height: 26px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-3); background: var(--surface);
+    flex-shrink: 0;
+  }
+  .doc-icon.plan { color: var(--blue-ink); background: var(--blue-tint); }
+  .doc-icon.spec { color: var(--green); background: var(--green-tint); }
+  .doc-icon.report { color: var(--amber-ink); background: var(--amber-tint); }
+  .doc-icon.pack { color: var(--purple); background: var(--purple-tint); }
+  .doc-cell .body { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+  .doc-cell .nm { font-size: 13px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
+  .doc-cell .sub { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+
+  .ver { font-family: var(--app-font-mono); font-size: 11.5px; color: var(--fg-2); }
+
+  /* Signatures: stack of tiny avatars + count */
+  .sigs {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11.5px; color: var(--fg-3);
+  }
+  .sigs .av { width: 18px; height: 18px; font-size: 8.5px; margin-left: -4px; border: 1.5px solid var(--bg); }
+  .sigs .av:first-child { margin-left: 0; }
+  .sigs .pending {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    padding: 1px 6px; border-radius: 3px;
+    color: var(--amber-ink); background: var(--amber-tint); border: 1px solid #EBD58A;
+    line-height: 14px;
+    margin-left: 6px;
+  }
+  .sigs .all-signed {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    padding: 1px 6px; border-radius: 3px;
+    color: var(--green); background: var(--green-tint); border: 1px solid #BFD9C9;
+    line-height: 14px;
+    margin-left: 6px;
+  }
+
+  /* Right — evidence packs panel */
+  .epanel { border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; overflow: auto; }
+
+  .pack {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .pack .ph {
+    font-family: var(--app-font-mono); font-size: 10.5px;
+    color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .pack h4 {
+    margin: 4px 0 6px;
+    font-size: 14px; font-weight: 600; color: var(--fg);
+  }
+  .pack .stat-row {
+    display: flex; gap: 14px;
+    font-family: var(--app-font-mono); font-size: 11px;
+    color: var(--fg-3);
+    margin: 6px 0 8px;
+  }
+  .pack .stat-row b { color: var(--fg); font-weight: 600; }
+  .pack-bars { display: flex; flex-direction: column; gap: 5px; }
+  .pack-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fg-3); font-family: var(--app-font-mono); }
+  .pack-bar .lbl { width: 88px; }
+  .pack-bar .bar { flex: 1; height: 4px; background: var(--surface-2); border-radius: 2px; position: relative; overflow: hidden; }
+  .pack-bar .bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--blue); }
+  .pack-bar .bar > i.green { background: var(--green); }
+  .pack-bar .bar > i.amber { background: var(--amber); }
+  .pack-bar .v { color: var(--fg); min-width: 38px; text-align: right; }
+  .pack .acts { display: flex; gap: 6px; margin-top: 10px; }
+
+  /* Export history */
+  .exp { padding: 9px 16px; border-bottom: 1px solid var(--line-soft); font-size: 12px; display: flex; align-items: center; gap: 10px; }
+  .exp:last-child { border-bottom: 0; }
+  .exp .stamp { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .exp .nm { flex: 1; min-width: 0; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exp .size { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+
+  .group-row td {
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    color: var(--fg-2); font-size: 12px;
+    height: 30px;
+  }
+  .group-row .nm { font-weight: 600; color: var(--fg); }
+  .group-row .gr-meta { color: var(--fg-3); margin-left: 8px; }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="07 Documentation">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item is-active" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><a>Falcon-9R Avionics</a><span class="sep">/</span><b>Documentation</b></div>
+
+      <div class="title-row">
+        <h1>Documentation</h1>
+        <span class="meta"><b>22</b> documents · <b>14</b> templates · <b>3</b> evidence packs · baseline <b>B-2026-04-12</b></span>
+        <div class="right">
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import</button>
+          <button class="btn"><i data-lucide="package" style="width:14px;height:14px;"></i>Build pack</button>
+          <button class="btn"><i data-lucide="layout-template" style="width:14px;height:14px;"></i>Templates</button>
+          <div class="btn-split">
+            <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New document</button>
+            <button class="btn primary"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <a class="tab is-active" href="#">Documents<span class="tab-count">22</span></a>
+        <a class="tab" href="#">Templates<span class="tab-count">14</span></a>
+        <a class="tab" href="#">Evidence packs<span class="tab-count">3</span></a>
+        <a class="tab" href="#">Export history</a>
+        <a class="tab" href="#">Import/Export</a>
+        <a class="tab" href="#">Settings</a>
+      </div>
+    </div>
+
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Filter by title, code, owner, tag…" />
+        <span class="kbd">⌘F</span>
+      </div>
+      <span class="filter-pill compact active"><span class="key">Status</span><span class="val">Released, In review</span><span class="x">×</span></span>
+      <span class="filter-pill compact"><span class="key">Type</span><span class="val">Any</span></span>
+      <button class="filter-pill ghost"><i data-lucide="plus" style="width:13px;height:13px;"></i>Add filter</button>
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>Sort: Updated</button>
+        <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Group: Type</button>
+      </div>
+    </div>
+
+    <div class="d-body">
+
+      <!-- Left rail -->
+      <aside class="drail">
+        <div class="drail-head"><span class="lbl">Library</span></div>
+        <div class="drail-list">
+          <div class="dn is-selected"><span class="ico"><i data-lucide="layers" style="width:13px;height:13px;"></i></span><span class="nm">All documents</span><span class="ct">22</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="user" style="width:13px;height:13px;"></i></span><span class="nm">Authored by me</span><span class="ct">4</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="signature" style="width:13px;height:13px;color:var(--amber);"></i></span><span class="nm">Awaiting my sign-off</span><span class="ct">3</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="clock" style="width:13px;height:13px;"></i></span><span class="nm">Recently changed</span><span class="ct">8</span></div>
+
+          <div class="dn-section">Plans (PLN)</div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">PSAC · plan for SW aspects</span><span class="ct">1</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">SDP · development</span><span class="ct">1</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">SVP · verification</span><span class="ct">2</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">SCMP · config mgmt</span><span class="ct">1</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">SQAP · quality assurance</span><span class="ct">1</span></div>
+
+          <div class="dn-section">Specifications (SPC)</div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">SRS · requirements</span><span class="ct">1</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">SDD · design</span><span class="ct">2</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">ICDs · interface</span><span class="ct">4</span></div>
+
+          <div class="dn-section">Reports (RPT)</div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">Test reports</span><span class="ct">6</span></div>
+          <div class="dn"><span class="ico"><i data-lucide="file" style="width:13px;height:13px;"></i></span><span class="nm">Safety reports</span><span class="ct">3</span></div>
+
+          <div class="dn-section">Evidence packs</div>
+          <div class="dn"><span class="ico"><i data-lucide="package" style="width:13px;height:13px;color:var(--purple);"></i></span><span class="nm">Audit packages</span><span class="ct">3</span></div>
+        </div>
+      </aside>
+
+      <!-- List -->
+      <div class="dlist">
+        <div class="scroll">
+          <table class="docs">
+            <colgroup>
+              <col style="width: 36px;"/>
+              <col style="width: 90px;"/>
+              <col/>
+              <col style="width: 100px;"/>
+              <col style="width: 110px;"/>
+              <col style="width: 160px;"/>
+              <col style="width: 92px;"/>
+            </colgroup>
+            <thead>
+              <tr>
+                <th style="padding-left:16px;"><input type="checkbox" class="check"/></th>
+                <th>Code</th>
+                <th>Document</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Signatures</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <tr class="group-row">
+                <td colspan="7">
+                  <span style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="folder-open" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="nm">Plans</span>
+                  </span>
+                  <span class="gr-meta">6 documents · DO-178C objectives 0–6</span>
+                </td>
+              </tr>
+
+              <tr class="is-active">
+                <td style="padding-left:16px;"><input type="checkbox" class="check" checked/></td>
+                <td><span class="ver">PSAC-01</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon plan"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Plan for Software Aspects of Certification</span>
+                      <span class="sub">M. Tan · 48 pages · DO-178C §11.1</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v2.1</span></td>
+                <td><span class="status released">Released</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-m">MT</span><span class="av a-k">KP</span><span class="av a-n">NV</span>
+                    <span class="all-signed">3/3 signed</span>
+                  </div>
+                </td>
+                <td class="when">12 Apr</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SDP-01</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon plan"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Software Development Plan</span>
+                      <span class="sub">M. Tan · 64 pages · DO-178C §11.2</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v3.2</span></td>
+                <td><span class="status review">In review</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-m">MT</span><span class="av a-k">KP</span>
+                    <span class="pending">1 pending · N. Voss</span>
+                  </div>
+                </td>
+                <td class="when">3 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SVP-01</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon plan"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Software Verification Plan</span>
+                      <span class="sub">C. Nguyen · 72 pages · DO-178C §11.3</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v3.3 <span style="color: var(--amber); font-size: 10px;">draft</span></span></td>
+                <td><span class="status draft">Draft</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="pending" style="margin-left: 0;">0/3 · drafting</span>
+                  </div>
+                </td>
+                <td class="when">1 h ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SCMP-01</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon plan"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Software Configuration Management Plan</span>
+                      <span class="sub">S. Fuentes · 36 pages · DO-178C §11.4</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v1.4</span></td>
+                <td><span class="status released">Released</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-s">SF</span><span class="av a-n">NV</span>
+                    <span class="all-signed">2/2 signed</span>
+                  </div>
+                </td>
+                <td class="when">2 w</td>
+              </tr>
+
+              <tr class="group-row">
+                <td colspan="7">
+                  <span style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="folder-open" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="nm">Specifications</span>
+                  </span>
+                  <span class="gr-meta">7 documents · ICDs and SDDs</span>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SRS-01</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon spec"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Software Requirements Specification (1,247 reqs)</span>
+                      <span class="sub">R. Solano · generated from REQ baseline · 312 pages</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v4.12</span></td>
+                <td><span class="status released">Released</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-r">RS</span><span class="av a-m">MT</span><span class="av a-k">KP</span>
+                    <span class="all-signed">3/3 signed</span>
+                  </div>
+                </td>
+                <td class="when">14 Apr</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">ICD-014</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon spec"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Avionics ↔ Power bus interface control</span>
+                      <span class="sub">S. Fuentes · 28 pages · CAN-FD + ARINC</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v1.2</span></td>
+                <td><span class="status review">In review</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-s">SF</span>
+                    <span class="pending">2 pending · CN, MT</span>
+                  </div>
+                </td>
+                <td class="when">2 d ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SDD-02</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon spec"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">Flight control SW design description</span>
+                      <span class="sub">S. Fuentes · 188 pages · architecture and modules</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v2.0</span></td>
+                <td><span class="status released">Released</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-s">SF</span><span class="av a-m">MT</span>
+                    <span class="all-signed">2/2 signed</span>
+                  </div>
+                </td>
+                <td class="when">11 Apr</td>
+              </tr>
+
+              <tr class="group-row">
+                <td colspan="7">
+                  <span style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="folder-open" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <span class="nm">Reports</span>
+                  </span>
+                  <span class="gr-meta">9 reports</span>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">TR-018</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon report"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">HIL test report · rig 02 — week 17</span>
+                      <span class="sub">L. Rivera · auto-generated from 142 runs</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v1.0</span></td>
+                <td><span class="status review">In review</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-l">LR</span>
+                    <span class="pending">2 pending · MT, CN</span>
+                  </div>
+                </td>
+                <td class="when">2 h ago</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SR-007</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon report"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">FHA report · avionics suite (80 hazards)</span>
+                      <span class="sub">K. Park · 96 pages · ARP4761</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v3.1</span></td>
+                <td><span class="status released">Released</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="av a-k">KP</span><span class="av a-n">NV</span>
+                    <span class="all-signed">2/2 signed</span>
+                  </div>
+                </td>
+                <td class="when">8 Apr</td>
+              </tr>
+
+              <tr>
+                <td style="padding-left:16px;"><input type="checkbox" class="check"/></td>
+                <td><span class="ver">SR-008</span></td>
+                <td>
+                  <div class="doc-cell">
+                    <span class="doc-icon report"><i data-lucide="file" style="width:14px;height:14px;"></i></span>
+                    <div class="body">
+                      <span class="nm">FTA report · loss of GPS lock (HAZ-018)</span>
+                      <span class="sub">K. Park · 24 pages · cut-set tables</span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="ver">v0.6 <span style="color: var(--amber); font-size: 10px;">draft</span></span></td>
+                <td><span class="status draft">Draft</span></td>
+                <td>
+                  <div class="sigs">
+                    <span class="pending" style="margin-left: 0;">0/2 · drafting</span>
+                  </div>
+                </td>
+                <td class="when">yesterday</td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right panel: evidence pack -->
+      <aside class="epanel">
+
+        <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px;">
+          <span class="status released" style="font-size: 10.5px;">building</span>
+          <span style="font-size: 11.5px; color: var(--fg-3); margin-left: auto; font-family: var(--app-font-mono);">v1.4 in progress</span>
+        </div>
+
+        <div class="pack">
+          <span class="ph">Current evidence pack</span>
+          <h4>Audit pack · PKG-2026-04-12</h4>
+          <div class="stat-row">
+            <span><b>112</b> artefacts</span>
+            <span><b>347 MB</b></span>
+            <span><b>71</b>/164 objectives</span>
+          </div>
+          <div class="pack-bars">
+            <div class="pack-bar">
+              <span class="lbl">SRS</span>
+              <span class="bar"><i class="green" style="width: 100%;"></i></span>
+              <span class="v">complete</span>
+            </div>
+            <div class="pack-bar">
+              <span class="lbl">SDD</span>
+              <span class="bar"><i class="green" style="width: 100%;"></i></span>
+              <span class="v">complete</span>
+            </div>
+            <div class="pack-bar">
+              <span class="lbl">SVP</span>
+              <span class="bar"><i class="amber" style="width: 60%;"></i></span>
+              <span class="v">draft v3.3</span>
+            </div>
+            <div class="pack-bar">
+              <span class="lbl">Test reports</span>
+              <span class="bar"><i style="width: 84%;"></i></span>
+              <span class="v">84%</span>
+            </div>
+            <div class="pack-bar">
+              <span class="lbl">Safety analyses</span>
+              <span class="bar"><i style="width: 72%;"></i></span>
+              <span class="v">22 / 31</span>
+            </div>
+            <div class="pack-bar">
+              <span class="lbl">Trace matrix</span>
+              <span class="bar"><i class="green" style="width: 100%;"></i></span>
+              <span class="v">generated</span>
+            </div>
+            <div class="pack-bar">
+              <span class="lbl">Sign-offs</span>
+              <span class="bar"><i class="amber" style="width: 58%;"></i></span>
+              <span class="v">11/19</span>
+            </div>
+          </div>
+          <div class="acts">
+            <button class="btn sm primary"><i data-lucide="package" style="width:12px;height:12px;"></i>Build pack</button>
+            <button class="btn sm"><i data-lucide="eye" style="width:12px;height:12px;"></i>Preview</button>
+            <button class="btn sm ghost"><i data-lucide="settings" style="width:12px;height:12px;"></i></button>
+          </div>
+        </div>
+
+        <div style="padding: 10px 16px 6px; font-size: 11px; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500; border-bottom: 1px solid var(--line-soft);">
+          Export history
+        </div>
+
+        <div class="exp">
+          <i data-lucide="package" style="width:14px;height:14px;color:var(--purple);"></i>
+          <span class="nm">PKG-2026-03-22 · audit pack</span>
+          <span class="size">312 MB</span>
+        </div>
+        <div class="exp">
+          <span class="stamp">22 Mar</span>
+          <span class="nm" style="color: var(--fg-3); font-family: var(--app-font-mono); font-size: 11px;">N. Voss · v1.3 final</span>
+        </div>
+
+        <div class="exp">
+          <i data-lucide="file-down" style="width:14px;height:14px;color:var(--blue);"></i>
+          <span class="nm">SRS-01 · v4.12.pdf</span>
+          <span class="size">8.4 MB</span>
+        </div>
+        <div class="exp">
+          <span class="stamp">14 Apr</span>
+          <span class="nm" style="color: var(--fg-3); font-family: var(--app-font-mono); font-size: 11px;">R. Solano · regulator submission</span>
+        </div>
+
+        <div class="exp">
+          <i data-lucide="file-down" style="width:14px;height:14px;color:var(--amber-ink);"></i>
+          <span class="nm">TR-018-rev0.pdf</span>
+          <span class="size">6.1 MB</span>
+        </div>
+        <div class="exp">
+          <span class="stamp">2 h ago</span>
+          <span class="nm" style="color: var(--fg-3); font-family: var(--app-font-mono); font-size: 11px;">L. Rivera · CI auto-export</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Project <b>Falcon-9R Avionics</b></span>
+    <span>22 documents · 11/19 sign-offs · 71/164 obj.</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

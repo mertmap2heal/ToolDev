@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tasks — Engineering Tool</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<link rel="stylesheet" href="_chrome.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  .t-body { display: grid; grid-template-columns: 248px 1fr; overflow: hidden; }
+
+  /* tree */
+  .ttree {
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .ttree-head { padding: 10px 12px 8px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 6px; }
+  .ttree-head .lbl { font-weight: 600; font-size: 13px; }
+  .ttree-head .ct { color: var(--fg-3); font-size: 12px; }
+  .ttree-search { padding: 6px 12px; border-bottom: 1px solid var(--line-soft); }
+  .ttree-search .input { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--fg-3); font-size: 12px; }
+  .ttree-search .input input { all: unset; flex: 1; color: var(--fg); font-size: 12px; }
+  .ttree-list { flex: 1; padding: 4px; overflow: auto; }
+  .tn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 5px;
+    font-size: 13px; color: var(--fg-2); cursor: pointer;
+  }
+  .tn:hover { background: var(--surface); color: var(--fg); }
+  .tn.is-selected { background: var(--blue-tint); color: var(--blue-ink); font-weight: 500; }
+  .tn .ico { color: var(--fg-3); width: 13px; height: 13px; display: inline-flex; }
+  .tn.is-selected .ico { color: var(--blue); }
+  .tn .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tn .ct { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+
+  /* main pane */
+  .mpane { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .scroll { flex: 1; overflow: auto; }
+
+  /* KPI strip */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); }
+  .kpis .stat { padding: 12px 16px; border-right: 1px solid var(--line); }
+  .kpis .stat:last-child { border-right: 0; }
+  .kpis .stat .num { font-size: 22px; }
+  .kpis .stat .num.amber { color: var(--amber); }
+  .kpis .stat .num.red { color: var(--red); }
+  .kpis .stat .num.green { color: var(--green); }
+
+  /* Table */
+  table.tt { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
+  table.tt thead th {
+    text-align: left; background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    color: var(--fg-3); font-size: 12px; font-weight: 500;
+    padding: 7px 12px; white-space: nowrap;
+    position: sticky; top: 0; z-index: 2;
+  }
+  table.tt td {
+    padding: 0 12px; height: 40px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--bg);
+    vertical-align: middle;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  table.tt tr.group td { background: var(--surface); height: 32px; border-top: 1px solid var(--line); color: var(--fg-2); font-size: 12px; }
+  table.tt tr.group .gr-name { font-weight: 600; color: var(--fg); }
+  table.tt tr.group .gr-meta { color: var(--fg-3); margin-left: 8px; }
+  table.tt tr:hover td { background: var(--surface-soft); }
+  table.tt tr.is-active td { background: #EAF3FB; box-shadow: inset 2px 0 0 var(--blue); }
+  table.tt tr.is-done td { color: var(--fg-3); }
+  table.tt tr.is-done .ti { text-decoration: line-through; text-decoration-color: var(--fg-4); }
+
+  .col-check { width: 36px; padding-left: 16px; padding-right: 4px; }
+  .col-id { width: 80px; }
+  .col-pri { width: 36px; text-align: center; }
+  .col-title {}
+  .col-link { width: 110px; }
+  .col-status { width: 110px; }
+  .col-due { width: 90px; }
+  .col-owner { width: 80px; }
+  .col-est { width: 70px; }
+
+  .id { font-family: var(--app-font-mono); font-size: 11px; color: var(--fg-3); }
+  .ti { color: var(--fg); font-size: 13px; }
+  .ti .sub-tag {
+    font-family: var(--app-font-mono); font-size: 10px;
+    padding: 1px 5px; border-radius: 3px;
+    background: var(--surface); border: 1px solid var(--line);
+    color: var(--fg-3); margin-right: 6px;
+  }
+
+  /* Priority arrow */
+  .pri {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+  }
+  .pri.crit { color: var(--red); }
+  .pri.high { color: var(--amber); }
+  .pri.med  { color: var(--blue-ink); }
+  .pri.low  { color: var(--fg-4); }
+
+  /* link to req/issue/etc */
+  .lref { font-family: var(--app-font-mono); font-size: 11px; color: var(--blue-ink); text-decoration: none; }
+  .lref:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+  /* due */
+  .due { font-family: var(--app-font-mono); font-size: 11.5px; color: var(--fg-3); }
+  .due.overdue { color: var(--red); font-weight: 500; }
+  .due.soon { color: var(--amber-ink); }
+
+  .ow { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-2); }
+  .ow .av { width: 20px; height: 20px; font-size: 9px; }
+  .est { font-family: var(--app-font-mono); font-size: 11.5px; color: var(--fg-3); }
+</style>
+</head>
+<body>
+<div class="app" data-theme="light" data-screen-label="05 Tasks">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 16 L9 2 L16 16 Z M5 11 L13 11" stroke="#1E83C8" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="name">Engineering Tool<span class="sub">Project Development</span></span>
+    </div>
+    <div class="search-global">
+      <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+      <input placeholder="Search across project — requirements, parameters, tasks, tests…" />
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn"><i data-lucide="bell" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+      <button class="icon-btn"><i data-lucide="moon" style="width:15px;height:15px;"></i></button>
+      <span class="avatar">CL</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-cap">Overview</div>
+    <a class="nav-item" href="01-dashboard-A.html"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i><span class="lbl">Dashboard</span></a>
+    <a class="nav-item" href="02-project-landing-A.html"><i data-lucide="folder-tree" style="width:15px;height:15px;"></i><span class="lbl">Projects</span></a>
+    <div class="nav-cap">Development</div>
+    <a class="nav-item" href="#"><i data-lucide="boxes" style="width:15px;height:15px;"></i><span class="lbl">System definition</span></a>
+    <a class="nav-item" href="../requirements-page-v3.html"><i data-lucide="list-checks" style="width:15px;height:15px;"></i><span class="lbl">Requirements</span><span class="pill-count">1,247</span></a>
+    <a class="nav-item" href="../parameters-page-v2.html"><i data-lucide="sliders-horizontal" style="width:15px;height:15px;"></i><span class="lbl">Parameters</span><span class="pill-count">312</span></a>
+    <a class="nav-item" href="03-verification-A.html"><i data-lucide="code-2" style="width:15px;height:15px;"></i><span class="lbl">Verification</span><span class="pill-count">142</span></a>
+    <a class="nav-item is-active" href="05-tasks.html"><i data-lucide="check-square" style="width:15px;height:15px;"></i><span class="lbl">Tasks</span><span class="pill-count">38</span></a>
+    <a class="nav-item" href="06-issues.html"><i data-lucide="circle-alert" style="width:15px;height:15px;"></i><span class="lbl">Issues</span><span class="pill-count">23</span></a>
+    <div class="nav-cap">Assurance</div>
+    <a class="nav-item" href="04-safety-A.html"><i data-lucide="shield-check" style="width:15px;height:15px;"></i><span class="lbl">Safety analysis</span></a>
+    <a class="nav-item" href="#"><i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i><span class="lbl">Risk matrix</span></a>
+    <a class="nav-item" href="07-documentation.html"><i data-lucide="file-text" style="width:15px;height:15px;"></i><span class="lbl">Documentation</span></a>
+    <a class="nav-item" href="#"><i data-lucide="file-down" style="width:15px;height:15px;"></i><span class="lbl">Audit package</span></a>
+    <div class="sidebar-foot">
+      <span class="av">CL</span><span>Christian Luciano</span>
+      <a class="icon-btn" style="margin-left:auto;width:22px;height:22px;" href="08-settings.html"><i data-lucide="settings" style="width:13px;height:13px;"></i></a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="page-head">
+      <div class="crumb"><a>Falcon-9R Avionics</a><span class="sep">/</span><b>Tasks</b></div>
+
+      <div class="title-row">
+        <h1>Tasks</h1>
+        <span class="meta"><b>38</b> open · <b>4</b> overdue · <b>12</b> mine · sprint <b>S-26.W18</b> ends Fri</span>
+        <div class="right">
+          <button class="btn"><i data-lucide="users" style="width:14px;height:14px;"></i>Assignees</button>
+          <button class="btn"><i data-lucide="calendar" style="width:14px;height:14px;"></i>Sprint<span class="caret"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></span></button>
+          <button class="btn"><i data-lucide="file-input" style="width:14px;height:14px;"></i>Import</button>
+          <div class="btn-split">
+            <button class="btn primary"><i data-lucide="plus" style="width:14px;height:14px;"></i>New task</button>
+            <button class="btn primary"><i data-lucide="chevron-down" style="width:13px;height:13px;"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <a class="tab is-active" href="#">All<span class="tab-count">38</span></a>
+        <a class="tab" href="#">Mine<span class="tab-count">12</span></a>
+        <a class="tab" href="#">Sprint<span class="tab-count">18</span></a>
+        <a class="tab" href="#">Backlog<span class="tab-count">142</span></a>
+        <a class="tab" href="#">Overdue<span class="tab-count" style="background:var(--red-tint);color:var(--red);">4</span></a>
+        <a class="tab" href="#">Reports</a>
+        <a class="tab" href="#">Templates</a>
+        <span style="flex:1;"></span>
+        <a class="tab" href="#" style="color:var(--fg-3);">Workflows</a>
+        <a class="tab" href="#" style="color:var(--fg-3);">Settings</a>
+      </div>
+    </div>
+
+    <div class="subbar">
+      <div class="search">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--fg-3);"></i>
+        <input placeholder="Filter tasks by title, ID, linked requirement, owner…" />
+        <span class="kbd">⌘F</span>
+      </div>
+      <span class="filter-pill compact active"><span class="key">Status</span><span class="val">In progress, To do</span><span class="x">×</span></span>
+      <span class="filter-pill compact active"><span class="key">Assignee</span><span class="val">Me</span><span class="x">×</span></span>
+      <span class="filter-pill compact"><span class="key">Priority</span><span class="val">Any</span></span>
+      <button class="filter-pill ghost"><i data-lucide="plus" style="width:13px;height:13px;"></i>Add filter</button>
+      <button class="filter-pill clear-all">Clear all</button>
+      <div class="right">
+        <button class="filter-pill"><i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>Sort: Due, then priority</button>
+        <button class="filter-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i>Group: Status</button>
+        <div class="seg">
+          <span class="seg-btn is-active"><i data-lucide="list" style="width:13px;height:13px;"></i>List</span>
+          <span class="seg-btn"><i data-lucide="layout-kanban" style="width:13px;height:13px;"></i>Board</span>
+          <span class="seg-btn"><i data-lucide="calendar-days" style="width:13px;height:13px;"></i>Calendar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="t-body">
+
+      <!-- left tree -->
+      <aside class="ttree">
+        <div class="ttree-head">
+          <span class="lbl">Views</span>
+        </div>
+        <div class="ttree-search">
+          <div class="input">
+            <i data-lucide="search" style="width:12px;height:12px;color:var(--fg-3);"></i>
+            <input placeholder="Filter" />
+          </div>
+        </div>
+        <div class="ttree-list">
+          <div class="tn is-selected">
+            <span class="ico"><i data-lucide="layers" style="width:13px;height:13px;"></i></span>
+            <span class="nm">All tasks</span>
+            <span class="ct">38</span>
+          </div>
+          <div class="tn">
+            <span class="ico"><i data-lucide="user" style="width:13px;height:13px;"></i></span>
+            <span class="nm">Assigned to me</span>
+            <span class="ct">12</span>
+          </div>
+          <div class="tn">
+            <span class="ico"><i data-lucide="eye" style="width:13px;height:13px;"></i></span>
+            <span class="nm">Watching</span>
+            <span class="ct">7</span>
+          </div>
+          <div class="tn">
+            <span class="ico"><i data-lucide="alert-triangle" style="width:13px;height:13px;color:var(--red);"></i></span>
+            <span class="nm">Overdue</span>
+            <span class="ct" style="color:var(--red);">4</span>
+          </div>
+          <div class="tn">
+            <span class="ico"><i data-lucide="clock" style="width:13px;height:13px;"></i></span>
+            <span class="nm">Due this week</span>
+            <span class="ct">9</span>
+          </div>
+
+          <div style="height: 6px; border-top: 1px solid var(--line-soft); margin: 6px 4px;"></div>
+
+          <div class="tn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">Sprint S-26.W18</span><span class="ct">18</span></div>
+          <div class="tn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">Sprint S-26.W19</span><span class="ct">14</span></div>
+          <div class="tn"><span class="ico"><i data-lucide="folder" style="width:13px;height:13px;"></i></span><span class="nm">Backlog</span><span class="ct">142</span></div>
+
+          <div style="height: 6px; border-top: 1px solid var(--line-soft); margin: 6px 4px;"></div>
+          <div class="ttree-head" style="border: 0; padding: 8px 8px 6px;"><span class="lbl" style="font-size: 11px; color: var(--fg-3); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;">Tags</span></div>
+          <div class="tn"><span class="ico"><i data-lucide="hash" style="width:12px;height:12px;color:var(--red);"></i></span><span class="nm">cert-blocker</span><span class="ct">5</span></div>
+          <div class="tn"><span class="ico"><i data-lucide="hash" style="width:12px;height:12px;color:var(--amber);"></i></span><span class="nm">rig-02</span><span class="ct">8</span></div>
+          <div class="tn"><span class="ico"><i data-lucide="hash" style="width:12px;height:12px;color:var(--blue);"></i></span><span class="nm">documentation</span><span class="ct">11</span></div>
+          <div class="tn"><span class="ico"><i data-lucide="hash" style="width:12px;height:12px;color:var(--purple);"></i></span><span class="nm">tooling</span><span class="ct">6</span></div>
+        </div>
+      </aside>
+
+      <!-- main -->
+      <div class="mpane">
+
+        <div class="kpis">
+          <div class="stat"><span class="lbl">Open</span><span class="num">38</span><span class="sub">across 4 sprints</span></div>
+          <div class="stat"><span class="lbl">In progress</span><span class="num amber">14</span><span class="sub">9 due this week</span></div>
+          <div class="stat"><span class="lbl">Overdue</span><span class="num red">4</span><span class="sub">avg <b>2.3 d</b> late</span></div>
+          <div class="stat"><span class="lbl">Done · 30 d</span><span class="num green">62</span><span class="sub"><span class="delta up">+8</span> velocity</span></div>
+          <div class="stat"><span class="lbl">Est. hours left</span><span class="num">214 h</span><span class="sub">team capacity 280 h</span></div>
+        </div>
+
+        <div class="scroll">
+          <table class="tt">
+            <colgroup>
+              <col style="width: 36px;"/>
+              <col style="width: 36px;"/>
+              <col style="width: 80px;"/>
+              <col/>
+              <col style="width: 110px;"/>
+              <col style="width: 110px;"/>
+              <col style="width: 90px;"/>
+              <col style="width: 80px;"/>
+              <col style="width: 70px;"/>
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="col-check"><input type="checkbox" class="check" /></th>
+                <th class="col-pri" style="text-align: center;">Pri</th>
+                <th>ID</th>
+                <th>Task</th>
+                <th>Linked to</th>
+                <th>Status</th>
+                <th>Due</th>
+                <th>Owner</th>
+                <th style="text-align: right;">Est.</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <!-- Group: Overdue -->
+              <tr class="group">
+                <td colspan="9">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="alert-triangle" style="width:12px;height:12px;color:var(--red);"></i>
+                    <span class="gr-name" style="color: var(--red);">Overdue</span>
+                  </span>
+                  <span class="gr-meta">4 tasks · avg 2.3 d late</span>
+                </td>
+              </tr>
+              <tr class="is-active">
+                <td><input type="checkbox" class="check" checked /></td>
+                <td class="col-pri"><span class="pri crit"><i data-lucide="chevrons-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0488</span></td>
+                <td><span class="ti"><span class="sub-tag">rig-02</span>Investigate root cause of <b>VER-0301</b> re-acquisition failure on HIL rig 02</span></td>
+                <td><a class="lref" href="03-verification-A.html">↑ VER-0301</a></td>
+                <td><span class="status in-progress">In progress</span></td>
+                <td class="due overdue">2 d late</td>
+                <td><div class="ow"><span class="av a-l">LR</span>Rivera</div></td>
+                <td class="est" style="text-align:right;">6 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri crit"><i data-lucide="chevrons-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0492</span></td>
+                <td><span class="ti"><span class="sub-tag">cert-blocker</span>Document mitigation for HAZ-018 (GPS lock loss)</span></td>
+                <td><a class="lref" href="04-safety-A.html">↑ HAZ-018</a></td>
+                <td><span class="status in-progress">In progress</span></td>
+                <td class="due overdue">3 d late</td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="est" style="text-align:right;">4 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri high"><i data-lucide="chevron-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0501</span></td>
+                <td><span class="ti">Re-baseline parameters after CAD geom rev. D update</span></td>
+                <td><a class="lref" href="../parameters-page-v2.html">↑ PRM-0142</a></td>
+                <td><span class="status todo">To do</span></td>
+                <td class="due overdue">1 d late</td>
+                <td><div class="ow"><span class="av a-m">MT</span>Tan</div></td>
+                <td class="est" style="text-align:right;">2 h</td>
+              </tr>
+
+              <!-- Group: In progress -->
+              <tr class="group">
+                <td colspan="9">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="circle-dot" style="width:12px;height:12px;color:var(--amber);"></i>
+                    <span class="gr-name">In progress</span>
+                  </span>
+                  <span class="gr-meta">11 tasks · 9 due this week</span>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri high"><i data-lucide="chevron-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0512</span></td>
+                <td><span class="ti">Update SDP §5.4 to reflect new tooling chain</span></td>
+                <td><a class="lref" href="07-documentation.html">↑ DOC-002</a></td>
+                <td><span class="status in-progress">In progress</span></td>
+                <td class="due soon">Fri</td>
+                <td><div class="ow"><span class="av a-n">NV</span>Voss</div></td>
+                <td class="est" style="text-align:right;">3 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri high"><i data-lucide="chevron-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0515</span></td>
+                <td><span class="ti"><span class="sub-tag">rig-02</span>Repair HIL rig 02 thermal chamber to support −40°C runs</span></td>
+                <td><a class="lref" href="06-issues.html">↑ ISS-0114</a></td>
+                <td><span class="status blocked">Blocked</span></td>
+                <td class="due">Mon</td>
+                <td><div class="ow"><span class="av a-s">SF</span>Fuentes</div></td>
+                <td class="est" style="text-align:right;">12 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri med"><i data-lucide="equal" style="width:14px;height:14px;"></i></span></td>
+                <td><span class="id">TSK-0518</span></td>
+                <td><span class="ti">Re-run failed verifications after baseline shift to B-2026-04-12</span></td>
+                <td><a class="lref" href="03-verification-A.html">↑ Campaign</a></td>
+                <td><span class="status in-progress">In progress</span></td>
+                <td class="due">Thu</td>
+                <td><div class="ow"><span class="av a-l">LR</span>Rivera</div></td>
+                <td class="est" style="text-align:right;">5 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri med"><i data-lucide="equal" style="width:14px;height:14px;"></i></span></td>
+                <td><span class="id">TSK-0521</span></td>
+                <td><span class="ti">Author FTA for HAZ-031 (battery thermal runaway)</span></td>
+                <td><a class="lref" href="04-safety-A.html">↑ HAZ-031</a></td>
+                <td><span class="status in-progress">In progress</span></td>
+                <td class="due">12 May</td>
+                <td><div class="ow"><span class="av a-k">KP</span>Park</div></td>
+                <td class="est" style="text-align:right;">8 h</td>
+              </tr>
+
+              <!-- Group: To do -->
+              <tr class="group">
+                <td colspan="9">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-down" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="circle" style="width:12px;height:12px;color:var(--blue);"></i>
+                    <span class="gr-name">To do</span>
+                  </span>
+                  <span class="gr-meta">10 tasks · sprint S-26.W18</span>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri high"><i data-lucide="chevron-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0525</span></td>
+                <td><span class="ti"><span class="sub-tag">documentation</span>Draft Software Verification Plan v3.3</span></td>
+                <td><a class="lref" href="07-documentation.html">↑ DOC-014</a></td>
+                <td><span class="status todo">To do</span></td>
+                <td class="due">15 May</td>
+                <td><div class="ow"><span class="av a-c">CN</span>Nguyen</div></td>
+                <td class="est" style="text-align:right;">10 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri med"><i data-lucide="equal" style="width:14px;height:14px;"></i></span></td>
+                <td><span class="id">TSK-0526</span></td>
+                <td><span class="ti">Promote 17 reviewed reqs to released after PDR</span></td>
+                <td><a class="lref" href="../requirements-page-v3.html">↑ REQ batch</a></td>
+                <td><span class="status todo">To do</span></td>
+                <td class="due">12 May</td>
+                <td><div class="ow"><span class="av a-r">RS</span>Solano</div></td>
+                <td class="est" style="text-align:right;">2 h</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" class="check" /></td>
+                <td class="col-pri"><span class="pri low"><i data-lucide="chevron-down" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0529</span></td>
+                <td><span class="ti"><span class="sub-tag">tooling</span>Upgrade LDRA to 2026.04 for MC/DC reports</span></td>
+                <td><span style="color:var(--fg-4); font-size:11px;">—</span></td>
+                <td><span class="status todo">To do</span></td>
+                <td class="due">22 May</td>
+                <td><div class="ow"><span class="av a-s">SF</span>Fuentes</div></td>
+                <td class="est" style="text-align:right;">4 h</td>
+              </tr>
+
+              <!-- Group: Done (collapsed) -->
+              <tr class="group">
+                <td colspan="9">
+                  <span style="display:inline-flex; align-items:center; gap:6px;">
+                    <i data-lucide="chevron-right" style="width:12px;height:12px;color:var(--fg-3);"></i>
+                    <i data-lucide="check-circle-2" style="width:12px;height:12px;color:var(--green);"></i>
+                    <span class="gr-name">Done</span>
+                  </span>
+                  <span class="gr-meta">13 tasks · last 7 d &middot; click to expand</span>
+                </td>
+              </tr>
+
+              <tr class="is-done">
+                <td><input type="checkbox" class="check" checked /></td>
+                <td class="col-pri"><span class="pri med"><i data-lucide="equal" style="width:14px;height:14px;"></i></span></td>
+                <td><span class="id">TSK-0480</span></td>
+                <td><span class="ti">Close CR-0138 — ICD-014 pin allocation</span></td>
+                <td><a class="lref" href="#">↑ CR-0138</a></td>
+                <td><span class="status done">Done</span></td>
+                <td class="due">9 May</td>
+                <td><div class="ow"><span class="av a-c">CN</span>Nguyen</div></td>
+                <td class="est" style="text-align:right;">1 h</td>
+              </tr>
+              <tr class="is-done">
+                <td><input type="checkbox" class="check" checked /></td>
+                <td class="col-pri"><span class="pri high"><i data-lucide="chevron-up" style="width:16px;height:16px;"></i></span></td>
+                <td><span class="id">TSK-0476</span></td>
+                <td><span class="ti">Re-baseline avionics after CAD update — captured 4 PRMs</span></td>
+                <td><a class="lref" href="../parameters-page-v2.html">↑ batch</a></td>
+                <td><span class="status done">Done</span></td>
+                <td class="due">8 May</td>
+                <td><div class="ow"><span class="av a-m">MT</span>Tan</div></td>
+                <td class="est" style="text-align:right;">3 h</td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">Live</span>
+    <span>Project <b>Falcon-9R Avionics</b></span>
+    <span>Sprint <span class="mono">S-26.W18</span> · ends Fri 17:00 UTC</span>
+    <div class="right">
+      <span><i data-lucide="git-branch" style="width:12px;height:12px;"></i><span class="mono">main</span></span>
+      <span><span class="mono">a3f9e2c</span> · 1h ago</span>
+      <span>v2.4.1</span>
+    </div>
+  </footer>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
