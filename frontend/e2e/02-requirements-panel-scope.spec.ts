@@ -55,12 +55,15 @@ test.describe('Requirements panel scope & deep links', () => {
     await expect(page.getByRole('heading', { name: /baseline manager/i })).toBeVisible({ timeout: 15_000 })
   })
 
-  test('dashboard suspect link opens suspect modal', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements/dashboard`)
+  test('Analysis dropdown opens suspect links review modal', async ({ page, projectId }) => {
+    // NX-7 replaced the Requirements dashboard with the ObjectiveCompletionMatrix,
+    // removing the dashboard suspect-link entry point. The suspect modal is now
+    // reached from the requirements table via the Analysis dropdown.
+    await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.getByRole('heading', { name: /requirements dashboard/i })).toBeVisible({ timeout: 15_000 })
-    await page.getByRole('link', { name: /suspect links/i }).first().click()
-    await expect(page).toHaveURL(/\/requirements(\?|$)/)
+    await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: /^Analysis$/i }).click()
+    await page.getByRole('button', { name: /suspect link review/i }).click()
     await expect(page.getByRole('heading', { name: /suspect links review/i })).toBeVisible({ timeout: 15_000 })
   })
 
@@ -139,7 +142,8 @@ test.describe('Requirements panel scope & deep links', () => {
     await page.goto(`/projects/${projectId}/verification`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { level: 2, name: /^Verification$/i })).toBeVisible({ timeout: 15_000 })
-    const openTree = page.getByTitle(/Open left panel \(Verification structure\)/i)
+    // R-11 CertModuleLayout uses a generic "Open left panel" toggle title.
+    const openTree = page.getByTitle(/Open left panel/i)
     if (await openTree.isVisible().catch(() => false)) {
       await openTree.click()
     }

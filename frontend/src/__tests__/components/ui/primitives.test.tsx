@@ -298,6 +298,33 @@ describe('Banner', () => {
     expect(screen.getByText('INFO')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument()
   })
+
+  it('renders role="alert" for the danger variant', () => {
+    render(<Banner variant="danger">Save failed</Banner>)
+    expect(screen.getByRole('alert')).toHaveTextContent('Save failed')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('renders role="status" for non-danger variants', () => {
+    const { rerender } = render(<Banner variant="info">An info notice</Banner>)
+    expect(screen.getByRole('status')).toHaveTextContent('An info notice')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    rerender(<Banner variant="success">Done</Banner>)
+    expect(screen.getByRole('status')).toHaveTextContent('Done')
+
+    rerender(<Banner variant="warning">Heads up</Banner>)
+    expect(screen.getByRole('status')).toHaveTextContent('Heads up')
+  })
+
+  it('honours an explicit role override', () => {
+    render(
+      <Banner variant="warning" role="alert">
+        Forced assertive
+      </Banner>,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Forced assertive')
+  })
 })
 
 describe('Card', () => {

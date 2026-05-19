@@ -63,7 +63,9 @@ test.describe('Validation page', () => {
   test('opens "Create from requirements" modal', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /from requirements/i }).click()
+    // /from requirements/i matches both the subbar button and the empty-state
+    // shortcut; the subbar button is first in DOM order and always rendered.
+    await page.getByRole('button', { name: /from requirements/i }).first().click()
     const modal = page
       .locator(MODAL)
       .filter({ hasText: /validation items from requirements/i })
@@ -77,9 +79,9 @@ test.describe('Validation page', () => {
   test('Export control surfaced on the subbar', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    // Export is now a label-wrapped <select> pill in the subbar (CSV / MD /
-    // PDF). The accessible name on the wrapping label still contains "Export".
-    const exportPill = page.locator('label.pv-pill').filter({ hasText: /^Export/i }).first()
+    // Export is a label-wrapped <select> pill in the subbar (CSV / MD / PDF).
+    // Target it by its stable, unique title attribute.
+    const exportPill = page.locator('label[title="Export the current view"]')
     await expect(exportPill).toBeVisible({ timeout: 5_000 })
     await expect(exportPill.locator('select')).toBeVisible()
   })

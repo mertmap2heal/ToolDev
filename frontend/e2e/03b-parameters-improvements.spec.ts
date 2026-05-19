@@ -45,9 +45,12 @@ test.describe('Parameters — command palette', () => {
   test('Ctrl+/ opens palette and Enter navigates', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/parameters`)
     await page.waitForLoadState('domcontentloaded')
+    // Wait for the page to be interactive before firing a global shortcut.
+    await expect(page.locator('table tbody')).toBeVisible({ timeout: 8_000 })
 
-    // Make sure no input is focused, then trigger the shortcut.
+    // Drop focus to a clean state, then trigger the shortcut.
     await page.locator('body').click()
+    await page.locator('body').evaluate((el) => (el as HTMLElement).focus())
     await page.keyboard.press('Control+/')
 
     const paletteInput = page.locator('input[placeholder*="Jump to parameter"]')
@@ -56,9 +59,14 @@ test.describe('Parameters — command palette', () => {
     // Show one of the built-in actions.
     await expect(page.getByText(/Create parameter/i).first()).toBeVisible()
 
-    // Esc closes.
-    await page.keyboard.press('Escape')
-    await expect(paletteInput).not.toBeVisible({ timeout: 3_000 })
+    // The palette's Escape handler is bound to the palette element, not the
+    // document — it only closes when the keypress originates from within the
+    // palette. The input autofocuses on a setTimeout, so pressing Escape too
+    // early (focus still on body) is a no-op and leaves the palette open in a
+    // busy full-suite run. Wait for the input to actually hold focus first.
+    await expect(paletteInput).toBeFocused({ timeout: 3_000 })
+    await paletteInput.press('Escape')
+    await expect(paletteInput).toBeHidden({ timeout: 5_000 })
   })
 
   test('Ctrl+K does NOT open the parameter palette (global only)', async ({ page, projectId }) => {
