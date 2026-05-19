@@ -157,9 +157,14 @@ export async function getLibrary(
   projectId: string,
   itemType?: string
 ): Promise<LifecycleDefinitionDto[]> {
+  // Order by [lifecycleKey, orderIndex] so the query exercises the declared
+  // @@index([lifecycleKey, orderIndex]) and is deterministic at the DB layer.
+  // orderIndex is per-lifecycle (0..n-1 within each lifecycleKey), never
+  // globally unique — groupLifecycles re-sorts each bucket by orderIndex, so
+  // the final per-lifecycle phase order is unchanged.
   const phases = await prisma.lifecyclePhase.findMany({
     where: phaseScopeFilter(projectId),
-    orderBy: { orderIndex: 'asc' },
+    orderBy: [{ lifecycleKey: 'asc' }, { orderIndex: 'asc' }],
   })
   const transitions = await prisma.lifecycleTransition.findMany({
     where: { OR: [{ projectId: null }, { projectId }] },

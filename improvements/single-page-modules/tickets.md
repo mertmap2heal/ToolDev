@@ -158,6 +158,8 @@ Per `backend.md` §7. Lifecycle definitions previously lived only in `frontend/s
 Per `backend.md` §7. The three placeholder stubs at `lifecycle.routes.ts:11-35` returned empty data. Shipped: replaced with real model-backed, project-scoped endpoints (`projectIdParam` + `requireProjectMember`) — `GET /:projectId/library|applicable|transitions` — plus the lifecycle write endpoints (`POST/PUT/DELETE /:projectId/definitions`) the editor now needs for server-side persistence. Catalogue (standard/organization) lifecycles are read-only (403 on write).
 **Acceptance met:** Stubs replaced with real endpoints returning DB data; the frontend adapter is backend-only.
 
+**Known limitation (NX-11):** NX-11 drops the `lifecycleStore` Zustand `localStorage` `persist`. The Library Builder tab's custom `library-`-prefixed *grouping* entries were never DB-backed and were already a session-only feature explicitly disclaimed to the user at save time (an `alert()` warns "this entry will be lost on refresh") and tracked under issue #279. Without the store `persist` those grouping entries no longer survive a page refresh — a known pre-existing limitation, not an NX-11 regression. Full Library Builder persistence remains tracked by #279.
+
 ### LF-4 (N) — Wire `TransitionChecklist` evaluation to `Project.currentPhaseId`
 After LF-2 lands, a phase transition is gated by `evaluateChecklist` producing PASS. Today this is partly wired but reads from `ChecklistAssignment` join — fragile. Tighten the join.
 **Acceptance:** Attempting to enter a new phase with a failing checklist returns 400 with the failing items.
