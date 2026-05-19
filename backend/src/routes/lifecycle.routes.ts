@@ -3,36 +3,18 @@ import { authenticateToken, AuthRequest } from '../middleware/auth.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { lifecycleControlTowerService } from '../services/lifecycleControlTower.service'
+import {
+    listLibrary,
+    getApplicableLifecycle,
+    listTransitions,
+    createLifecycleDefinition,
+    updateLifecycleDefinition,
+    deleteLifecycleDefinition,
+} from '../controllers/lifecycle.controller'
 
 const router = Router()
 
 router.use(authenticateToken)
-
-// Placeholder routes for lifecycle to prevent 404s
-// The frontend service falls back to Zustand store if these return empty or 404,
-// but explicit 200 OK with empty data is cleaner.
-
-router.get('/library', async (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: [], // Empty list
-    })
-})
-
-router.get('/applicable', async (_req: Request, res: Response) => {
-    // Return success: false or empty data to trigger frontend fallback
-    res.json({
-        success: true,
-        data: null,
-    })
-})
-
-router.get('/transitions', async (_req: Request, res: Response) => {
-    res.json({
-        success: true,
-        data: { transitions: [] },
-    })
-})
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTROL TOWER ENDPOINTS — Isolated lifecycle monitoring & governance
@@ -254,5 +236,33 @@ ctProject.get('/audit', async (req: AuthRequest, res: Response) => {
 // Mount the project-scoped sub-router. Any path on /control-tower/:projectId
 // goes through requireProjectMember before hitting a handler.
 router.use('/control-tower/:projectId', ctProject)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIFECYCLE DEFINITION ENDPOINTS — model-backed library + writes (NX-11 #474)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Replaces the former placeholder stubs. Project-scoped per N-3: projectId is
+// a URL path segment (never a query string), resolved by the projectIdParam
+// router.param handler registered above, then guarded by requireProjectMember.
+// Reads return the shared catalogue + this project's own custom lifecycles;
+// writes only ever touch project-custom rows (the service raises 403 for a
+// catalogue lifecycle). Mounted AFTER /control-tower so the literal
+// 'control-tower' segment is never captured as a projectId.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const lifecycleDef = Router({ mergeParams: true })
+lifecycleDef.use(requireProjectMember)
+
+// Reads
+lifecycleDef.get('/library', listLibrary)
+lifecycleDef.get('/applicable', getApplicableLifecycle)
+lifecycleDef.get('/transitions', listTransitions)
+
+// Writes — project-custom lifecycles only
+lifecycleDef.post('/definitions', createLifecycleDefinition)
+lifecycleDef.put('/definitions/:lifecycleId', updateLifecycleDefinition)
+lifecycleDef.delete('/definitions/:lifecycleId', deleteLifecycleDefinition)
+
+router.use('/:projectId', lifecycleDef)
 
 export default router

@@ -149,12 +149,16 @@ Per `frontend.md` §7 and the inline comment at line 42 of `LifecycleStatusPage.
 **Acceptance:** Three tabs become two (Control Tower + Lifecycle Settings). URL `?tab=status` redirects to Control Tower.
 
 ### LF-2 (L) — Promote lifecycle phases from Zustand to Prisma
-Per `backend.md` §7. Today lifecycle definitions live in `frontend/src/store/lifecycleStatusesStore.ts`. Add `LifecyclePhase` + `LifecycleTransition` Prisma models. Add `Project.currentPhaseId` + `Project.phaseEnteredAt` columns. Migrate the store to a thin React Query wrapper around the new endpoints.
-**Acceptance:** Lifecycle definitions persist server-side. The Zustand store becomes a memoised wrapper.
+**Status: Shipped — 6c27e93 (Issue #474, NX-11).** Bundled with LF-3 as ROADMAP NX-11 "Lifecycle persistence".
+Per `backend.md` §7. Lifecycle definitions previously lived only in `frontend/src/store/lifecycleStore.ts` (localStorage-persisted). Shipped: `LifecyclePhase` + `LifecycleTransition` Prisma models, `Project.currentPhaseId` + `Project.phaseEnteredAt` columns, an idempotent standard-catalogue seed (`seed-lifecycle-phases.ts`, wired into `start.ps1`), the store re-pointed off `persist` to a DB-hydrated in-memory cache (`useLifecycleSync`) with a one-time silent localStorage->DB migration of any browser-local custom lifecycles.
+**Acceptance met:** Lifecycle definitions persist server-side; the Zustand store is a DB-hydrated cache, no localStorage source of truth.
 
-### LF-3 (Q) — Delete stub endpoints `/library`, `/applicable`, `/transitions`
-Per `backend.md` §7. The three stubs at `lifecycle.routes.ts:11-35` return empty data and only exist to prevent 404s in the frontend. The frontend should not call these once LF-2 lands.
-**Acceptance:** Routes removed; frontend never calls them; no 404s.
+### LF-3 (Q) — Replace stub endpoints `/library`, `/applicable`, `/transitions`
+**Status: Shipped — 6c27e93 (Issue #474, NX-11).** Bundled with LF-2 as ROADMAP NX-11 "Lifecycle persistence".
+Per `backend.md` §7. The three placeholder stubs at `lifecycle.routes.ts:11-35` returned empty data. Shipped: replaced with real model-backed, project-scoped endpoints (`projectIdParam` + `requireProjectMember`) — `GET /:projectId/library|applicable|transitions` — plus the lifecycle write endpoints (`POST/PUT/DELETE /:projectId/definitions`) the editor now needs for server-side persistence. Catalogue (standard/organization) lifecycles are read-only (403 on write).
+**Acceptance met:** Stubs replaced with real endpoints returning DB data; the frontend adapter is backend-only.
+
+**Known limitation (NX-11):** NX-11 drops the `lifecycleStore` Zustand `localStorage` `persist`. The Library Builder tab's custom `library-`-prefixed *grouping* entries were never DB-backed and were already a session-only feature explicitly disclaimed to the user at save time (an `alert()` warns "this entry will be lost on refresh") and tracked under issue #279. Without the store `persist` those grouping entries no longer survive a page refresh — a known pre-existing limitation, not an NX-11 regression. Full Library Builder persistence remains tracked by #279.
 
 ### LF-4 (N) — Wire `TransitionChecklist` evaluation to `Project.currentPhaseId`
 After LF-2 lands, a phase transition is gated by `evaluateChecklist` producing PASS. Today this is partly wired but reads from `ChecklistAssignment` join — fragile. Tighten the join.

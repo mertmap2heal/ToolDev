@@ -11,6 +11,7 @@
  */
 
 import type { Request } from 'express'
+import { prisma } from '../lib/prisma'
 
 // ---------------------------------------------------------------------------
 // Helper types (mirroring frontend contracts)
@@ -192,10 +193,27 @@ export const lifecycleControlTowerService = {
     const blockers: string[] = []
     dimensions.filter((d) => d.score < 50).forEach((d) => blockers.push(`${d.dimension} below 50% threshold`))
 
+    // NX-11 light reconcile: the current lifecycle phase is read from real
+    // project state (Project.currentPhaseId), not a random pick. The rest of
+    // the Control Tower remains mock until the deep rework ticket.
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        currentPhaseId: true,
+        phaseEnteredAt: true,
+        currentPhase: { select: { name: true, lifecycleName: true } },
+      },
+    })
+
     return {
       projectId,
       overallScore: +overallScore.toFixed(1),
       nextGate: pick(['SRR', 'PDR', 'CDR', 'TRR', 'PRR']),
+      // Real project state — null when no phase has been set.
+      currentPhaseId: project?.currentPhaseId ?? null,
+      currentPhase: project?.currentPhase?.name ?? null,
+      currentLifecycle: project?.currentPhase?.lifecycleName ?? null,
+      phaseEnteredAt: project?.phaseEnteredAt?.toISOString() ?? null,
       dimensions,
       blockers,
       computedAt: new Date().toISOString(),

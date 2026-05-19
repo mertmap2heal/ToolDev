@@ -10,6 +10,13 @@ import { useAIGuideStore } from '../../store/aiGuideStore'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import { usePlatformAdminStore } from '../../store/platformAdminStore'
+import { useLifecycleSync } from '../../hooks/useLifecycleSync'
+
+/** Extract the project id/slug from a `/projects/:projectId/...` pathname. */
+function projectIdFromPath(pathname: string): string | null {
+  const m = pathname.match(/\/projects\/([^/]+)/)
+  return m ? m[1]! : null
+}
 
 export default function MainLayout() {
   const { isOpen } = useAIGuideStore()
@@ -18,6 +25,11 @@ export default function MainLayout() {
   const { user, setUser } = useAuthStore()
   const { activeCompanyName } = usePlatformAdminStore()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // NX-11: hydrate the lifecycle store cache from the DB for the active
+  // project, and run the one-time localStorage migration. Transparent to the
+  // requirement modals / checklist builder that read the store synchronously.
+  useLifecycleSync(projectIdFromPath(location.pathname))
 
   const isSuperiorAdmin = user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin === true
   useEffect(() => {

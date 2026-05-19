@@ -32,6 +32,10 @@ import clsx from 'clsx'
 import { useQuery } from '@tanstack/react-query'
 import { useStatusDefinitionsStore, type StatusDefinition } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore, type Lifecycle, type TransitionRule } from '../../store/lifecycleStore'
+import { lifecycleService, type LifecycleDefinitionInput } from '../../services/lifecycle.service'
+import { useLifecycleSync } from '../../hooks/useLifecycleSync'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ErrorMessage from '../../components/common/ErrorMessage'
 import { projectService } from '../../services/project.service'
 import { functionService } from '../../services/function.service'
 import { requirementService } from '../../services/requirement.service'
@@ -106,7 +110,11 @@ export default function LifecycleManagementPage() {
   const [activeTab, setActiveTab] = useState<TabId>('library')
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-  const { lifecycles, setLifecycles } = useLifecycleStore()
+
+  // NX-11: the lifecycle library now comes from the DB. useLifecycleSync
+  // hydrates the store cache and runs the one-time localStorage migration;
+  // its loading/error state drives the Library tab.
+  const lifecycleSync = useLifecycleSync(projectId)
 
   const activeTabData = tabs.find(tab => tab.id === activeTab)!
 
@@ -190,7 +198,16 @@ export default function LifecycleManagementPage() {
 
       {/* Tab Content */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        {activeTab === 'library' && <LifecycleLibraryContent searchQuery={searchQuery} projectId={projectId} />}
+        {activeTab === 'library' && (
+          <LifecycleLibraryContent
+            searchQuery={searchQuery}
+            projectId={projectId}
+            isLoading={lifecycleSync.isLoading}
+            loadError={lifecycleSync.error}
+            onRefetch={lifecycleSync.refetch}
+            migratedCount={lifecycleSync.migratedCount}
+          />
+        )}
         {activeTab === 'builder' && <LifecycleBuilderContent />}
         {activeTab === 'status' && <StatusDefinitionsContent searchQuery={searchQuery} />}
         {activeTab === 'transitions' && <TransitionRulesContent />}
@@ -294,8 +311,25 @@ function sanitizeRulesForSave(rules: TransitionRule[]) {
 }
 
 // Lifecycle Library Content
-function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?: string; projectId?: string }) {
-  const { lifecycles, setLifecycles, updateLifecycle, addLifecycle } = useLifecycleStore()
+function LifecycleLibraryContent({
+  searchQuery = '',
+  projectId,
+  isLoading = false,
+  loadError = null,
+  onRefetch,
+  migratedCount = 0,
+}: {
+  searchQuery?: string
+  projectId?: string
+  isLoading?: boolean
+  loadError?: string | null
+  onRefetch?: () => void
+  migratedCount?: number
+}) {
+  // NX-11: the library is hydrated from the DB by useLifecycleSync (mounted in
+  // the parent). The store is a read cache; the former localStorage lazy-seed
+  // of standard lifecycles is removed - the standard catalogue is server-seeded.
+  const { lifecycles } = useLifecycleStore()
   const [activeSubsection, setActiveSubsection] = useState<string>('standard')
   const [selectedLifecycle, setSelectedLifecycle] = useState<string | null>(null)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -303,98 +337,18 @@ function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?
   const [showCloneModal, setShowCloneModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingLifecycle, setEditingLifecycle] = useState<any>(null)
+  // Async-save state for the create/edit flows (NX-11: writes hit the API).
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [savePill, setSavePill] = useState<string | null>(null)
+  const showSavePill = (msg: string) => {
+    setSavePill(msg)
+    window.setTimeout(() => setSavePill(null), 1500)
+  }
 
-  // Seed standard lifecycles once when the store has none
+  // One-time migration: a quiet success pill if >=1 custom lifecycle moved.
   useEffect(() => {
-    const hasStandard = lifecycles.some(lc => lc.type === 'standard')
-    if (hasStandard) return
-    const today = new Date().toISOString().split('T')[0]!
-    const makeStatuses = (names: string[]) =>
-      names.map((name, i) => ({ id: `s${i}`, name, color: i === 0 ? 'blue' : i === names.length - 1 ? 'green' : 'gray' }))
-    const makeSteps = (names: string[]) =>
-      names.map((_, i) => ({ id: `step${i}`, statusId: `s${i}`, order: i }))
-    const standards = [
-      {
-        id: 'std-arp4754a',
-        name: 'ARP4754A System Development',
-        description: 'Aircraft system development lifecycle per SAE ARP4754A. Covers system requirements, architecture, implementation, verification and validation.',
-        type: 'standard' as const,
-        version: '1.0',
-        lastModified: today,
-        applicableItemTypes: ['Requirement', 'Function', 'Task'],
-        statuses: makeStatuses(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'In Implementation', 'Verified', 'Validated', 'Released']),
-        steps: makeSteps(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'In Implementation', 'Verified', 'Validated', 'Released']),
-        statusCount: 9,
-        itemCount: 0,
-      },
-      {
-        id: 'std-do178c',
-        name: 'DO-178C Software Development',
-        description: 'Software development lifecycle for airborne systems per RTCA DO-178C. Covers planning, requirements, design, coding, integration and verification.',
-        type: 'standard' as const,
-        version: '1.0',
-        lastModified: today,
-        applicableItemTypes: ['Requirement', 'Task', 'Issue'],
-        statuses: makeStatuses(['Planning', 'Requirements', 'Design', 'Implementation', 'Integration', 'Verification', 'Certification', 'Released']),
-        steps: makeSteps(['Planning', 'Requirements', 'Design', 'Implementation', 'Integration', 'Verification', 'Certification', 'Released']),
-        statusCount: 8,
-        itemCount: 0,
-      },
-      {
-        id: 'std-do254',
-        name: 'DO-254 Hardware Development',
-        description: 'Hardware development assurance lifecycle for airborne electronic systems per RTCA DO-254.',
-        type: 'standard' as const,
-        version: '1.0',
-        lastModified: today,
-        applicableItemTypes: ['Requirement', 'Task'],
-        statuses: makeStatuses(['Concept', 'Requirements', 'Design', 'Implementation', 'Production Transition', 'Verification', 'Acceptance']),
-        steps: makeSteps(['Concept', 'Requirements', 'Design', 'Implementation', 'Production Transition', 'Verification', 'Acceptance']),
-        statusCount: 7,
-        itemCount: 0,
-      },
-      {
-        id: 'std-requirement',
-        name: 'Requirements Lifecycle',
-        description: 'Standard lifecycle for engineering requirements management — from elicitation through baselined approval and obsolescence.',
-        type: 'standard' as const,
-        version: '1.0',
-        lastModified: today,
-        applicableItemTypes: ['Requirement'],
-        statuses: makeStatuses(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'Obsolete']),
-        steps: makeSteps(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'Obsolete']),
-        statusCount: 6,
-        itemCount: 0,
-      },
-      {
-        id: 'std-verification',
-        name: 'Verification & Test Lifecycle',
-        description: 'Lifecycle for test cases, test plans and verification activities covering definition through closure.',
-        type: 'standard' as const,
-        version: '1.0',
-        lastModified: today,
-        applicableItemTypes: ['Task', 'Issue'],
-        statuses: makeStatuses(['Draft', 'Ready', 'In Execution', 'Pass', 'Fail', 'Closed']),
-        steps: makeSteps(['Draft', 'Ready', 'In Execution', 'Pass', 'Fail', 'Closed']),
-        statusCount: 6,
-        itemCount: 0,
-      },
-      {
-        id: 'std-change-request',
-        name: 'Change Request Lifecycle',
-        description: 'Lifecycle for engineering change requests from submission through disposition and implementation.',
-        type: 'standard' as const,
-        version: '1.0',
-        lastModified: today,
-        applicableItemTypes: ['Change Request'],
-        statuses: makeStatuses(['Submitted', 'Under Review', 'Impact Assessment', 'Approved', 'In Implementation', 'Verified', 'Closed', 'Rejected']),
-        steps: makeSteps(['Submitted', 'Under Review', 'Impact Assessment', 'Approved', 'In Implementation', 'Verified', 'Closed', 'Rejected']),
-        statusCount: 8,
-        itemCount: 0,
-      },
-    ]
-    setLifecycles([...lifecycles, ...standards])
-  }, [])
+    if (migratedCount > 0) showSavePill('Saved your lifecycle definitions.')
+  }, [migratedCount])
 
   // Get created libraries (those with type 'project' that were created via Library Builder)
   // Libraries have id starting with 'library-' to distinguish them from lifecycles
@@ -472,10 +426,147 @@ function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?
     }
   }
 
+  // NX-11: delete a project-custom lifecycle. Catalogue lifecycles never reach
+  // here - the editor hides the Delete affordance on a catalogue row.
+  const [deletingLifecycleId, setDeletingLifecycleId] = useState<string | null>(null)
+  const handleDeleteLifecycle = async (id: string) => {
+    setSaveError(null)
+    if (!projectId) {
+      setSaveError('No project context - cannot delete the lifecycle.')
+      return
+    }
+    setDeletingLifecycleId(id)
+    const res = await lifecycleService.deleteLifecycle(projectId, id)
+    setDeletingLifecycleId(null)
+    if (res.success) {
+      onRefetch?.()
+      showSavePill('Lifecycle deleted.')
+    } else {
+      setSaveError(`Delete failed: ${res.error ?? 'unknown error'}.`)
+    }
+  }
+
   const [isCreateLifecycleModalOpen, setIsCreateLifecycleModalOpen] = useState(false)
+
+  const { statuses: statusDefs } = useStatusDefinitionsStore()
+
+  /**
+   * NX-11: map the CreateLifecycleModal payload (steps[] keyed by statusId,
+   * transitionRules[] keyed by statusId) onto the API's LifecycleDefinitionInput
+   * (phases[] with names + isInitial, transitions[] with phase indices).
+   */
+  const buildDefinitionInput = (lifecycleData: any): LifecycleDefinitionInput => {
+    const steps: Array<{ statusId: string; order: number }> = [
+      ...(lifecycleData.steps || []),
+    ].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+    const phases = steps.map((s, i) => ({
+      statusId: String(s.statusId),
+      name: statusDefs.find((d) => d.id === s.statusId)?.name ?? String(s.statusId),
+      isInitial: i === 0,
+    }))
+    const statusToIndex = new Map<string, number>()
+    phases.forEach((p, i) => {
+      if (!statusToIndex.has(p.statusId)) statusToIndex.set(p.statusId, i)
+    })
+    const transitions = (lifecycleData.transitionRules || [])
+      .map((r: any) => {
+        const fromIdx = statusToIndex.get(String(r.fromStatusId))
+        const toIdx = statusToIndex.get(String(r.toStatusId))
+        if (fromIdx === undefined || toIdx === undefined || fromIdx === toIdx) return null
+        return {
+          fromPhaseIndex: fromIdx,
+          toPhaseIndex: toIdx,
+          allowedEngineeringRoleIds: Array.isArray(r.allowedEngineeringRoleIds)
+            ? r.allowedEngineeringRoleIds
+            : [],
+        }
+      })
+      .filter((t: unknown): t is NonNullable<typeof t> => t !== null)
+    return {
+      name: lifecycleData.name,
+      description: lifecycleData.description || null,
+      version: lifecycleData.version || '1.0',
+      applicableItemTypes: lifecycleData.applicableItemTypes || [],
+      phases,
+      transitions,
+    }
+  }
+
+  const handleCreateSave = async (lifecycleData: any) => {
+    setSaveError(null)
+    if (!projectId) {
+      setSaveError('No project context - cannot save the lifecycle.')
+      return
+    }
+    const res = await lifecycleService.createLifecycle(projectId, buildDefinitionInput(lifecycleData))
+    if (res.success) {
+      onRefetch?.()
+      showSavePill('Lifecycle saved.')
+      setIsCreateLifecycleModalOpen(false)
+    } else {
+      setSaveError(`Save failed: ${res.error ?? 'unknown error'}. Your edits are kept - retry.`)
+    }
+  }
+
+  const handleEditSave = async (lifecycleData: any) => {
+    setSaveError(null)
+    if (!projectId || !editingLifecycle) {
+      setSaveError('No project context - cannot save the lifecycle.')
+      return
+    }
+    const res = await lifecycleService.updateLifecycle(
+      projectId,
+      editingLifecycle.id,
+      buildDefinitionInput(lifecycleData)
+    )
+    if (res.success) {
+      onRefetch?.()
+      showSavePill('Lifecycle saved.')
+      setShowEditModal(false)
+      setEditingLifecycle(null)
+    } else {
+      setSaveError(`Save failed: ${res.error ?? 'unknown error'}. Your edits are kept - retry.`)
+    }
+  }
+
+  // NX-11: the library now waits on a DB fetch.
+  if (isLoading) {
+    return <LoadingSpinner label="Loading lifecycle library..." />
+  }
+  if (loadError) {
+    return (
+      <div className="space-y-3 py-8 text-center">
+        <ErrorMessage
+          message={`Couldn't load the lifecycle library: ${loadError}. Retry, or check the project is reachable.`}
+        />
+        {onRefetch && (
+          <button
+            onClick={() => onRefetch()}
+            className="px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded text-sm"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
+      {/* NX-11 async-save feedback: a non-blocking success pill / inline error. */}
+      {savePill && (
+        <div
+          role="status"
+          className="fixed top-4 right-4 z-50 px-4 py-2 rounded bg-status-success/12 text-status-success text-sm border border-status-success/30 shadow"
+        >
+          {savePill}
+        </div>
+      )}
+      {saveError && (
+        <div role="alert" className="px-4 py-2 rounded bg-status-danger/10 text-status-danger text-sm">
+          {saveError}
+        </div>
+      )}
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Lifecycle Library</h2>
@@ -573,12 +664,18 @@ function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?
               }
             } else if (activeSubsection === 'standard') {
               tagLabel = 'Standard'
-              tagStyle = 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+              // NX-11: status-info token marks a read-only catalogue lifecycle.
+              tagStyle = 'bg-status-info/12 text-status-info border border-status-info/30'
             } else if (activeSubsection === 'organization') {
               tagLabel = 'Organization'
-              tagStyle = 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+              tagStyle = 'bg-status-info/12 text-status-info border border-status-info/30'
             }
-            
+
+            // NX-11: catalogue lifecycles (standard / organization) are
+            // read-only - the editor shows View / Clone only, never Edit /
+            // Delete (a control whose action would 403 is not a control).
+            const isReadOnly = lifecycle.isCatalog === true
+
             return (
               <div
                 key={lifecycle.id}
@@ -605,32 +702,49 @@ function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?
                 Modified: {lifecycle.lastModified}
               </div>
 
-              {/* Actions */}
+              {/* Actions — NX-11: catalogue lifecycles get View / Clone only */}
               <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={() => handleViewLifecycle(lifecycle.id)}
                   className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
                   title="View lifecycle details"
+                  aria-label="View lifecycle"
                 >
                   <Eye size={14} />
                   <span>View</span>
                 </button>
-                <button
-                  onClick={() => handleEditLifecycle(lifecycle.id)}
-                  className="flex-1 px-3 py-2 bg-indigo-100 dark:bg-indigo-900/20 hover:bg-indigo-200 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
-                  title="Edit lifecycle"
-                >
-                  <Edit2 size={14} />
-                  <span>Edit</span>
-                </button>
+                {!isReadOnly && (
+                  <button
+                    onClick={() => handleEditLifecycle(lifecycle.id)}
+                    className="flex-1 px-3 py-2 bg-indigo-100 dark:bg-indigo-900/20 hover:bg-indigo-200 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
+                    title="Edit lifecycle"
+                    aria-label="Edit lifecycle"
+                  >
+                    <Edit2 size={14} />
+                    <span>Edit</span>
+                  </button>
+                )}
                 <button
                   onClick={() => handleCloneLifecycle(lifecycle.id)}
                   className="flex-1 px-3 py-2 bg-green-100 dark:bg-green-900/20 hover:bg-green-200 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
                   title="Clone lifecycle"
+                  aria-label="Clone lifecycle"
                 >
                   <Copy size={14} />
                   <span>Clone</span>
                 </button>
+                {!isReadOnly && (
+                  <button
+                    onClick={() => handleDeleteLifecycle(lifecycle.id)}
+                    disabled={deletingLifecycleId === lifecycle.id}
+                    className="flex-1 px-3 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors disabled:opacity-50"
+                    title="Delete lifecycle"
+                    aria-label="Delete lifecycle"
+                  >
+                    <Trash2 size={14} />
+                    <span>{deletingLifecycleId === lifecycle.id ? 'Deleting...' : 'Delete'}</span>
+                  </button>
+                )}
               </div>
             </div>
             )
@@ -704,30 +818,7 @@ function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?
           hideLibrarySelection={true} // Hide library selection when a specific tab is already selected (always true when coming from tab selection)
           activeSubsection={activeSubsection} // Pass activeSubsection for custom library naming
           onClose={() => setIsCreateLifecycleModalOpen(false)}
-          onSave={(lifecycleData) => {
-            // Determine if this lifecycle belongs to a custom library
-            const libraryId = (activeSubsection && activeSubsection !== 'standard' && activeSubsection !== 'organization' && activeSubsection !== 'project')
-              ? activeSubsection // Custom library ID
-              : undefined
-            
-            const newLifecycle = {
-              id: `lifecycle-${Date.now()}`,
-              name: lifecycleData.name,
-              description: lifecycleData.description || '',
-              type: lifecycleData.type || 'project',
-              version: lifecycleData.version || '1.0',
-              statusCount: lifecycleData.steps?.length || 0,
-              itemCount: 0,
-              lastModified: new Date().toLocaleDateString(),
-              applicableItemTypes: lifecycleData.applicableItemTypes || [],
-              libraryId: libraryId, // Associate with custom library if created under one
-              statuses: [],
-              steps: lifecycleData.steps || [],
-              transitionRules: lifecycleData.transitionRules || []
-            }
-            setLifecycles([...lifecycles, newLifecycle])
-            setIsCreateLifecycleModalOpen(false)
-          }}
+          onSave={handleCreateSave}
         />
       )}
 
@@ -740,22 +831,7 @@ function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?
             setShowEditModal(false)
             setEditingLifecycle(null)
           }}
-          onSave={(lifecycleData) => {
-            const updatedLifecycle = {
-              ...editingLifecycle,
-              name: lifecycleData.name,
-              description: lifecycleData.description || '',
-              version: lifecycleData.version || editingLifecycle.version,
-              statusCount: lifecycleData.steps?.length || editingLifecycle.statusCount,
-              applicableItemTypes: lifecycleData.applicableItemTypes || [],
-              steps: lifecycleData.steps || [],
-              transitionRules: lifecycleData.transitionRules || [],
-              lastModified: new Date().toLocaleDateString()
-            }
-            updateLifecycle(editingLifecycle.id, updatedLifecycle)
-            setShowEditModal(false)
-            setEditingLifecycle(null)
-          }}
+          onSave={handleEditSave}
         />
       )}
     </div>

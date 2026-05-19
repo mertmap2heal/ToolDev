@@ -15,6 +15,7 @@
     "seed:users": "tsx src/scripts/seed-users.ts",
     "seed:e2e-user": "tsx src/scripts/seed-e2e-user.ts",
     "seed:engineering-roles": "tsx src/scripts/seed-engineering-roles.ts",
+    "seed:lifecycle-phases": "tsx src/scripts/seed-lifecycle-phases.ts",
     "seed:mocs": "tsx prisma/seed-mocs.ts",
     "seed:test-case": "tsx src/scripts/seed-test-case.ts",
     "seed:test-cases-3": "tsx src/scripts/seed-3-realistic-test-cases.ts",
