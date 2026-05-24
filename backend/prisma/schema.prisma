@@ -7,6 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model User {
   auditLogs                      AuditLog[]
   verEvidenceLinks               VerEvidenceLink[]
@@ -58,6 +59,8 @@ model User {
   raciAssignments                     RaciAssignment[]
   lifecyclePhasesCreated              LifecyclePhase[]                  @relation("LifecyclePhaseCreatedBy")
   lifecycleTransitionsCreated         LifecycleTransition[]             @relation("LifecycleTransitionCreatedBy")
+  requirementQualityDismissals        RequirementQualityDismissal[]
+  requirementQualitySnapshots         RequirementQualitySnapshot[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -320,6 +323,8 @@ model Project {
   lifecyclePhases             LifecyclePhase[]
   lifecycleTransitions        LifecycleTransition[]
   currentPhase                LifecyclePhase?              @relation("ProjectCurrentPhase", fields: [currentPhaseId], references: [id], onDelete: SetNull)
+  requirementQualityDismissals RequirementQualityDismissal[]
+  requirementQualitySnapshots  RequirementQualitySnapshot[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -570,6 +575,8 @@ model Requirement {
   certObjectiveLinks CertObjectiveRequirementLink[]
   changeRequestLinks RequirementChangeRequestLink[]
   subscriptions      RequirementSubscription[]
+  qualityDismissals  RequirementQualityDismissal[]
+  qualitySnapshots   RequirementQualitySnapshot[]
 
   // AI-provenance lattice (R-1; ai-ready-vision.md section 6.1)
   authorType             String    @default("human")
@@ -5032,4 +5039,47 @@ model LifecycleTransition {
   @@unique([fromPhaseId, toPhaseId])
   @@index([projectId])
   @@index([lifecycleKey])
+}
+
+/// Per-user dismissals of validation issues in the Quality Workbench
+model RequirementQualityDismissal {
+  id            String   @id @default(uuid())
+  projectId     String
+  requirementId String
+  userId        String
+  issueKey      String
+  reason        String?  @db.VarChar(500)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, userId, issueKey])
+  @@index([projectId, userId])
+  @@index([requirementId])
+}
+
+enum RequirementQualitySnapSource {
+  full_project
+  single_requirement
+}
+
+/// Stored validation summary for compare (last run vs current)
+model RequirementQualitySnapshot {
+  id            String                       @id @default(uuid())
+  projectId     String
+  userId        String?
+  source        RequirementQualitySnapSource
+  requirementId String?
+  capturedAt    DateTime                     @default(now())
+  payload       Json
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement? @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, capturedAt])
+  @@index([projectId, requirementId])
 }

@@ -4786,6 +4786,7 @@ export default function RequirementsPage() {
               onClose={() => setEditingRequirement(null)}
               projectId={projectId}
               requirement={editingRequirement}
+              variant={isQualityPanelOpen ? 'sidePanel' : 'centered'}
             />
           )}
 
@@ -4976,13 +4977,17 @@ export default function RequirementsPage() {
           {isQualityPanelOpen && projectId && (
             <RequirementQualityPanel
               projectId={projectId}
+              initialSelectedRequirementId={focusRequirementId ?? undefined}
+              squeezeForSideEditor={!!editingRequirement}
               onClose={() => setIsQualityPanelOpen(false)}
               onRequirementClick={(requirementId) => {
                 const req = requirements.find((r) => r.id === requirementId)
                 if (req) {
-                  setDetailRequirement(req)
-                  setIsQualityPanelOpen(false)
+                  setEditingRequirement(req)
                 }
+              }}
+              onRequirementUpdated={() => {
+                queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
               }}
             />
           )}
